@@ -159,15 +159,19 @@ function setupSearch() {
       if (results.length === 0) {
         dropdown.innerHTML = '<div class="search-result-item" style="color:var(--text-muted)">Sin resultados</div>';
       } else {
-        dropdown.innerHTML = results.map(r => `
-          <div class="search-result-item" data-type="${r.type}" data-id="${r.id}">
-            <span class="search-result-type ${r.type}">${r.type === 'persona' ? 'PER' : r.type === 'hecho' ? 'HEC' : 'BAN'}</span>
-            <div>
-              <div style="font-weight:500;font-size:13px">${r.title}</div>
-              <div style="font-size:11px;color:var(--text-muted)">${r.subtitle}</div>
+        dropdown.innerHTML = results.map(r => {
+          const typeLabel = r.type === 'persona' ? 'PER' : r.type === 'hecho' ? 'HEC' : r.type === 'allanamiento' ? 'ALL' : 'BAN';
+          const coordsAttr = r.coords ? `data-lng="${r.coords.lng}" data-lat="${r.coords.lat}"` : '';
+          return `
+            <div class="search-result-item" data-type="${r.type}" data-id="${r.id}" ${coordsAttr}>
+              <span class="search-result-type ${r.type}">${typeLabel}</span>
+              <div>
+                <div style="font-weight:500;font-size:13px">${r.title}</div>
+                <div style="font-size:11px;color:var(--text-muted)">${r.subtitle}</div>
+              </div>
             </div>
-          </div>
-        `).join('');
+          `;
+        }).join('');
       }
       dropdown.classList.add('visible');
     }, 300);
@@ -180,15 +184,17 @@ function setupSearch() {
     dropdown.classList.remove('visible');
     input.value = '';
 
-    // Navigate to result
     const type = item.dataset.type;
-    if (type === 'persona') {
-      navigateToView('personas');
-    } else if (type === 'hecho') {
-      navigateToView('mapa');
-    } else if (type === 'banda') {
-      navigateToView('bandas');
+    const id = item.dataset.id;
+    const lng = item.dataset.lng ? parseFloat(item.dataset.lng) : null;
+    const lat = item.dataset.lat ? parseFloat(item.dataset.lat) : null;
+
+    if (lng && lat) {
+      document.querySelector('[data-view="mapa"]')?.click();
+      flyTo(lng, lat, 16);
     }
+
+    showEntityDetail(type, id);
   });
 
   // Close dropdown on outside click
@@ -1140,6 +1146,9 @@ async function showEntityDetail(type, id) {
           </div>
           <div><span style="color:var(--text-muted);display:block;font-size:11px">MODUS OPERANDI / ACTIVIDADES</span><div style="font-size:13px;margin-top:4px">${b.actividad_principal || '—'}</div></div>
           <div><span style="color:var(--text-muted);display:block;font-size:11px">INTELIGENCIA TÁCTICA</span><div style="font-size:13px;margin-top:4px;color:var(--text-secondary)">${b.descripcion || 'Sin observaciones registradas.'}</div></div>
+          <div style="display:flex;gap:8px;margin-top:8px">
+            <button class="btn btn-accent btn-sm" onclick="document.getElementById('modal-detalle').classList.add('hidden');document.querySelector('[data-view=grafo]').click();">Ver Red de Vínculos</button>
+          </div>
         </div>
       `;
     } else if (type === 'allanamiento') {

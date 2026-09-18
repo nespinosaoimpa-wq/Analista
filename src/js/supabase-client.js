@@ -424,28 +424,40 @@ export async function globalSearch(term) {
       type: 'persona',
       id: p.id,
       title: `${p.nombre || ''} ${p.apellido || ''}`.trim() || 'Sin nombre',
-      subtitle: p.alias?.length ? `Alias: ${p.alias.join(', ')}` : (p.dni || ''),
+      subtitle: p.alias?.length ? `Alias: ${p.alias.join(', ')}` : (p.dni ? `DNI: ${p.dni}` : p.domicilio_principal || ''),
+      coords: parseGeom(p.domicilio_principal_geom),
     }));
 
-    const hechos = await getHechos({ limit: 200 });
+    const hechos = await getHechos({ limit: 500 });
     hechos.filter(h =>
       h.cuij?.toLowerCase().includes(t) ||
       h.direccion?.toLowerCase().includes(t) ||
       h.barrio?.toLowerCase().includes(t) ||
-      h.tipo_penal?.toLowerCase().includes(t)
+      h.tipo_penal?.toLowerCase().includes(t) ||
+      h.resumen?.toLowerCase().includes(t)
     ).slice(0, 5).forEach(h => results.push({
       type: 'hecho',
       id: h.id,
       title: h.tipo_penal || 'Hecho',
-      subtitle: h.direccion || h.barrio || h.cuij || '',
+      subtitle: `${h.direccion || h.barrio || ''} ${h.cuij ? `(CUIJ: ${h.cuij})` : ''}`,
+      coords: parseGeom(h.geom),
+    }));
+
+    const allanamientos = await getAllanamientos({ search: term, limit: 5 });
+    allanamientos.forEach(a => results.push({
+      type: 'allanamiento',
+      id: a.id,
+      title: `Allanamiento: ${a.cuij || a.direccion}`,
+      subtitle: `${a.direccion || ''} ${a.barrio ? `(${a.barrio})` : ''}`,
+      coords: parseGeom(a.geom),
     }));
 
     const bandas = await getBandas({ search: term, limit: 5 });
     bandas.forEach(b => results.push({
       type: 'banda',
       id: b.id,
-      title: b.nombre,
-      subtitle: b.barrio_base || '',
+      title: `Banda: ${b.nombre}`,
+      subtitle: b.barrio_base ? `Base: ${b.barrio_base}` : '',
     }));
   } catch (e) {
     console.error('Global search error:', e);
