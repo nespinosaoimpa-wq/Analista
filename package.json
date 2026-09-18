@@ -1,0 +1,26 @@
+{
+  "name": "crimint",
+  "version": "1.0.0",
+  "description": "CRIMINT - Plataforma de Inteligencia Criminal y Despliegue Táctico",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "seed": "node scripts/seed-data.js",
+    "import:local": "node scripts/import-local-data.js"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.45.0",
+    "chart.js": "^4.4.0",
+    "dotenv": "^18.0.0",
+    "jszip": "^3.10.2",
+    "mapbox-gl": "^3.9.0",
+    "vis-data": "^7.1.9",
+    "vis-network": "^9.1.9",
+    "xlsx": "^0.18.5"
+  },
+  "devDependencies": {
+    "vite": "^6.0.0"
+  }
+}

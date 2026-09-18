@@ -1,0 +1,802 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="CRIMINT - Plataforma de Inteligencia Criminal y Despliegue Táctico">
+  <title>CRIMINT — Inteligencia Criminal</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link href="https://api.mapbox.com/mapbox-gl-js/v3.9.2/mapbox-gl.css" rel="stylesheet">
+  <link rel="stylesheet" href="/src/styles/main.css">
+</head>
+<body>
+  <!-- ========== HEADER ========== -->
+  <header class="app-header" id="app-header">
+    <div class="header-left">
+      <button class="sidebar-toggle" id="sidebar-toggle" aria-label="Toggle sidebar">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+      </button>
+      <div class="app-logo">
+        <div class="logo-icon">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <circle cx="12" cy="12" r="10"/>
+            <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+            <line x1="2" y1="12" x2="22" y2="12"/>
+          </svg>
+        </div>
+        <div class="logo-text">
+          <span class="logo-title">CRIMINT</span>
+          <span class="logo-subtitle">Inteligencia Criminal</span>
+        </div>
+      </div>
+    </div>
+    <div class="header-center">
+      <div class="global-search" id="global-search">
+        <svg class="search-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <input type="text" id="search-input" placeholder="Buscar persona, alias, CUIJ, dirección..." autocomplete="off">
+        <kbd class="search-kbd">Ctrl+K</kbd>
+        <div class="search-results-dropdown" id="search-results-dropdown"></div>
+      </div>
+    </div>
+    <div class="header-right">
+      <div class="header-stats" id="header-stats">
+        <div class="stat-chip" id="stat-hechos">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/></svg>
+          <span>0</span>
+        </div>
+        <div class="stat-chip" id="stat-personas">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
+          <span>0</span>
+        </div>
+        <div class="stat-chip" id="stat-bandas">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+          <span>0</span>
+        </div>
+      </div>
+      <div class="header-actions">
+        <button class="icon-btn" id="btn-notifications" title="Alertas">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+          <span class="notification-badge hidden" id="notification-badge">0</span>
+        </button>
+        <div class="user-menu" id="user-menu">
+          <div class="user-avatar">A</div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- ========== SIDEBAR ========== -->
+  <nav class="sidebar" id="sidebar">
+    <div class="sidebar-nav">
+      <button class="nav-item active" data-view="mapa" id="nav-mapa" title="Mapa Táctico">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"/><line x1="8" y1="2" x2="8" y2="18"/><line x1="16" y1="6" x2="16" y2="22"/></svg>
+        <span class="nav-label">Mapa</span>
+      </button>
+      <button class="nav-item" data-view="dashboard" id="nav-dashboard" title="Dashboard">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+        <span class="nav-label">Dashboard</span>
+      </button>
+      <button class="nav-item" data-view="personas" id="nav-personas" title="Personas">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        <span class="nav-label">Personas</span>
+      </button>
+      <button class="nav-item" data-view="bandas" id="nav-bandas" title="Bandas">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 22 8.5 22 15.5 12 22 2 15.5 2 8.5 12 2"/><line x1="12" y1="22" x2="12" y2="15.5"/><polyline points="22 8.5 12 15.5 2 8.5"/></svg>
+        <span class="nav-label">Bandas</span>
+      </button>
+      <button class="nav-item" data-view="grafo" id="nav-grafo" title="Red de Vínculos">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="6" cy="6" r="3"/><circle cx="18" cy="18" r="3"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><line x1="8.5" y1="7.5" x2="15.5" y2="16.5"/><line x1="15.5" y1="7.5" x2="8.5" y2="16.5"/></svg>
+        <span class="nav-label">Vínculos</span>
+      </button>
+      <button class="nav-item" data-view="allanamientos" id="nav-allanamientos" title="Allanamientos">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="22" y1="12" x2="18" y2="12"/><line x1="6" y1="12" x2="2" y2="12"/><line x1="12" y1="6" x2="12" y2="2"/><line x1="12" y1="22" x2="12" y2="18"/></svg>
+        <span class="nav-label">Operativos</span>
+      </button>
+      <div class="nav-divider"></div>
+      <button class="nav-item" data-view="carga" id="nav-carga" title="Carga de Datos">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+        <span class="nav-label">Cargar</span>
+      </button>
+    </div>
+    <div class="sidebar-footer">
+      <button class="nav-item" id="nav-config" title="Configuración">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        <span class="nav-label">Config</span>
+      </button>
+    </div>
+  </nav>
+
+  <!-- ========== MAIN CONTENT ========== -->
+  <main class="main-content" id="main-content">
+    <!-- MAP VIEW (Default) -->
+    <div class="view active" id="view-mapa">
+      <div id="map-container" class="map-container"></div>
+      
+      <!-- Map Controls Overlay -->
+      <div class="map-controls" id="map-controls">
+        <div class="map-filter-bar" id="map-filter-bar">
+          <div class="filter-group">
+            <label>Desde</label>
+            <input type="date" id="filter-fecha-desde" class="filter-input">
+          </div>
+          <div class="filter-group">
+            <label>Hasta</label>
+            <input type="date" id="filter-fecha-hasta" class="filter-input">
+          </div>
+          <div class="filter-group">
+            <label>Lesividad mín.</label>
+            <input type="range" id="filter-lesividad" min="1" max="10" value="1" class="filter-range">
+            <span id="filter-lesividad-val">1</span>
+          </div>
+          <div class="filter-group">
+            <label>Tipo</label>
+            <select id="filter-tipo" class="filter-select">
+              <option value="">Todos</option>
+            </select>
+          </div>
+          <button class="btn btn-primary btn-sm" id="btn-apply-filters">Aplicar</button>
+          <button class="btn btn-ghost btn-sm" id="btn-clear-filters">Limpiar</button>
+        </div>
+
+        <div class="map-layer-panel" id="map-layer-panel">
+          <h4 class="panel-mini-title">Capas</h4>
+          <label class="layer-toggle">
+            <input type="checkbox" id="layer-heatmap" checked> 
+            <span class="layer-dot" style="background:#ef4444"></span>Mapa de Calor
+          </label>
+          <label class="layer-toggle">
+            <input type="checkbox" id="layer-clusters" checked> 
+            <span class="layer-dot" style="background:#0ea5e9"></span>Clusters
+          </label>
+          <label class="layer-toggle">
+            <input type="checkbox" id="layer-zonas"> 
+            <span class="layer-dot" style="background:#f59e0b"></span>Zonas/Territorios
+          </label>
+          <label class="layer-toggle">
+            <input type="checkbox" id="layer-allanamientos"> 
+            <span class="layer-dot" style="background:#22c55e"></span>Allanamientos
+          </label>
+        </div>
+      </div>
+
+      <!-- Map Info Panel (appears on click) -->
+      <div class="map-info-panel hidden" id="map-info-panel">
+        <button class="panel-close" id="map-info-close">&times;</button>
+        <div id="map-info-content"></div>
+      </div>
+    </div>
+
+    <!-- DASHBOARD VIEW -->
+    <div class="view" id="view-dashboard">
+      <div class="dashboard-container">
+        <div class="dashboard-header">
+          <h1>Dashboard Analítico</h1>
+          <div class="dashboard-date-range">
+            <input type="date" id="dash-fecha-desde" class="filter-input">
+            <span>—</span>
+            <input type="date" id="dash-fecha-hasta" class="filter-input">
+            <button class="btn btn-primary btn-sm" id="btn-dash-refresh">Actualizar</button>
+          </div>
+        </div>
+        <div class="kpi-grid" id="kpi-grid">
+          <div class="kpi-card" id="kpi-hechos">
+            <div class="kpi-icon danger">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/></svg>
+            </div>
+            <div class="kpi-data">
+              <span class="kpi-value" id="kpi-val-hechos">0</span>
+              <span class="kpi-label">Hechos Delictivos</span>
+            </div>
+          </div>
+          <div class="kpi-card" id="kpi-personas-card">
+            <div class="kpi-icon info">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
+            </div>
+            <div class="kpi-data">
+              <span class="kpi-value" id="kpi-val-personas">0</span>
+              <span class="kpi-label">Personas Registradas</span>
+            </div>
+          </div>
+          <div class="kpi-card" id="kpi-bandas-card">
+            <div class="kpi-icon warning">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 22 8.5 22 15.5 12 22 2 15.5 2 8.5 12 2"/></svg>
+            </div>
+            <div class="kpi-data">
+              <span class="kpi-value" id="kpi-val-bandas">0</span>
+              <span class="kpi-label">Bandas Activas</span>
+            </div>
+          </div>
+          <div class="kpi-card" id="kpi-ops-card">
+            <div class="kpi-icon success">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="22" y1="12" x2="18" y2="12"/><line x1="6" y1="12" x2="2" y2="12"/></svg>
+            </div>
+            <div class="kpi-data">
+              <span class="kpi-value" id="kpi-val-ops">0</span>
+              <span class="kpi-label">Allanamientos</span>
+            </div>
+          </div>
+        </div>
+        <div class="charts-grid">
+          <div class="chart-card">
+            <h3>Tendencia Temporal</h3>
+            <canvas id="chart-tendencia"></canvas>
+          </div>
+          <div class="chart-card">
+            <h3>Por Tipo Penal</h3>
+            <canvas id="chart-tipos"></canvas>
+          </div>
+          <div class="chart-card">
+            <h3>Por Barrio</h3>
+            <canvas id="chart-barrios"></canvas>
+          </div>
+          <div class="chart-card">
+            <h3>Distribución de Lesividad</h3>
+            <canvas id="chart-lesividad"></canvas>
+          </div>
+        </div>
+        <div class="recent-table-card">
+          <h3>Últimos Hechos Registrados</h3>
+          <div class="table-wrapper">
+            <table class="data-table" id="table-hechos">
+              <thead>
+                <tr>
+                  <th>Fecha</th>
+                  <th>Tipo</th>
+                  <th>Dirección</th>
+                  <th>Barrio</th>
+                  <th>Lesividad</th>
+                  <th>CUIJ</th>
+                  <th>Acciones</th>
+                </tr>
+              </thead>
+              <tbody id="table-hechos-body"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- PERSONAS VIEW -->
+    <div class="view" id="view-personas">
+      <div class="list-view-container">
+        <div class="list-header">
+          <h1>Personas de Interés</h1>
+          <div class="list-actions">
+            <div class="search-inline">
+              <input type="text" id="personas-search" placeholder="Buscar por nombre, alias, DNI..." class="filter-input">
+            </div>
+            <button class="btn btn-primary" id="btn-nueva-persona">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              Nueva Persona
+            </button>
+          </div>
+        </div>
+        <div class="cards-grid" id="personas-grid"></div>
+      </div>
+    </div>
+
+    <!-- BANDAS VIEW -->
+    <div class="view" id="view-bandas">
+      <div class="list-view-container">
+        <div class="list-header">
+          <h1>Estructuras Criminales</h1>
+          <div class="list-actions">
+            <input type="text" id="bandas-search" placeholder="Buscar banda..." class="filter-input">
+            <button class="btn btn-primary" id="btn-nueva-banda">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              Nueva Banda
+            </button>
+          </div>
+        </div>
+        <div class="cards-grid" id="bandas-grid"></div>
+      </div>
+    </div>
+
+    <!-- GRAFO VIEW -->
+    <div class="view" id="view-grafo">
+      <div class="grafo-container">
+        <div class="grafo-toolbar">
+          <h1>Red de Vínculos</h1>
+          <div class="grafo-controls">
+            <select id="grafo-persona-select" class="filter-select">
+              <option value="">Seleccionar persona...</option>
+            </select>
+            <button class="btn btn-primary btn-sm" id="btn-grafo-load">Cargar Grafo</button>
+          </div>
+        </div>
+        <div id="grafo-canvas" class="grafo-canvas"></div>
+        <div class="grafo-legend">
+          <span class="legend-item"><span class="legend-dot" style="background:#ef4444"></span>Penal</span>
+          <span class="legend-item"><span class="legend-dot" style="background:#f59e0b"></span>Familiar</span>
+          <span class="legend-item"><span class="legend-dot" style="background:#0ea5e9"></span>Comercial</span>
+          <span class="legend-item"><span class="legend-dot" style="background:#8b5cf6"></span>Subordinado</span>
+          <span class="legend-item"><span class="legend-dot" style="background:#ec4899"></span>Sentimental</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ALLANAMIENTOS VIEW -->
+    <div class="view" id="view-allanamientos">
+      <div class="list-view-container">
+        <div class="list-header">
+          <h1>Operativos y Allanamientos</h1>
+          <div class="list-actions">
+            <input type="text" id="allanamientos-search" placeholder="Buscar por CUIJ, dirección..." class="filter-input">
+            <button class="btn btn-primary" id="btn-nuevo-allanamiento">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              Nuevo Operativo
+            </button>
+            <button class="btn btn-accent" id="btn-briefing">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+              Generar Briefing
+            </button>
+          </div>
+        </div>
+        <div class="cards-grid" id="allanamientos-grid"></div>
+      </div>
+    </div>
+
+    <!-- CARGA VIEW -->
+    <div class="view" id="view-carga">
+      <div class="carga-container">
+        <h1>Carga y Procesamiento de Datos</h1>
+        <div class="carga-grid">
+          <!-- Manual Entry -->
+          <div class="carga-card">
+            <div class="carga-card-icon">
+              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+            </div>
+            <h3>Carga Manual</h3>
+            <p>Ingresar hechos, personas, bandas y vínculos manualmente.</p>
+            <div class="carga-actions">
+              <button class="btn btn-primary btn-sm" id="btn-form-hecho">Nuevo Hecho</button>
+              <button class="btn btn-secondary btn-sm" id="btn-form-persona">Nueva Persona</button>
+              <button class="btn btn-secondary btn-sm" id="btn-form-vinculo">Nuevo Vínculo</button>
+            </div>
+          </div>
+
+          <!-- KML Import -->
+          <div class="carga-card">
+            <div class="carga-card-icon kml">
+              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"/></svg>
+            </div>
+            <h3>Importar KML/KMZ</h3>
+            <p>Cargar archivos de Google My Maps con zonas y puntos georreferenciados.</p>
+            <div class="carga-actions">
+              <input type="file" id="input-kml" accept=".kml,.kmz" class="file-input" multiple>
+              <label for="input-kml" class="btn btn-primary btn-sm">Seleccionar Archivos</label>
+              <button class="btn btn-accent btn-sm" id="btn-import-kml-local">Importar de Carpeta Local</button>
+            </div>
+            <div class="import-status" id="kml-import-status"></div>
+          </div>
+
+          <!-- XLSX Import -->
+          <div class="carga-card">
+            <div class="carga-card-icon xlsx">
+              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+            </div>
+            <h3>Importar Excel</h3>
+            <p>Cargar planillas de datos con hechos, allanamientos y domicilios.</p>
+            <div class="carga-actions">
+              <input type="file" id="input-xlsx" accept=".xlsx,.xls,.csv" class="file-input" multiple>
+              <label for="input-xlsx" class="btn btn-primary btn-sm">Seleccionar Excel</label>
+            </div>
+            <div class="import-status" id="xlsx-import-status"></div>
+          </div>
+
+          <!-- LLM Processing -->
+          <div class="carga-card">
+            <div class="carga-card-icon llm">
+              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20z"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+            </div>
+            <h3>Procesamiento LLM</h3>
+            <p>Extraer entidades automáticamente de informes DOCX/PDF con IA.</p>
+            <div class="carga-actions">
+              <input type="file" id="input-docs" accept=".docx,.pdf,.odt" class="file-input" multiple>
+              <label for="input-docs" class="btn btn-primary btn-sm">Seleccionar Documentos</label>
+              <button class="btn btn-accent btn-sm" id="btn-process-local-docs">Procesar Carpeta Local</button>
+            </div>
+            <div class="import-status" id="llm-import-status"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- ========== MODALS ========== -->
+  <!-- Modal: Nuevo Hecho -->
+  <div class="modal-overlay hidden" id="modal-hecho">
+    <div class="modal">
+      <div class="modal-header">
+        <h2>Registrar Hecho Delictivo</h2>
+        <button class="modal-close" data-close="modal-hecho">&times;</button>
+      </div>
+      <div class="modal-body">
+        <form id="form-hecho">
+          <div class="form-row">
+            <div class="form-group">
+              <label for="hecho-fecha">Fecha y Hora</label>
+              <input type="datetime-local" id="hecho-fecha" class="form-input" required>
+            </div>
+            <div class="form-group">
+              <label for="hecho-tipo">Tipo Penal</label>
+              <select id="hecho-tipo" class="form-input" required>
+                <option value="">Seleccionar...</option>
+                <option value="Microtráfico">Microtráfico</option>
+                <option value="Abuso de armas">Abuso de armas</option>
+                <option value="Homicidio">Homicidio</option>
+                <option value="Tentativa de homicidio">Tentativa de homicidio</option>
+                <option value="Robo">Robo</option>
+                <option value="Robo calificado">Robo calificado</option>
+                <option value="Amenazas">Amenazas</option>
+                <option value="Lesiones">Lesiones</option>
+                <option value="Tenencia de estupefacientes">Tenencia de estupefacientes</option>
+                <option value="Comercialización de estupefacientes">Comercialización de estupefacientes</option>
+                <option value="Extorsión">Extorsión</option>
+                <option value="Usurpación">Usurpación</option>
+                <option value="Otros">Otros</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="hecho-direccion">Dirección</label>
+              <input type="text" id="hecho-direccion" class="form-input" placeholder="Ej: Esmeralda y Riobamba">
+            </div>
+            <div class="form-group">
+              <label for="hecho-barrio">Barrio</label>
+              <input type="text" id="hecho-barrio" class="form-input" placeholder="Ej: San Lorenzo">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="hecho-lesividad">Índice de Lesividad (1-10)</label>
+              <input type="range" id="hecho-lesividad" min="1" max="10" value="3" class="filter-range">
+              <span id="hecho-lesividad-val">3</span>
+            </div>
+            <div class="form-group">
+              <label for="hecho-cuij">CUIJ</label>
+              <input type="text" id="hecho-cuij" class="form-input" placeholder="21-09XXXXXX-X">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="hecho-requerimiento">Requerimiento</label>
+              <input type="text" id="hecho-requerimiento" class="form-input" placeholder="R-XXXXXX-XX">
+            </div>
+            <div class="form-group">
+              <label for="hecho-localidad">Localidad</label>
+              <input type="text" id="hecho-localidad" class="form-input" value="Santa Fe">
+            </div>
+          </div>
+          <div class="form-group">
+            <label for="hecho-modus">Modus Operandi</label>
+            <textarea id="hecho-modus" class="form-input" rows="2" placeholder="Descripción del modus operandi..."></textarea>
+          </div>
+          <div class="form-group">
+            <label for="hecho-resumen">Resumen</label>
+            <textarea id="hecho-resumen" class="form-input" rows="3" placeholder="Resumen del hecho..."></textarea>
+          </div>
+          <div class="form-actions">
+            <button type="button" class="btn btn-ghost" data-close="modal-hecho">Cancelar</button>
+            <button type="submit" class="btn btn-primary">Guardar Hecho</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Nueva Persona -->
+  <div class="modal-overlay hidden" id="modal-persona">
+    <div class="modal modal-lg">
+      <div class="modal-header">
+        <h2>Registrar Persona</h2>
+        <button class="modal-close" data-close="modal-persona">&times;</button>
+      </div>
+      <div class="modal-body">
+        <form id="form-persona">
+          <div class="form-section-title">Datos de Identidad</div>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="persona-nombre">Nombre</label>
+              <input type="text" id="persona-nombre" class="form-input">
+            </div>
+            <div class="form-group">
+              <label for="persona-apellido">Apellido</label>
+              <input type="text" id="persona-apellido" class="form-input">
+            </div>
+            <div class="form-group">
+              <label for="persona-dni">DNI</label>
+              <input type="text" id="persona-dni" class="form-input">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="persona-alias">Alias (separados por coma)</label>
+              <input type="text" id="persona-alias" class="form-input" placeholder='Ej: El Tuerto, Tuerquito'>
+            </div>
+            <div class="form-group">
+              <label for="persona-sexo">Sexo</label>
+              <select id="persona-sexo" class="form-input">
+                <option value="M">Masculino</option>
+                <option value="F">Femenino</option>
+                <option value="X">Otro</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="persona-nacimiento">Fecha Nacimiento</label>
+              <input type="date" id="persona-nacimiento" class="form-input">
+            </div>
+          </div>
+
+          <div class="form-section-title">Descripción Física</div>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="persona-tez">Tez</label>
+              <input type="text" id="persona-tez" class="form-input" placeholder="Clara, trigueña, morena...">
+            </div>
+            <div class="form-group">
+              <label for="persona-cabello">Cabello</label>
+              <input type="text" id="persona-cabello" class="form-input" placeholder="Negro corto, rubio largo...">
+            </div>
+            <div class="form-group">
+              <label for="persona-contextura">Contextura</label>
+              <input type="text" id="persona-contextura" class="form-input" placeholder="Delgada, robusta, atlética...">
+            </div>
+          </div>
+          <div class="form-group">
+            <label for="persona-senas">Señas Particulares (tatuajes, cicatrices)</label>
+            <textarea id="persona-senas" class="form-input" rows="2"></textarea>
+          </div>
+
+          <div class="form-section-title">Análisis Criminal</div>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="persona-peligrosidad">Peligrosidad (0-10)</label>
+              <input type="range" id="persona-peligrosidad" min="0" max="10" value="0" class="filter-range">
+              <span id="persona-peligrosidad-val">0</span>
+            </div>
+            <div class="form-group">
+              <label for="persona-roles">Roles (separados por coma)</label>
+              <input type="text" id="persona-roles" class="form-input" placeholder="dealer, tirador, campana...">
+            </div>
+          </div>
+          <div class="form-group">
+            <label for="persona-domicilio">Domicilio Principal</label>
+            <input type="text" id="persona-domicilio" class="form-input" placeholder="Dirección completa">
+          </div>
+          <div class="form-group">
+            <label for="persona-antecedentes">Antecedentes / Notas</label>
+            <textarea id="persona-antecedentes" class="form-input" rows="3"></textarea>
+          </div>
+
+  <!-- Modal: Nueva Banda -->
+  <div class="modal-overlay hidden" id="modal-banda">
+    <div class="modal">
+      <div class="modal-header">
+        <h2>Registrar Estructura Criminal</h2>
+        <button class="modal-close" data-close="modal-banda">&times;</button>
+      </div>
+      <div class="modal-body">
+        <form id="form-banda">
+          <div class="form-row">
+            <div class="form-group">
+              <label for="banda-nombre">Nombre de la Banda / Organización</label>
+              <input type="text" id="banda-nombre" class="form-input" placeholder="Ej: Los Chingos, La Negrada" required>
+            </div>
+            <div class="form-group">
+              <label for="banda-barrio">Barrio Base / Zona Principal</label>
+              <input type="text" id="banda-barrio" class="form-input" placeholder="Ej: Yapeyú, San Lorenzo">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="banda-color">Color Distintivo</label>
+              <input type="color" id="banda-color" class="form-input" value="#EF4444" style="height:42px;padding:2px 6px">
+            </div>
+            <div class="form-group">
+              <label for="banda-peligrosidad">Nivel de Hostilidad / Conflicto (1-10)</label>
+              <input type="range" id="banda-peligrosidad" min="1" max="10" value="5" class="filter-range">
+              <span id="banda-peligrosidad-val">5</span>
+            </div>
+          </div>
+          <div class="form-group">
+            <label for="banda-modus">Modus Operandi / Actividades Ilícitas</label>
+            <textarea id="banda-modus" class="form-input" rows="2" placeholder="Comercialización de estupefacientes, usurpación, abuso de armas..."></textarea>
+          </div>
+          <div class="form-group">
+            <label for="banda-observaciones">Observaciones e Inteligencia Táctica</label>
+            <textarea id="banda-observaciones" class="form-input" rows="3" placeholder="Disputas territoriales, puntos de acopio, contactos clave..."></textarea>
+          </div>
+          <div class="form-actions">
+            <button type="button" class="btn btn-ghost" data-close="modal-banda">Cancelar</button>
+            <button type="submit" class="btn btn-primary">Guardar Banda</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Nuevo Allanamiento / Operativo -->
+  <div class="modal-overlay hidden" id="modal-allanamiento">
+    <div class="modal modal-lg">
+      <div class="modal-header">
+        <h2>Registrar Operativo / Allanamiento</h2>
+        <button class="modal-close" data-close="modal-allanamiento">&times;</button>
+      </div>
+      <div class="modal-body">
+        <form id="form-allanamiento">
+          <div class="form-row">
+            <div class="form-group">
+              <label for="allanamiento-cuij">CUIJ / Causa Judicial</label>
+              <input type="text" id="allanamiento-cuij" class="form-input" placeholder="21-09XXXXXX-X" required>
+            </div>
+            <div class="form-group">
+              <label for="allanamiento-req">N° Requerimiento</label>
+              <input type="text" id="allanamiento-req" class="form-input" placeholder="R-XXXXXX-XX">
+            </div>
+            <div class="form-group">
+              <label for="allanamiento-fecha">Fecha del Operativo</label>
+              <input type="datetime-local" id="allanamiento-fecha" class="form-input" required>
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="allanamiento-direccion">Dirección Objetivo</label>
+              <input type="text" id="allanamiento-direccion" class="form-input" placeholder="Calle y altura o intersección" required>
+            </div>
+            <div class="form-group">
+              <label for="allanamiento-barrio">Barrio</label>
+              <input type="text" id="allanamiento-barrio" class="form-input" placeholder="Ej: San Lorenzo, Las Flores">
+            </div>
+            <div class="form-group">
+              <label for="allanamiento-localidad">Localidad</label>
+              <input type="text" id="allanamiento-localidad" class="form-input" value="Santa Fe">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="allanamiento-fuerza">Fuerza Interviniente</label>
+              <select id="allanamiento-fuerza" class="form-input">
+                <option value="PDI">PDI (Policía de Investigaciones)</option>
+                <option value="Policía de Santa Fe">Policía de Santa Fe (URI)</option>
+                <option value="Gendarmería Nacional">Gendarmería Nacional</option>
+                <option value="Prefectura Naval">Prefectura Naval</option>
+                <option value="Policía Federal Argentina">Policía Federal Argentina (PFA)</option>
+                <option value="Fuerza Conjunta">Fuerza Conjunta / Mixta</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="allanamiento-resultado">Resultado</label>
+              <select id="allanamiento-resultado" class="form-input">
+                <option value="Positivo">Positivo (Secuestro / Detención)</option>
+                <option value="Negativo">Negativo</option>
+                <option value="En curso">En curso / Planificado</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="allanamiento-juzgado">Juzgado / Fiscalía Interviniente</label>
+              <input type="text" id="allanamiento-juzgado" class="form-input" placeholder="MPA Fiscalía Regional 1">
+            </div>
+          </div>
+          <div class="form-group">
+            <label for="allanamiento-secuestros">Detalle de Secuestros y Detenidos</label>
+            <textarea id="allanamiento-secuestros" class="form-input" rows="2" placeholder="Estupefacientes (cocaína, marihuana), armas de fuego, teléfonos celulares, dinero..."></textarea>
+          </div>
+          <div class="form-group">
+            <label for="allanamiento-resumen">Síntesis Operativa</label>
+            <textarea id="allanamiento-resumen" class="form-input" rows="2" placeholder="Resumen del desarrollo y novedades del allanamiento..."></textarea>
+          </div>
+          <div class="form-actions">
+            <button type="button" class="btn btn-ghost" data-close="modal-allanamiento">Cancelar</button>
+            <button type="submit" class="btn btn-primary">Guardar Operativo</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Nuevo Vínculo -->
+  <div class="modal-overlay hidden" id="modal-vinculo">
+    <div class="modal">
+      <div class="modal-header">
+        <h2>Establecer Vínculo Criminal</h2>
+        <button class="modal-close" data-close="modal-vinculo">&times;</button>
+      </div>
+      <div class="modal-body">
+        <form id="form-vinculo">
+          <div class="form-row">
+            <div class="form-group">
+              <label for="vinculo-origen">Persona Origen</label>
+              <select id="vinculo-origen" class="form-input" required>
+                <option value="">Seleccionar persona...</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="vinculo-destino">Persona Destino</label>
+              <select id="vinculo-destino" class="form-input" required>
+                <option value="">Seleccionar persona...</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="vinculo-tipo">Tipo de Vínculo</label>
+              <select id="vinculo-tipo" class="form-input" required>
+                <option value="COAUTOR_EN">Coautor en Hecho (Penal)</option>
+                <option value="SUBORDINADO_A">Subordinado a (Estructura)</option>
+                <option value="VINCULO_CON">Vínculo con (Contacto)</option>
+                <option value="FAMILIAR_DE">Familiar de</option>
+                <option value="COMERCIAL_CON">Comercial / Negocios</option>
+                <option value="SENTIMENTAL_CON">Sentimental / Pareja</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="vinculo-certeza">Certeza de la Evidencia</label>
+              <select id="vinculo-certeza" class="form-input">
+                <option value="CONFIRMADO">Confirmado (Causa Judicial / Intervención)</option>
+                <option value="SOSPECHA">Sospecha Fundada</option>
+                <option value="INTELIGENCIA">Inteligencia Policial / Testimonial</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-group">
+            <label for="vinculo-origen-info">Origen de la Información / Causa</label>
+            <input type="text" id="vinculo-origen-info" class="form-input" placeholder="Ej: CUIJ 21-09744817-2 / Intervención telefónica">
+          </div>
+          <div class="form-group">
+            <label for="vinculo-obs">Observaciones del Vínculo</label>
+            <textarea id="vinculo-obs" class="form-input" rows="2" placeholder="Detalles de la relación, roles entre ambos..."></textarea>
+          </div>
+          <div class="form-actions">
+            <button type="button" class="btn btn-ghost" data-close="modal-vinculo">Cancelar</button>
+            <button type="submit" class="btn btn-primary">Registrar Vínculo</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Tactical Briefing -->
+  <div class="modal-overlay hidden" id="modal-briefing">
+    <div class="modal modal-lg">
+      <div class="modal-header">
+        <h2>Ficha Táctica Operativa (Briefing)</h2>
+        <div style="display:flex;gap:8px;align-items:center">
+          <button class="btn btn-secondary btn-sm" id="btn-print-briefing" onclick="window.print()">Imprimir Ficha</button>
+          <button class="modal-close" data-close="modal-briefing">&times;</button>
+        </div>
+      </div>
+      <div class="modal-body" id="briefing-content">
+        <!-- Generated dynamically -->
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Detalle de Entidad -->
+  <div class="modal-overlay hidden" id="modal-detalle">
+    <div class="modal modal-lg">
+      <div class="modal-header">
+        <h2 id="detalle-titulo">Detalle</h2>
+        <button class="modal-close" data-close="modal-detalle">&times;</button>
+      </div>
+      <div class="modal-body" id="detalle-contenido"></div>
+    </div>
+  </div>
+
+  <!-- Toast Notifications -->
+  <div class="toast-container" id="toast-container"></div>
+
+  <!-- Loading Overlay -->
+  <div class="loading-overlay hidden" id="loading-overlay">
+    <div class="loading-spinner">
+      <div class="spinner"></div>
+      <span id="loading-text">Cargando...</span>
+    </div>
+  </div>
+
+  <script type="module" src="/src/js/app.js"></script>
+</body>
+</html>
