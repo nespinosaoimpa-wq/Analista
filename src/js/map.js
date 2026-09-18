@@ -348,6 +348,7 @@ export async function loadMapData(filters = {}) {
       }).filter(Boolean),
     };
     map.getSource('allanamientos')?.setData(allsGeoJSON);
+    window.dispatchEvent(new CustomEvent('crimint:data-loaded'));
 
   } catch (e) {
     console.error('Error loading map data:', e);

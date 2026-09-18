@@ -29,6 +29,7 @@ document.addEventListener('DOMContentLoaded', () => {
   setupRangeSliders();
   setupKeyboard();
   updateHeaderStats();
+  window.addEventListener('crimint:data-loaded', updateHeaderStats);
 
   // Default dates for filters
   const today = new Date().toISOString().split('T')[0];
