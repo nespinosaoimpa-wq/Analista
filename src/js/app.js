@@ -7,6 +7,7 @@ import {
   globalSearch, insertHecho, insertPersona, insertBanda,
   getPersonas, getBandas, getAllanamientos, insertAllanamiento, insertVinculo,
   getGrafoPersona, geocodeAddress, logAction, parseGeom,
+  getPersonaById, getBandaById, getAllanamientoById, getHechoById,
 } from './supabase-client.js';
 import { parseKML, parseKMZ, parseExcel, importExcelRows, importKMLGeoJSON, saveTacticalToLocal, getTacticalFromLocal } from './importers.js';
 import { CONFIG, getLesividadClass, formatDate, formatDateTime } from './config.js';
@@ -1090,8 +1091,8 @@ async function showEntityDetail(type, id) {
 
   try {
     if (type === 'persona') {
-      const { data: p, error } = await (await import('./supabase-client.js')).default.from('personas').select('*').eq('id', id).single();
-      if (error) throw error;
+      const p = await getPersonaById(id);
+      if (!p) throw new Error('No se encontró el registro de la persona.');
 
       titulo.textContent = `${p.nombre || ''} ${p.apellido || ''}`.trim() || 'Persona';
       contenido.innerHTML = `
@@ -1127,8 +1128,9 @@ async function showEntityDetail(type, id) {
         </div>
       `;
     } else if (type === 'banda') {
-      const { data: b, error } = await (await import('./supabase-client.js')).default.from('bandas').select('*').eq('id', id).single();
-      if (error) throw error;
+      const b = await getBandaById(id);
+      if (!b) throw new Error('No se encontró el registro de la banda.');
+
       titulo.textContent = b.nombre;
       contenido.innerHTML = `
         <div style="display:grid;gap:16px">
@@ -1141,8 +1143,9 @@ async function showEntityDetail(type, id) {
         </div>
       `;
     } else if (type === 'allanamiento') {
-      const { data: a, error } = await (await import('./supabase-client.js')).default.from('allanamientos').select('*').eq('id', id).single();
-      if (error) throw error;
+      const a = await getAllanamientoById(id);
+      if (!a) throw new Error('No se encontró el registro del operativo.');
+
       titulo.textContent = `Operativo: ${a.cuij || a.direccion}`;
       contenido.innerHTML = `
         <div style="display:grid;gap:16px">
@@ -1157,8 +1160,9 @@ async function showEntityDetail(type, id) {
         </div>
       `;
     } else if (type === 'hecho') {
-      const { data: h, error } = await (await import('./supabase-client.js')).default.from('hechos_delictivos').select('*').eq('id', id).single();
-      if (error) throw error;
+      const h = await getHechoById(id);
+      if (!h) throw new Error('No se encontró el hecho delictivo.');
+
       titulo.textContent = `${h.tipo_penal} — ${formatDate(h.fecha)}`;
       contenido.innerHTML = `
         <div style="display:grid;gap:16px">

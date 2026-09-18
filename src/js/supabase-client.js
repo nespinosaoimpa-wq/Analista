@@ -100,6 +100,17 @@ export async function getHechosGeoJSON({ desde, hasta, lesividadMin, tipo } = {}
   };
 }
 
+export async function getHechoById(id) {
+  try {
+    if (supabase) {
+      const { data, error } = await supabase.from('hechos_delictivos').select('*').eq('id', id).single();
+      if (!error && data) return data;
+    }
+  } catch (e) { }
+
+  return INITIAL_HECHOS.find(h => h.id === id) || null;
+}
+
 // ============================================================
 // PERSONAS
 // ============================================================
@@ -211,6 +222,17 @@ export async function insertBanda(banda) {
   return b;
 }
 
+export async function getBandaById(id) {
+  try {
+    if (supabase) {
+      const { data, error } = await supabase.from('bandas').select('*').eq('id', id).single();
+      if (!error && data) return data;
+    }
+  } catch (e) { }
+
+  return INITIAL_BANDAS.find(b => b.id === id) || null;
+}
+
 // ============================================================
 // VÍNCULOS (GRAFO)
 // ============================================================
@@ -285,6 +307,17 @@ export async function insertAllanamiento(all) {
   const item = { ...all, id: `local-allanamiento-${Date.now()}` };
   INITIAL_ALLANAMIENTOS.unshift(item);
   return item;
+}
+
+export async function getAllanamientoById(id) {
+  try {
+    if (supabase) {
+      const { data, error } = await supabase.from('allanamientos').select('*').eq('id', id).single();
+      if (!error && data) return data;
+    }
+  } catch (e) { }
+
+  return INITIAL_ALLANAMIENTOS.find(a => a.id === id) || null;
 }
 
 // ============================================================
