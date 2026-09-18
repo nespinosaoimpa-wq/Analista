@@ -28,6 +28,7 @@ document.addEventListener('DOMContentLoaded', () => {
   setupIngestion();
   setupRangeSliders();
   setupKeyboard();
+  updateHeaderStats();
 
   // Default dates for filters
   const today = new Date().toISOString().split('T')[0];
@@ -37,6 +38,24 @@ document.addEventListener('DOMContentLoaded', () => {
 
   showToast('CRIMINT iniciado correctamente', 'info');
 });
+
+export async function updateHeaderStats() {
+  try {
+    const [hechos, personas, bandas] = await Promise.all([
+      getHechos({ limit: 1000 }),
+      getPersonas({ limit: 1000 }),
+      getBandas({ limit: 1000 })
+    ]);
+    const elH = document.querySelector('#stat-hechos span');
+    const elP = document.querySelector('#stat-personas span');
+    const elB = document.querySelector('#stat-bandas span');
+    if (elH) elH.textContent = hechos.length;
+    if (elP) elP.textContent = personas.length;
+    if (elB) elB.textContent = bandas.length;
+  } catch (e) {
+    console.warn('Error actualizando métricas del header:', e);
+  }
+}
 
 function setDefaultDate(id, value) {
   const el = document.getElementById(id);

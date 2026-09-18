@@ -1,6 +1,6 @@
 import mapboxgl from 'mapbox-gl';
 import { CONFIG, getLesividadColor, formatDateTime } from './config.js';
-import { getHechosGeoJSON, getZonas, getAllanamientos, parseGeom } from './supabase-client.js';
+import { getHechosGeoJSON, getZonas, getAllanamientos, parseGeom, parsePolygonGeom } from './supabase-client.js';
 
 let map = null;
 let hechosSource = null;
@@ -9,32 +9,47 @@ let allanamientosSource = null;
 let popup = null;
 
 export function initMap() {
-  mapboxgl.accessToken = CONFIG.mapbox.token;
+  const token = CONFIG.mapbox.token;
+  if (token) {
+    mapboxgl.accessToken = token;
+  }
 
-  map = new mapboxgl.Map({
-    container: 'map-container',
-    style: CONFIG.mapbox.style,
-    center: CONFIG.mapbox.center,
-    zoom: CONFIG.mapbox.zoom,
-    attributionControl: false,
-    pitch: 0,
-    bearing: 0,
-  });
+  // Use Mapbox vector style if token exists, otherwise use CartoDB dark matter tiles
+  const mapStyle = token ? CONFIG.mapbox.style : CONFIG.mapbox.fallbackStyle;
 
-  map.addControl(new mapboxgl.NavigationControl({ showCompass: true }), 'bottom-right');
-  map.addControl(new mapboxgl.ScaleControl({ maxWidth: 150, unit: 'metric' }), 'bottom-left');
-  map.addControl(new mapboxgl.AttributionControl({ compact: true }), 'bottom-right');
+  try {
+    map = new mapboxgl.Map({
+      container: 'map-container',
+      style: mapStyle,
+      center: CONFIG.mapbox.center,
+      zoom: CONFIG.mapbox.zoom,
+      attributionControl: false,
+      pitch: 0,
+      bearing: 0,
+    });
 
-  popup = new mapboxgl.Popup({ closeOnClick: true, maxWidth: '320px' });
+    map.on('error', (e) => {
+      console.warn('Mapbox map error:', e);
+    });
 
-  map.on('load', () => {
-    setupSources();
-    setupLayers();
-    setupInteractions();
-    loadMapData();
-  });
+    map.addControl(new mapboxgl.NavigationControl({ showCompass: true }), 'bottom-right');
+    map.addControl(new mapboxgl.ScaleControl({ maxWidth: 150, unit: 'metric' }), 'bottom-left');
+    map.addControl(new mapboxgl.AttributionControl({ compact: true }), 'bottom-right');
 
-  return map;
+    popup = new mapboxgl.Popup({ closeOnClick: true, maxWidth: '320px' });
+
+    map.on('load', () => {
+      setupSources();
+      setupLayers();
+      setupInteractions();
+      loadMapData();
+    });
+
+    return map;
+  } catch (err) {
+    console.error('Error inicializando Mapbox:', err);
+    return null;
+  }
 }
 
 function setupSources() {
@@ -299,11 +314,8 @@ export async function loadMapData(filters = {}) {
         type: 'FeatureCollection',
         features: zonas.map(z => {
           try {
-            let geom = z.geom;
-            if (typeof geom === 'string') {
-              // Try to parse as GeoJSON
-              geom = JSON.parse(geom);
-            }
+            const geom = parsePolygonGeom(z.geom);
+            if (!geom) return null;
             return {
               type: 'Feature',
               geometry: geom,

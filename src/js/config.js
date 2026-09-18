@@ -1,12 +1,36 @@
 // CRIMINT Configuration
 export const CONFIG = {
   supabase: {
-    url: import.meta.env.VITE_SUPABASE_URL,
-    anonKey: import.meta.env.VITE_SUPABASE_ANON_KEY,
+    url: import.meta.env.VITE_SUPABASE_URL || '',
+    anonKey: import.meta.env.VITE_SUPABASE_ANON_KEY || '',
   },
   mapbox: {
-    token: import.meta.env.VITE_MAPBOX_TOKEN,
+    token: import.meta.env.VITE_MAPBOX_TOKEN || '',
     style: 'mapbox://styles/mapbox/dark-v11',
+    fallbackStyle: {
+      version: 8,
+      sources: {
+        'carto-dark': {
+          type: 'raster',
+          tiles: [
+            'https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png',
+            'https://b.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png',
+            'https://c.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png'
+          ],
+          tileSize: 256,
+          attribution: '&copy; CARTO &copy; OpenStreetMap'
+        }
+      },
+      layers: [
+        {
+          id: 'carto-dark-tiles',
+          type: 'raster',
+          source: 'carto-dark',
+          minzoom: 0,
+          maxzoom: 19
+        }
+      ]
+    },
     center: [-60.6936, -31.6333], // Santa Fe, Argentina
     zoom: 12.5,
   },
