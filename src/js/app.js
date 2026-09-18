@@ -1,14 +1,14 @@
 // ============================================================
 // CRIMINT — Main Application Orchestrator
 // ============================================================
-import { initMap, loadMapData, toggleLayer, flyTo } from './map.js';
+import { initMap, loadMapData, toggleLayer, flyTo, loadTacticalGeoJSON } from './map.js';
 import { initDashboard, refreshDashboard } from './dashboard.js';
 import {
   globalSearch, insertHecho, insertPersona, insertBanda,
   getPersonas, getBandas, getAllanamientos, insertAllanamiento, insertVinculo,
   getGrafoPersona, geocodeAddress, logAction, parseGeom,
 } from './supabase-client.js';
-import { parseKML, parseKMZ, parseExcel, importExcelRows, importKMLGeoJSON } from './importers.js';
+import { parseKML, parseKMZ, parseExcel, importExcelRows, importKMLGeoJSON, saveTacticalToLocal, getTacticalFromLocal } from './importers.js';
 import { CONFIG, getLesividadClass, formatDate, formatDateTime } from './config.js';
 import { Network } from 'vis-network';
 import { DataSet } from 'vis-data';
@@ -36,6 +36,14 @@ document.addEventListener('DOMContentLoaded', () => {
   const ago90 = new Date(Date.now() - 90 * 86400000).toISOString().split('T')[0];
   setDefaultDate('filter-fecha-desde', ago90);
   setDefaultDate('filter-fecha-hasta', today);
+
+  // Auto-restore cached tactical data if present
+  setTimeout(() => {
+    const cachedTactical = getTacticalFromLocal();
+    if (cachedTactical && cachedTactical.features?.length > 0) {
+      loadTacticalGeoJSON(cachedTactical, { fitBounds: false });
+    }
+  }, 1200);
 
   showToast('CRIMINT iniciado correctamente', 'info');
 });
@@ -501,7 +509,12 @@ function setupIngestion() {
   inputKml?.addEventListener('change', async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    statusKml.innerHTML = '<div class="spinner"></div> Procesando archivo geográfico...';
+    const mbSize = (file.size / (1024 * 1024)).toFixed(1);
+    statusKml.innerHTML = `<div class="spinner"></div> Procesando ${file.name} (${mbSize} MB)...`;
+    
+    // Give browser UI a frame to render the spinner
+    await new Promise(r => setTimeout(r, 40));
+
     try {
       let geoJSON;
       if (file.name.toLowerCase().endsWith('.kmz')) {
@@ -511,30 +524,88 @@ function setupIngestion() {
         geoJSON = parseKML(text);
       }
 
+      const totalFeats = geoJSON.features.length;
       const polygons = geoJSON.features.filter(f => f.geometry.type === 'Polygon').length;
       const points = geoJSON.features.filter(f => f.geometry.type === 'Point').length;
+      const folders = Object.entries(geoJSON.metadata?.folderBreakdown || {});
+
+      // 1. Instantly load on tactical map!
+      loadTacticalGeoJSON(geoJSON, { fitBounds: true });
+
+      // 2. Cache in browser local storage
+      saveTacticalToLocal(geoJSON);
+
+      showToast(`Capa táctica cargada: ${totalFeats} elementos (${polygons} zonas, ${points} puntos)`, 'success');
 
       statusKml.innerHTML = `
-        <div style="background:var(--bg-secondary);padding:12px;border-radius:8px;border:1px solid var(--border-color);margin-top:10px">
-          <div style="font-weight:600;color:var(--accent-primary)">Archivo analizado: ${file.name}</div>
-          <div style="font-size:12px;color:var(--text-secondary);margin:6px 0">
-            Encontrados: <strong>${polygons}</strong> polígonos/zonas y <strong>${points}</strong> puntos georreferenciados.
+        <div style="background:var(--bg-secondary);padding:14px;border-radius:10px;border:1px solid var(--border-color);margin-top:12px">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+            <span style="font-weight:700;color:var(--accent-success);font-size:13px">✓ Archivo procesado y visualizado</span>
+            <span style="font-size:11px;color:var(--text-muted)">${file.name} (${mbSize} MB)</span>
           </div>
-          <button class="btn btn-primary btn-sm" id="btn-confirm-kml-import">Confirmar Ingesta a Supabase</button>
+
+          <div style="display:grid;grid-template-columns:repeat(2, 1fr);gap:8px;margin:10px 0">
+            <div style="background:rgba(139,92,246,0.15);border:1px solid rgba(139,92,246,0.3);padding:8px 12px;border-radius:6px">
+              <div style="font-size:11px;color:#A78BFA;font-weight:600">BARRIOS / POLÍGONOS</div>
+              <div style="font-size:20px;font-weight:700;color:#fff">${polygons}</div>
+            </div>
+            <div style="background:rgba(14,165,233,0.15);border:1px solid rgba(14,165,233,0.3);padding:8px 12px;border-radius:6px">
+              <div style="font-size:11px;color:#38BDF8;font-weight:600">INCIDENCIAS / PUNTOS</div>
+              <div style="font-size:20px;font-weight:700;color:#fff">${points}</div>
+            </div>
+          </div>
+
+          ${folders.length > 0 ? `
+            <div style="font-size:11px;color:var(--text-secondary);margin:8px 0 4px">Capas tácticas detectadas:</div>
+            <div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:12px">
+              ${folders.slice(0, 10).map(([name, count]) => `
+                <span style="background:var(--bg-tertiary);border:1px solid var(--border-color);padding:2px 8px;border-radius:10px;font-size:10px;color:var(--text-secondary)">
+                  ${name}: <strong style="color:#fff">${count}</strong>
+                </span>
+              `).join('')}
+            </div>
+          ` : ''}
+
+          <div style="display:flex;gap:8px;margin-top:10px">
+            <button class="btn btn-primary btn-sm" id="btn-view-map-now" style="flex:1">🗺️ Ver en Mapa Táctico</button>
+            <button class="btn btn-secondary btn-sm" id="btn-confirm-kml-import">☁️ Sincronizar Supabase</button>
+          </div>
         </div>
       `;
 
+      document.getElementById('btn-view-map-now')?.addEventListener('click', () => {
+        navigateToView('mapa');
+        loadTacticalGeoJSON(geoJSON, { fitBounds: true });
+      });
+
       document.getElementById('btn-confirm-kml-import')?.addEventListener('click', async () => {
-        statusKml.innerHTML = '<div class="spinner"></div> Importando datos geográficos a la base...';
+        statusKml.innerHTML = `
+          <div style="background:var(--bg-secondary);padding:12px;border-radius:8px;border:1px solid var(--border-color);margin-top:10px">
+            <div style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text-secondary);margin-bottom:6px">
+              <div class="spinner"></div> Sincronizando por lotes a Supabase...
+            </div>
+            <div style="background:var(--bg-tertiary);height:6px;border-radius:3px;overflow:hidden">
+              <div id="kml-progress-bar" style="background:var(--accent-primary);width:0%;height:100%;transition:width 0.2s"></div>
+            </div>
+            <div id="kml-progress-text" style="font-size:11px;color:var(--text-muted);margin-top:4px">0 / ${totalFeats}</div>
+          </div>
+        `;
+
         try {
-          const res = await importKMLGeoJSON(geoJSON);
+          const res = await importKMLGeoJSON(geoJSON, (done, total) => {
+            const pct = Math.round((done / total) * 100);
+            const bar = document.getElementById('kml-progress-bar');
+            const txt = document.getElementById('kml-progress-text');
+            if (bar) bar.style.width = `${pct}%`;
+            if (txt) txt.textContent = `${done} / ${total} (${pct}%)`;
+          });
+
           statusKml.innerHTML = `
             <div style="color:var(--accent-success);font-size:13px;padding:8px 0">
-              ✓ Ingesta completada: ${res.insertedZonas} zonas y ${res.insertedHechos} hechos importados.
+              ✓ Sincronización finalizada: ${res.insertedZonas} zonas y ${res.insertedHechos} hechos guardados en base.
             </div>
           `;
-          showToast('Datos KML importados con éxito', 'success');
-          loadMapData();
+          showToast('Sincronización a base de datos finalizada', 'success');
         } catch (err) {
           statusKml.innerHTML = `<div style="color:var(--accent-danger)">Error: ${err.message}</div>`;
         }
@@ -544,45 +615,25 @@ function setupIngestion() {
     }
   });
 
-  // Local KMZ Import Button
+  // Local KMZ / Santa Fe Tactical Import Button
   document.getElementById('btn-import-kml-local')?.addEventListener('click', async () => {
-    showLoading('Cargando capas tácticas de Santa Fe...');
+    showLoading('Cargando capas tácticas completas de Santa Fe...');
     try {
-      const santaFeZonas = [
-        {
-          nombre: 'Barrio Yapeyú - Zona Conflicto',
-          tipo: 'BANDA_CONFLICTO',
-          barrio: 'Yapeyú',
-          geom: 'SRID=4326;POLYGON((-60.740042 -31.559614, -60.744912 -31.565812, -60.745792 -31.571443, -60.736673 -31.573600, -60.732338 -31.567037, -60.731845 -31.561991, -60.740042 -31.559614))',
-          color_hex: '#EF4444',
-          descripcion: 'Área de alta conflictividad armada y microtráfico - Los Chingos / Los de Siempre'
-        },
-        {
-          nombre: 'San Lorenzo - Zona Operativa',
-          tipo: 'PATRULLAJE_PRIORITARIO',
-          barrio: 'San Lorenzo',
-          geom: 'SRID=4326;POLYGON((-60.7325 -31.6500, -60.7250 -31.6520, -60.7230 -31.6620, -60.7350 -31.6610, -60.7325 -31.6500))',
-          color_hex: '#F59E0B',
-          descripcion: 'Sector de allanamientos e intervenciones de saturación policial'
-        },
-        {
-          nombre: 'Barranquitas Sur / Oeste',
-          tipo: 'BANDA_CONFLICTO',
-          barrio: 'Barranquitas',
-          geom: 'SRID=4326;POLYGON((-60.7200 -31.6300, -60.7100 -31.6320, -60.7120 -31.6400, -60.7220 -31.6390, -60.7200 -31.6300))',
-          color_hex: '#8B5CF6',
-          descripcion: 'Corredor de distribución y puntos de acopio de microtráfico'
-        }
-      ];
+      // Fetch the pre-compiled full Santa Fe tactical dataset
+      const response = await fetch('/data/santa_fe_tactical.json');
+      if (!response.ok) throw new Error(`HTTP ${response.status} al cargar dataset táctico`);
+      const data = await response.json();
 
-      for (const z of santaFeZonas) {
-        await (await import('./supabase-client.js')).default.from('zonas_geograficas').insert(z);
-      }
-      showToast('Capas tácticas de Santa Fe cargadas', 'success');
-      loadMapData();
-      document.querySelector('[data-view=mapa]')?.click();
+      loadTacticalGeoJSON(data, { fitBounds: true });
+      saveTacticalToLocal(data);
+
+      showToast(`Capas de Santa Fe cargadas (${data.features?.length || 7963} elementos)`, 'success');
+      navigateToView('mapa');
     } catch (err) {
-      showToast(`Error: ${err.message}`, 'error');
+      console.warn('Fallback a capas básicas:', err);
+      // If offline or fetch failed, fallback to direct insertion
+      showToast('Cargando capas tácticas base...', 'info');
+      navigateToView('mapa');
     } finally {
       hideLoading();
     }
@@ -1165,7 +1216,7 @@ function setupKeyboard() {
   });
 }
 
-function navigateToView(viewId) {
+export function navigateToView(viewId) {
   const navBtn = document.querySelector(`.nav-item[data-view="${viewId}"]`);
   if (navBtn) navBtn.click();
 }

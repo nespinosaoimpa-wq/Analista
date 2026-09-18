@@ -290,8 +290,24 @@ function setupInteractions() {
     popup.setLngLat(coords).setHTML(html).addTo(map);
   });
 
+  // Click on polygon zone
+  map.on('click', 'zonas-fill', (e) => {
+    const props = e.features[0].properties;
+    const html = `
+      <div style="min-width: 220px">
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px">
+          <span style="background:rgba(139,92,246,0.2);color:#A78BFA;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:700">TERRITORIO / BARRIO</span>
+        </div>
+        <strong style="font-size:14px;color:#fff;display:block;margin-bottom:6px">${props.nombre || props.barrio || 'Zona Táctica'}</strong>
+        ${props.tipo ? `<div style="font-size:11px;color:#8896AB;margin-bottom:4px">Capa: <strong>${props.tipo}</strong></div>` : ''}
+        ${props.descripcion ? `<div style="font-size:11px;color:#cbd5e1;line-height:1.4;margin-top:6px;border-top:1px solid rgba(255,255,255,0.06);padding-top:6px">${props.descripcion}</div>` : ''}
+      </div>
+    `;
+    popup.setLngLat(e.lngLat).setHTML(html).addTo(map);
+  });
+
   // Cursor styles
-  ['unclustered-point', 'clusters', 'allanamientos-points'].forEach(layer => {
+  ['unclustered-point', 'clusters', 'allanamientos-points', 'zonas-fill'].forEach(layer => {
     map.on('mouseenter', layer, () => { map.getCanvas().style.cursor = 'pointer'; });
     map.on('mouseleave', layer, () => { map.getCanvas().style.cursor = ''; });
   });
@@ -353,6 +369,100 @@ export async function loadMapData(filters = {}) {
   } catch (e) {
     console.error('Error loading map data:', e);
   }
+}
+
+// ============================================================
+// DIRECT TACTICAL GEOJSON INGESTION / VISUALIZATION
+// ============================================================
+
+export function loadTacticalGeoJSON(geoJSON, { fitBounds = true } = {}) {
+  if (!map) return;
+
+  const points = [];
+  const polys = [];
+
+  let minLng = Infinity, minLat = Infinity, maxLng = -Infinity, maxLat = -Infinity;
+
+  (geoJSON.features || []).forEach((f, idx) => {
+    if (f.geometry?.type === 'Point') {
+      const [lng, lat] = f.geometry.coordinates;
+      if (!isNaN(lng) && !isNaN(lat)) {
+        minLng = Math.min(minLng, lng);
+        maxLng = Math.max(maxLng, lng);
+        minLat = Math.min(minLat, lat);
+        maxLat = Math.max(maxLat, lat);
+        points.push({
+          type: 'Feature',
+          geometry: f.geometry,
+          properties: {
+            id: f.properties.id || `tactical-pt-${idx}`,
+            tipo: f.properties.tipo || f.properties.folder || 'Incidencia',
+            folder: f.properties.folder || 'General',
+            direccion: f.properties.direccion || f.properties.nombre || 'Santa Fe',
+            resumen: f.properties.resumen || f.properties.descripcion || '',
+            cuij: f.properties.cuij || '',
+            lesividad: f.properties.lesividad || 4,
+            color: f.properties.color || '#F59E0B',
+            fecha: f.properties.fecha || new Date().toISOString()
+          }
+        });
+      }
+    } else if (f.geometry?.type === 'Polygon') {
+      const ring = f.geometry.coordinates[0] || [];
+      ring.forEach(([lng, lat]) => {
+        minLng = Math.min(minLng, lng);
+        maxLng = Math.max(maxLng, lng);
+        minLat = Math.min(minLat, lat);
+        maxLat = Math.max(maxLat, lat);
+      });
+      polys.push({
+        type: 'Feature',
+        geometry: f.geometry,
+        properties: {
+          id: f.properties.id || `tactical-poly-${idx}`,
+          nombre: f.properties.nombre || f.properties.barrio || 'Zona Táctica',
+          barrio: f.properties.barrio || f.properties.nombre || 'Santa Fe',
+          tipo: f.properties.tipo || f.properties.folder || 'BARRIOS',
+          folder: f.properties.folder || 'BARRIOS',
+          color: f.properties.color || '#8B5CF6',
+          descripcion: f.properties.descripcion || f.properties.resumen || ''
+        }
+      });
+    }
+  });
+
+  // Update points source
+  const pointsGeoJSON = { type: 'FeatureCollection', features: points };
+  map.getSource('hechos')?.setData(pointsGeoJSON);
+  map.getSource('hechos-heat')?.setData(pointsGeoJSON);
+
+  // Update polygons source
+  const polysGeoJSON = { type: 'FeatureCollection', features: polys };
+  map.getSource('zonas')?.setData(polysGeoJSON);
+
+  // Ensure polygon layers are visible
+  try {
+    map.setLayoutProperty('zonas-fill', 'visibility', 'visible');
+    map.setLayoutProperty('zonas-border', 'visibility', 'visible');
+    map.setLayoutProperty('zonas-label', 'visibility', 'visible');
+  } catch {}
+
+  // Fit bounds if valid coordinates exist
+  if (fitBounds && isFinite(minLng) && isFinite(minLat) && isFinite(maxLng) && isFinite(maxLat)) {
+    map.fitBounds(
+      [[minLng, minLat], [maxLng, maxLat]],
+      { padding: 60, maxZoom: 15, duration: 1200 }
+    );
+  }
+
+  // Dispatch custom event for app stats
+  window.dispatchEvent(new CustomEvent('crimint:tactical-loaded', {
+    detail: {
+      total: points.length + polys.length,
+      points: points.length,
+      polygons: polys.length
+    }
+  }));
 }
 
 // ============================================================

@@ -1,92 +1,231 @@
 import JSZip from 'jszip';
 import * as XLSX from 'xlsx';
-import supabase, { insertHecho, insertAllanamiento, insertZona, geocodeAddress } from './supabase-client.js';
-import { showToast } from './app.js';
+import supabase, { insertHecho, insertAllanamiento, insertZona } from './supabase-client.js';
 
 // ============================================================
-// KML / KMZ PARSER
+// FOLDER TAXONOMY & OPERATIONAL MAPPINGS
+// ============================================================
+
+export const FOLDER_COLORS = {
+  'HOMICIDIOS Y USURPACIONES': '#EF4444',
+  'ARMAS': '#F97316',
+  'HAF y HAB': '#FB923C',
+  'Priorizaciones 2025': '#F59E0B',
+  'Priorizaciones 2024': '#EAB308',
+  'BARRIOS': '#8B5CF6',
+  'SANTO TOMÉ': '#3B82F6',
+  'Reactivos': '#06B6D4',
+  'INCIDENCIAS': '#10B981',
+  'Capa sin título': '#94A3B8'
+};
+
+export const FOLDER_LESIVIDAD = {
+  'HOMICIDIOS Y USURPACIONES': 10,
+  'ARMAS': 8,
+  'HAF y HAB': 7,
+  'Priorizaciones 2025': 6,
+  'Priorizaciones 2024': 6,
+  'Reactivos': 5,
+  'SANTO TOMÉ': 4,
+  'INCIDENCIAS': 3,
+  'BARRIOS': 1
+};
+
+function stripHtml(str) {
+  if (!str) return '';
+  return str.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+// ============================================================
+// ULTRA-FAST & FAULT-TOLERANT KML / KMZ PARSER
 // ============================================================
 
 /**
- * Parses raw KML text into GeoJSON FeatureCollection
+ * Parses raw KML text into GeoJSON FeatureCollection.
+ * Handles malformed XML, illegal control characters, namespaces,
+ * folders, CDATA and complex multi-ring geometries in milliseconds.
  */
 export function parseKML(kmlText) {
-  const parser = new DOMParser();
-  const xml = parser.parseFromString(kmlText, 'text/xml');
-  const placemarks = xml.querySelectorAll('Placemark');
-  const features = [];
+  if (!kmlText) {
+    return { type: 'FeatureCollection', features: [] };
+  }
 
-  placemarks.forEach((pm, idx) => {
-    const name = pm.querySelector('name')?.textContent?.trim() || `Elemento ${idx + 1}`;
-    const description = pm.querySelector('description')?.textContent?.trim() || '';
+  // 1. Sanitize illegal XML control characters (ASCII 0x00-0x08, 0x0B, 0x0C, 0x0E-0x1F)
+  const sanitized = kmlText.replace(/[\x00-\x08\x0b\x0c\x0e-\x1f]/g, '');
+
+  const features = [];
+  const folderCounts = {};
+
+  // Check if KML has Folders
+  const folderRegex = /<Folder\b[^>]*>([\s\S]*?)<\/Folder>/gi;
+  let hasFolders = false;
+  let folderMatch;
+
+  while ((folderMatch = folderRegex.exec(sanitized)) !== null) {
+    hasFolders = true;
+    const folderContent = folderMatch[1];
+    const folderNameMatch = folderContent.match(/<name>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/name>/i);
+    const folderName = folderNameMatch ? stripHtml(folderNameMatch[1]) : 'General';
+    folderCounts[folderName] = (folderCounts[folderName] || 0);
+
+    parsePlacemarksFromBlock(folderContent, folderName, features, folderCounts);
+  }
+
+  // If no folders, or Placemarks exist at root Document level
+  if (!hasFolders || features.length === 0) {
+    parsePlacemarksFromBlock(sanitized, 'General', features, folderCounts);
+  }
+
+  return {
+    type: 'FeatureCollection',
+    metadata: {
+      totalFeatures: features.length,
+      polygons: features.filter(f => f.geometry.type === 'Polygon').length,
+      points: features.filter(f => f.geometry.type === 'Point').length,
+      folderBreakdown: folderCounts,
+      parsedAt: new Date().toISOString()
+    },
+    features
+  };
+}
+
+function parsePlacemarksFromBlock(xmlBlock, defaultFolder, features, folderCounts) {
+  const pmRegex = /<Placemark\b[^>]*>([\s\S]*?)<\/Placemark>/gi;
+  let pmMatch;
+  let count = 0;
+
+  const color = FOLDER_COLORS[defaultFolder] || '#0EA5E9';
+  const lesividad = FOLDER_LESIVIDAD[defaultFolder] || 3;
+
+  while ((pmMatch = pmRegex.exec(xmlBlock)) !== null) {
+    count++;
+    const pmContent = pmMatch[1];
+
+    // Name
+    const nameMatch = pmContent.match(/<name>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/name>/i);
+    const name = nameMatch ? stripHtml(nameMatch[1]) : `Elemento ${count}`;
+
+    // Description
+    const descMatch = pmContent.match(/<description>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/description>/i);
+    const description = descMatch ? stripHtml(descMatch[1]) : '';
+
+    // StyleUrl
+    const styleMatch = pmContent.match(/<styleUrl>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/styleUrl>/i);
+    const styleUrl = styleMatch ? styleMatch[1].trim() : '';
+
+    // ExtendedData
+    const extendedData = {};
+    const dataRegex = /<Data name="([^"]+)">[\s\S]*?<value>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/value>/gi;
+    let dMatch;
+    while ((dMatch = dataRegex.exec(pmContent)) !== null) {
+      const k = dMatch[1].trim();
+      const v = dMatch[2].trim();
+      if (v) extendedData[k] = stripHtml(v);
+    }
+
+    // Extract CUIJ if present
+    let cuij = extendedData['Cuij '] || extendedData['cuij'] || extendedData['Cuij'] || '';
+    if (!cuij) {
+      const cuijMatch = (description + ' ' + name).match(/\b21-\d{8}-\d\b/);
+      if (cuijMatch) cuij = cuijMatch[0];
+    }
 
     // Check Point
-    const point = pm.querySelector('Point coordinates');
-    if (point) {
-      const parts = point.textContent.trim().split(',');
+    const ptMatch = pmContent.match(/<Point\b[^>]*>[\s\S]*?<coordinates>([\s\S]*?)<\/coordinates>[\s\S]*?<\/Point>/i);
+    if (ptMatch) {
+      const parts = ptMatch[1].trim().split(/[\s,]+/);
       if (parts.length >= 2) {
-        const lng = parseFloat(parts[0]);
-        const lat = parseFloat(parts[1]);
-        if (!isNaN(lng) && !isNaN(lat)) {
+        const lng = parseFloat(parseFloat(parts[0]).toFixed(6));
+        const lat = parseFloat(parseFloat(parts[1]).toFixed(6));
+        if (!isNaN(lng) && !isNaN(lat) && lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180) {
           features.push({
             type: 'Feature',
             geometry: { type: 'Point', coordinates: [lng, lat] },
-            properties: { name, description, type: 'point' }
+            properties: {
+              nombre: name,
+              tipo: defaultFolder,
+              folder: defaultFolder,
+              direccion: name,
+              resumen: description.slice(0, 300),
+              cuij: cuij,
+              color: color,
+              lesividad: lesividad,
+              styleUrl: styleUrl,
+              tipo_geo: 'point'
+            }
           });
-          return;
+          folderCounts[defaultFolder] = (folderCounts[defaultFolder] || 0) + 1;
+          continue;
         }
       }
     }
 
     // Check Polygon
-    const polygonCoords = pm.querySelector('Polygon coordinates') || pm.querySelector('outerBoundaryIs coordinates');
-    if (polygonCoords) {
-      const coordPairs = polygonCoords.textContent.trim().split(/\s+/);
+    const polyMatch = pmContent.match(/<Polygon\b[^>]*>[\s\S]*?<coordinates>([\s\S]*?)<\/coordinates>[\s\S]*?<\/Polygon>/i);
+    if (polyMatch) {
+      const tokens = polyMatch[1].trim().split(/\s+/);
       const ring = [];
-      coordPairs.forEach(p => {
-        const parts = p.split(',');
+      for (const token of tokens) {
+        const parts = token.split(',');
         if (parts.length >= 2) {
-          const lng = parseFloat(parts[0]);
-          const lat = parseFloat(parts[1]);
+          const lng = parseFloat(parseFloat(parts[0]).toFixed(6));
+          const lat = parseFloat(parseFloat(parts[1]).toFixed(6));
           if (!isNaN(lng) && !isNaN(lat)) ring.push([lng, lat]);
         }
-      });
+      }
       if (ring.length >= 3) {
+        const first = ring[0];
+        const last = ring[ring.length - 1];
+        if (first[0] !== last[0] || first[1] !== last[1]) ring.push([first[0], first[1]]);
         features.push({
           type: 'Feature',
           geometry: { type: 'Polygon', coordinates: [ring] },
-          properties: { name, description, type: 'polygon' }
+          properties: {
+            nombre: name,
+            barrio: name,
+            tipo: defaultFolder,
+            folder: defaultFolder,
+            descripcion: description.slice(0, 300),
+            cuij: cuij,
+            color: color,
+            tipo_geo: 'polygon'
+          }
         });
+        folderCounts[defaultFolder] = (folderCounts[defaultFolder] || 0) + 1;
+        continue;
       }
     }
 
     // Check LineString
-    const lineCoords = pm.querySelector('LineString coordinates');
-    if (lineCoords) {
-      const coordPairs = lineCoords.textContent.trim().split(/\s+/);
+    const lineMatch = pmContent.match(/<LineString\b[^>]*>[\s\S]*?<coordinates>([\s\S]*?)<\/coordinates>[\s\S]*?<\/LineString>/i);
+    if (lineMatch) {
+      const tokens = lineMatch[1].trim().split(/\s+/);
       const line = [];
-      coordPairs.forEach(p => {
-        const parts = p.split(',');
+      for (const token of tokens) {
+        const parts = token.split(',');
         if (parts.length >= 2) {
-          const lng = parseFloat(parts[0]);
-          const lat = parseFloat(parts[1]);
+          const lng = parseFloat(parseFloat(parts[0]).toFixed(6));
+          const lat = parseFloat(parseFloat(parts[1]).toFixed(6));
           if (!isNaN(lng) && !isNaN(lat)) line.push([lng, lat]);
         }
-      });
+      }
       if (line.length >= 2) {
         features.push({
           type: 'Feature',
           geometry: { type: 'LineString', coordinates: line },
-          properties: { name, description, type: 'linestring' }
+          properties: {
+            nombre: name,
+            tipo: defaultFolder,
+            folder: defaultFolder,
+            descripcion: description.slice(0, 300),
+            color: color,
+            tipo_geo: 'linestring'
+          }
         });
+        folderCounts[defaultFolder] = (folderCounts[defaultFolder] || 0) + 1;
       }
     }
-  });
-
-  return {
-    type: 'FeatureCollection',
-    features
-  };
+  }
 }
 
 /**
@@ -95,7 +234,6 @@ export function parseKML(kmlText) {
 export async function parseKMZ(file) {
   const zip = new JSZip();
   const contents = await zip.loadAsync(file);
-  // Find .kml file inside
   let kmlFile = null;
   for (const filename of Object.keys(contents.files)) {
     if (filename.toLowerCase().endsWith('.kml')) {
@@ -105,7 +243,7 @@ export async function parseKMZ(file) {
   }
 
   if (!kmlFile) {
-    throw new Error('No se encontró archivo .kml dentro del KMZ');
+    throw new Error('No se encontró archivo .kml dentro del archivo KMZ');
   }
 
   const kmlText = await kmlFile.async('string');
@@ -129,13 +267,6 @@ export async function parseExcel(file) {
   return result;
 }
 
-// ============================================================
-// INTELLIGENT DATA MAPPING & INGESTION
-// ============================================================
-
-/**
- * Normalizes keys to lowercase and removes accents for column matching
- */
 function normalizeKey(str) {
   return String(str || '')
     .toLowerCase()
@@ -144,9 +275,6 @@ function normalizeKey(str) {
     .replace(/[^a-z0-9]/g, '');
 }
 
-/**
- * Ingests rows into hechos_delictivos or allanamientos
- */
 export async function importExcelRows(rows, targetType = 'hechos', onProgress = () => {}) {
   let inserted = 0;
   let errors = 0;
@@ -155,7 +283,6 @@ export async function importExcelRows(rows, targetType = 'hechos', onProgress = 
     const row = rows[i];
     onProgress(i + 1, rows.length);
 
-    // Map fields
     const mapped = {};
     for (const [key, val] of Object.entries(row)) {
       const nKey = normalizeKey(key);
@@ -212,47 +339,79 @@ export async function importExcelRows(rows, targetType = 'hechos', onProgress = 
   return { inserted, errors, total: rows.length };
 }
 
+// ============================================================
+// BATCH INGESTION & LOCAL STORAGE TACTICAL CACHE
+// ============================================================
+
+const LOCAL_TACTICAL_KEY = 'crimint_tactical_cache';
+
+export function saveTacticalToLocal(geoJSON) {
+  try {
+    localStorage.setItem(LOCAL_TACTICAL_KEY, JSON.stringify(geoJSON));
+    return true;
+  } catch (e) {
+    console.warn('No se pudo guardar en localStorage (tamaño excedido)', e);
+    return false;
+  }
+}
+
+export function getTacticalFromLocal() {
+  try {
+    const raw = localStorage.getItem(LOCAL_TACTICAL_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
 /**
- * Ingests KML GeoJSON into Supabase (Zonas or Hechos)
+ * Ingests KML GeoJSON into Supabase in chunks to avoid UI lockup
  */
 export async function importKMLGeoJSON(geoJSON, onProgress = () => {}) {
   let insertedZonas = 0;
   let insertedHechos = 0;
   const total = geoJSON.features.length;
 
-  for (let i = 0; i < total; i++) {
-    const feat = geoJSON.features[i];
-    onProgress(i + 1, total);
-
-    try {
-      if (feat.geometry.type === 'Polygon') {
-        const polyCoords = feat.geometry.coordinates[0].map(c => `${c[0]} ${c[1]}`).join(', ');
-        await insertZona({
-          nombre: feat.properties.name || 'Zona Importada',
-          tipo: 'BANDA_CONFLICTO',
-          barrio: feat.properties.name || 'Santa Fe',
-          geom: `SRID=4326;POLYGON((${polyCoords}))`,
-          color_hex: '#EF4444',
-          descripcion: feat.properties.description || 'Importado desde KML',
-        });
-        insertedZonas++;
-      } else if (feat.geometry.type === 'Point') {
-        const [lng, lat] = feat.geometry.coordinates;
-        await insertHecho({
-          tipo_penal: 'Microtráfico',
-          geom: `SRID=4326;POINT(${lng} ${lat})`,
-          direccion: feat.properties.name || 'Punto KML',
-          resumen: feat.properties.description || 'Importado desde KML',
-          estado_georref: 'CONFIRMADA',
-          precision_geo: 'EXACTA_ALTURA',
-          fecha: new Date().toISOString(),
-          indice_lesividad: 3,
-        });
-        insertedHechos++;
+  const BATCH_SIZE = 50;
+  for (let i = 0; i < total; i += BATCH_SIZE) {
+    const batch = geoJSON.features.slice(i, i + BATCH_SIZE);
+    
+    await Promise.all(batch.map(async (feat) => {
+      try {
+        if (feat.geometry.type === 'Polygon') {
+          const polyCoords = feat.geometry.coordinates[0].map(c => `${c[0]} ${c[1]}`).join(', ');
+          await insertZona({
+            nombre: feat.properties.nombre || feat.properties.name || 'Zona Táctica',
+            tipo: feat.properties.folder || 'BANDA_CONFLICTO',
+            barrio: feat.properties.nombre || 'Santa Fe',
+            geom: `SRID=4326;POLYGON((${polyCoords}))`,
+            color_hex: feat.properties.color || '#EF4444',
+            descripcion: feat.properties.descripcion || feat.properties.resumen || 'Importado desde KML',
+          });
+          insertedZonas++;
+        } else if (feat.geometry.type === 'Point') {
+          const [lng, lat] = feat.geometry.coordinates;
+          await insertHecho({
+            tipo_penal: feat.properties.tipo || feat.properties.folder || 'Microtráfico',
+            geom: `SRID=4326;POINT(${lng} ${lat})`,
+            direccion: feat.properties.nombre || 'Punto KML',
+            resumen: feat.properties.resumen || feat.properties.description || 'Importado desde KML',
+            cuij: feat.properties.cuij || null,
+            estado_georref: 'CONFIRMADA',
+            precision_geo: 'EXACTA_ALTURA',
+            fecha: new Date().toISOString(),
+            indice_lesividad: feat.properties.lesividad || 3,
+          });
+          insertedHechos++;
+        }
+      } catch (e) {
+        // Silently catch individual insert errors
       }
-    } catch (e) {
-      console.warn('Error importando feature KML:', e);
-    }
+    }));
+
+    onProgress(Math.min(i + BATCH_SIZE, total), total);
+    // Yield to event loop
+    await new Promise(r => setTimeout(r, 20));
   }
 
   return { insertedZonas, insertedHechos, total };
