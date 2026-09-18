@@ -1,7 +1,9 @@
 import Chart from 'chart.js/auto';
-import { getDashboardStats, getHechos } from './supabase-client.js';
+import { getDashboardStats, getHechos, getPersonas, getBandas, getAllanamientos } from './supabase-client.js';
 import { formatDate, getLesividadClass } from './config.js';
+import { getActiveMapFeatures } from './map.js';
 
+let chartAnioDelito = null;
 let chartTendencia = null;
 let chartTipos = null;
 let chartBarrios = null;
@@ -44,8 +46,27 @@ const chartDefaults = {
   },
 };
 
+// Helper functions to parse feature year & crime type
+function extractFeatureYear(f) {
+  const p = f.properties || f;
+  const str = `${p.folder || ''} ${p.tipo || ''} ${p.nombre || ''} ${p.fecha || ''} ${p.resumen || ''}`;
+  const match = str.match(/\b(202[0-9])\b/);
+  if (match) return match[1];
+  if (p.fecha) {
+    const d = new Date(p.fecha);
+    if (!isNaN(d.getFullYear())) return String(d.getFullYear());
+  }
+  return '2026';
+}
+
+function extractFeatureCrimeType(f) {
+  const p = f.properties || f;
+  let type = p.tipo_penal || p.tipo || p.folder || 'Incidencia';
+  if (type === 'General' || type === 'Capa sin título') type = 'Incidencias Varias';
+  return type;
+}
+
 export async function initDashboard() {
-  // Set default dates
   const desde = document.getElementById('dash-fecha-desde');
   const hasta = document.getElementById('dash-fecha-hasta');
 
@@ -58,18 +79,89 @@ export async function initDashboard() {
     hasta.value = new Date().toISOString().split('T')[0];
   }
 
+  // Auto refresh when map data changes or year filter changes
+  window.addEventListener('crimint:data-loaded', () => refreshDashboard());
+  document.getElementById('dash-filter-anio')?.addEventListener('change', () => refreshDashboard());
+
   await refreshDashboard();
 }
 
 export async function refreshDashboard() {
+  const selectedYear = document.getElementById('dash-filter-anio')?.value || 'todos';
   const desde = document.getElementById('dash-fecha-desde')?.value;
   const hasta = document.getElementById('dash-fecha-hasta')?.value;
 
   try {
-    const stats = await getDashboardStats(
-      desde ? new Date(desde).toISOString() : undefined,
-      hasta ? new Date(hasta + 'T23:59:59').toISOString() : undefined,
-    );
+    const mapFeatures = getActiveMapFeatures();
+    let stats;
+
+    if (mapFeatures && mapFeatures.length > 0) {
+      // -------------------------------------------------------------
+      // Compute stats directly from active MAP features!
+      // -------------------------------------------------------------
+      let filtered = mapFeatures;
+
+      // Filter by selected year if not 'todos'
+      if (selectedYear !== 'todos') {
+        filtered = filtered.filter(f => extractFeatureYear(f) === selectedYear);
+      }
+
+      // Filter by date range if provided
+      if (desde) filtered = filtered.filter(f => !f.properties?.fecha || f.properties.fecha >= desde);
+      if (hasta) filtered = filtered.filter(f => !f.properties?.fecha || f.properties.fecha <= hasta + 'T23:59:59');
+
+      const personas = await getPersonas({ limit: 1000 });
+      const bandas = await getBandas({ limit: 1000 });
+      const allanamientos = await getAllanamientos({ limit: 1000 });
+
+      const porTipo = {};
+      const porBarrio = {};
+      const porLesividad = {};
+      const porDia = {};
+      const matrixAnioDelito = { 2024: {}, 2025: {}, 2026: {} };
+      const allCrimeTypes = new Set();
+
+      filtered.forEach(f => {
+        const props = f.properties || {};
+        const year = extractFeatureYear(f);
+        const tipo = extractFeatureCrimeType(f);
+        const barrio = props.barrio || props.nombre || 'Santa Fe';
+        const lesividad = props.lesividad || 3;
+
+        allCrimeTypes.add(tipo);
+        porTipo[tipo] = (porTipo[tipo] || 0) + 1;
+        if (barrio) porBarrio[barrio] = (porBarrio[barrio] || 0) + 1;
+        porLesividad[lesividad] = (porLesividad[lesividad] || 0) + 1;
+
+        if (!matrixAnioDelito[year]) matrixAnioDelito[year] = {};
+        matrixAnioDelito[year][tipo] = (matrixAnioDelito[year][tipo] || 0) + 1;
+
+        const dia = props.fecha ? props.fecha.split('T')[0] : 'sin_fecha';
+        porDia[dia] = (porDia[dia] || 0) + 1;
+      });
+
+      stats = {
+        total_hechos: filtered.length,
+        total_personas: personas.length,
+        total_bandas: bandas.length,
+        total_allanamientos: allanamientos.length,
+        por_tipo: Object.entries(porTipo).map(([tipo, cantidad]) => ({ tipo, cantidad })).sort((a, b) => b.cantidad - a.cantidad),
+        por_barrio: Object.entries(porBarrio).map(([barrio, cantidad]) => ({ barrio, cantidad })).sort((a, b) => b.cantidad - a.cantidad).slice(0, 15),
+        por_lesividad: Object.entries(porLesividad).map(([nivel, cantidad]) => ({ nivel: parseInt(nivel), cantidad })).sort((a, b) => a.nivel - b.nivel),
+        tendencia_diaria: Object.entries(porDia).map(([fecha, cantidad]) => ({ fecha, cantidad })).sort((a, b) => a.fecha.localeCompare(b.fecha)),
+        por_anio_delito: {
+          matrix: matrixAnioDelito,
+          types: Array.from(allCrimeTypes)
+        }
+      };
+
+    } else {
+      // Fallback to database stats
+      stats = await getDashboardStats(
+        desde ? new Date(desde).toISOString() : undefined,
+        hasta ? new Date(hasta + 'T23:59:59').toISOString() : undefined,
+      );
+    }
 
     // Update KPIs
     animateNumber('kpi-val-hechos', stats.total_hechos || 0);
@@ -85,7 +177,8 @@ export async function refreshDashboard() {
     if (statPersonas) statPersonas.textContent = stats.total_personas || 0;
     if (statBandas) statBandas.textContent = stats.total_bandas || 0;
 
-    // Charts
+    // Render All Charts
+    renderAnioDelitoChart(stats.por_anio_delito || { matrix: {}, types: [] });
     renderTendenciaChart(stats.tendencia_diaria || []);
     renderTiposChart(stats.por_tipo || []);
     renderBarriosChart(stats.por_barrio || []);
@@ -121,6 +214,92 @@ function animateNumber(elementId, target) {
   }, duration / steps);
 }
 
+function renderAnioDelitoChart(dataByYearAndType) {
+  const ctx = document.getElementById('chart-anio-delito');
+  if (!ctx) return;
+
+  if (chartAnioDelito) chartAnioDelito.destroy();
+
+  const years = ['2024', '2025', '2026'];
+  const categories = dataByYearAndType.types && dataByYearAndType.types.length > 0
+    ? dataByYearAndType.types
+    : ['Homicidios', 'Armas', 'Microtráfico', 'Abuso de armas'];
+
+  const COLOR_MAP = {
+    'HOMICIDIOS Y USURPACIONES': '#EF4444',
+    'Homicidio': '#EF4444',
+    'ARMAS': '#F97316',
+    'Abuso de armas': '#F97316',
+    'HAF y HAB': '#FB923C',
+    'Tentativa de homicidio': '#FB923C',
+    'Priorizaciones 2025': '#F59E0B',
+    'Priorizaciones 2024': '#EAB308',
+    'Microtráfico': '#0EA5E9',
+    'Comercialización de estupefacientes': '#0EA5E9',
+    'SANTO TOMÉ': '#3B82F6',
+    'Reactivos': '#06B6D4',
+    'INCIDENCIAS': '#10B981',
+    'BARRIOS': '#8B5CF6',
+  };
+
+  const defaultColors = [
+    '#EF4444', '#F59E0B', '#0EA5E9', '#22C55E', '#8B5CF6',
+    '#EC4899', '#14B8A6', '#6366F1', '#F43F5E', '#84CC16',
+  ];
+
+  const datasets = categories.slice(0, 10).map((cat, idx) => {
+    const color = COLOR_MAP[cat] || defaultColors[idx % defaultColors.length];
+    return {
+      label: cat,
+      data: years.map(y => dataByYearAndType.matrix?.[y]?.[cat] || 0),
+      backgroundColor: color + 'CC',
+      borderColor: color,
+      borderWidth: 1,
+      borderRadius: 4,
+    };
+  });
+
+  chartAnioDelito = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: years.map(y => `Año ${y}`),
+      datasets: datasets,
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        ...chartDefaults.plugins,
+        legend: {
+          position: 'top',
+          labels: {
+            color: '#8896AB',
+            font: { family: 'Inter', size: 11 },
+            padding: 12,
+            boxWidth: 12,
+          }
+        },
+        tooltip: {
+          ...chartDefaults.plugins.tooltip,
+          mode: 'index',
+          intersect: false,
+        }
+      },
+      scales: {
+        x: {
+          ticks: { color: '#E8ECF4', font: { family: 'Inter', size: 12, weight: '600' } },
+          grid: { color: 'rgba(255,255,255,0.03)' },
+        },
+        y: {
+          ticks: { color: '#8896AB', font: { family: 'Inter', size: 10 } },
+          grid: { color: 'rgba(255,255,255,0.03)' },
+          title: { display: true, text: 'Cantidad de Incidencias', color: '#4B5D78', font: { size: 10 } }
+        }
+      }
+    }
+  });
+}
+
 function renderTendenciaChart(data) {
   const ctx = document.getElementById('chart-tendencia');
   if (!ctx) return;
@@ -132,7 +311,7 @@ function renderTendenciaChart(data) {
     data: {
       labels: data.map(d => {
         const dt = new Date(d.fecha);
-        return dt.toLocaleDateString('es-AR', { day: '2-digit', month: 'short' });
+        return isNaN(dt.valueOf()) ? d.fecha : dt.toLocaleDateString('es-AR', { day: '2-digit', month: 'short' });
       }),
       datasets: [{
         label: 'Hechos',
@@ -269,11 +448,29 @@ async function renderHechosTable(desde, hasta) {
   if (!tbody) return;
 
   try {
-    const hechos = await getHechos({
-      desde: desde ? new Date(desde).toISOString() : undefined,
-      hasta: hasta ? new Date(hasta + 'T23:59:59').toISOString() : undefined,
-      limit: 25,
-    });
+    const mapFeatures = getActiveMapFeatures();
+    let hechos = [];
+
+    if (mapFeatures && mapFeatures.length > 0) {
+      hechos = mapFeatures.slice(0, 25).map((f, i) => {
+        const props = f.properties || {};
+        return {
+          id: props.id || `hecho-${i}`,
+          fecha: props.fecha || new Date().toISOString(),
+          tipo_penal: props.tipo || props.folder || 'Incidencia',
+          direccion: props.direccion || props.nombre || 'Santa Fe',
+          barrio: props.barrio || 'Santa Fe',
+          indice_lesividad: props.lesividad || 3,
+          cuij: props.cuij || '—',
+        };
+      });
+    } else {
+      hechos = await getHechos({
+        desde: desde ? new Date(desde).toISOString() : undefined,
+        hasta: hasta ? new Date(hasta + 'T23:59:59').toISOString() : undefined,
+        limit: 25,
+      });
+    }
 
     if (hechos.length === 0) {
       tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;color:var(--text-muted);padding:32px">No hay hechos registrados en este período</td></tr>`;

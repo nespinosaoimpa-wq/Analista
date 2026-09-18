@@ -7,6 +7,16 @@ let hechosSource = null;
 let zonasSource = null;
 let allanamientosSource = null;
 let popup = null;
+let activeMapFeatures = [];
+
+export function getActiveMapFeatures() {
+  return activeMapFeatures;
+}
+
+export function setActiveMapFeatures(features) {
+  activeMapFeatures = features || [];
+  window.dispatchEvent(new CustomEvent('crimint:data-loaded'));
+}
 
 export function initMap() {
   const token = CONFIG.mapbox.token;
@@ -318,6 +328,9 @@ function setupInteractions() {
 export async function loadMapData(filters = {}) {
   try {
     const geojson = await getHechosGeoJSON(filters);
+    if (!activeMapFeatures || activeMapFeatures.length === 0) {
+      activeMapFeatures = geojson.features || [];
+    }
 
     map.getSource('hechos')?.setData(geojson);
     map.getSource('hechos-heat')?.setData(geojson);
@@ -431,6 +444,7 @@ export function loadTacticalGeoJSON(geoJSON, { fitBounds = true } = {}) {
   });
 
   // Update points source
+  activeMapFeatures = points;
   const pointsGeoJSON = { type: 'FeatureCollection', features: points };
   map.getSource('hechos')?.setData(pointsGeoJSON);
   map.getSource('hechos-heat')?.setData(pointsGeoJSON);
@@ -438,6 +452,7 @@ export function loadTacticalGeoJSON(geoJSON, { fitBounds = true } = {}) {
   // Update polygons source
   const polysGeoJSON = { type: 'FeatureCollection', features: polys };
   map.getSource('zonas')?.setData(polysGeoJSON);
+  window.dispatchEvent(new CustomEvent('crimint:data-loaded'));
 
   // Ensure polygon layers are visible
   try {

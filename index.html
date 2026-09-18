@@ -174,6 +174,12 @@
         <div class="dashboard-header">
           <h1>Dashboard Analítico</h1>
           <div class="dashboard-date-range">
+            <select id="dash-filter-anio" class="filter-select" style="background:var(--bg-secondary);color:var(--text-primary);border:1px solid rgba(255,255,255,0.1);padding:6px 10px;border-radius:6px;font-size:13px">
+              <option value="todos">Todos los Años</option>
+              <option value="2026">Año 2026</option>
+              <option value="2025">Año 2025</option>
+              <option value="2024">Año 2024</option>
+            </select>
             <input type="date" id="dash-fecha-desde" class="filter-input">
             <span>—</span>
             <input type="date" id="dash-fecha-hasta" class="filter-input">
@@ -219,16 +225,23 @@
           </div>
         </div>
         <div class="charts-grid">
+          <div class="chart-card full-width" style="grid-column: 1 / -1;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+              <h3>Desglose y Comparativa: Delito por Año (2024 - 2026)</h3>
+              <span style="font-size:11px;background:rgba(245,158,11,0.12);color:var(--accent-primary);padding:4px 8px;border-radius:4px;font-weight:500">Datos Sincronizados del Mapa Táctico</span>
+            </div>
+            <canvas id="chart-anio-delito" style="height:320px"></canvas>
+          </div>
           <div class="chart-card">
             <h3>Tendencia Temporal</h3>
             <canvas id="chart-tendencia"></canvas>
           </div>
           <div class="chart-card">
-            <h3>Por Tipo Penal</h3>
+            <h3>Por Tipo Penal / Categoría</h3>
             <canvas id="chart-tipos"></canvas>
           </div>
           <div class="chart-card">
-            <h3>Por Barrio</h3>
+            <h3>Por Barrio / Sector</h3>
             <canvas id="chart-barrios"></canvas>
           </div>
           <div class="chart-card">
