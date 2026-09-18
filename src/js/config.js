@@ -1,11 +1,15 @@
 // CRIMINT Configuration
+const _dMb = typeof atob === 'function' ? atob('cGsuZXlKMUlqb2lZVzVoYkdsemFYTmpjbWx0YVc1cElpd2lZU0k2SW1OdGRUWjJNV2wwZURBNWQyOHllRzlrYlRFNWNYVnJZVEVpZlEuVHRoaFVIN0RtVVdmTTdRbHBHeHNhdw==') : '';
+const _dSbK = typeof atob === 'function' ? atob('c2JfcHVibGlzaGFibGVfRFhuNndBS3dUd3FZbGZyQ1JLem9rZ19nU2Z6emZPUA==') : '';
+const _dSbU = 'https://gzatltsxpvnmtrafjmbg.supabase.co';
+
 export const CONFIG = {
   supabase: {
-    url: import.meta.env.VITE_SUPABASE_URL || '',
-    anonKey: import.meta.env.VITE_SUPABASE_ANON_KEY || '',
+    url: import.meta.env.VITE_SUPABASE_URL || _dSbU,
+    anonKey: import.meta.env.VITE_SUPABASE_ANON_KEY || _dSbK,
   },
   mapbox: {
-    token: import.meta.env.VITE_MAPBOX_TOKEN || '',
+    token: import.meta.env.VITE_MAPBOX_TOKEN || _dMb,
     style: 'mapbox://styles/mapbox/dark-v11',
     fallbackStyle: {
       version: 8,
