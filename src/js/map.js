@@ -114,10 +114,10 @@ function setupLayers() {
     id: 'zonas-fill',
     type: 'fill',
     source: 'zonas',
-    layout: { visibility: 'none' },
+    layout: { visibility: 'visible' },
     paint: {
-      'fill-color': ['coalesce', ['get', 'color'], '#F59E0B'],
-      'fill-opacity': 0.15,
+      'fill-color': ['coalesce', ['get', 'color'], '#8B5CF6'],
+      'fill-opacity': 0.22,
     },
   });
 
@@ -125,12 +125,11 @@ function setupLayers() {
     id: 'zonas-border',
     type: 'line',
     source: 'zonas',
-    layout: { visibility: 'none' },
+    layout: { visibility: 'visible' },
     paint: {
-      'line-color': ['coalesce', ['get', 'color'], '#F59E0B'],
+      'line-color': ['coalesce', ['get', 'color'], '#8B5CF6'],
       'line-width': 2,
-      'line-opacity': 0.6,
-      'line-dasharray': [2, 2],
+      'line-opacity': 0.85,
     },
   });
 
@@ -139,7 +138,7 @@ function setupLayers() {
     type: 'symbol',
     source: 'zonas',
     layout: {
-      visibility: 'none',
+      visibility: 'visible',
       'text-field': ['get', 'nombre'],
       'text-size': 11,
       'text-font': ['DIN Pro Medium', 'Arial Unicode MS Regular'],
@@ -147,9 +146,9 @@ function setupLayers() {
       'text-allow-overlap': false,
     },
     paint: {
-      'text-color': '#F59E0B',
-      'text-halo-color': 'rgba(0,0,0,0.8)',
-      'text-halo-width': 1,
+      'text-color': '#E2E8F0',
+      'text-halo-color': 'rgba(0,0,0,0.85)',
+      'text-halo-width': 1.5,
     },
   });
 
@@ -445,14 +444,34 @@ export function loadTacticalGeoJSON(geoJSON, { fitBounds = true } = {}) {
     map.setLayoutProperty('zonas-fill', 'visibility', 'visible');
     map.setLayoutProperty('zonas-border', 'visibility', 'visible');
     map.setLayoutProperty('zonas-label', 'visibility', 'visible');
+    const zonasCheckbox = document.getElementById('layer-zonas');
+    if (zonasCheckbox) zonasCheckbox.checked = true;
   } catch {}
 
-  // Fit bounds if valid coordinates exist
-  if (fitBounds && isFinite(minLng) && isFinite(minLat) && isFinite(maxLng) && isFinite(maxLat)) {
-    map.fitBounds(
-      [[minLng, minLat], [maxLng, maxLat]],
-      { padding: 60, maxZoom: 15, duration: 1200 }
-    );
+  // Smart bounds calculation (filter out extreme continental outliers like Mexico point)
+  if (fitBounds) {
+    const regionalPoints = points.filter(p => {
+      const [lng, lat] = p.geometry.coordinates;
+      return lng >= -61.5 && lng <= -60.0 && lat >= -32.2 && lat <= -31.2;
+    });
+
+    if (regionalPoints.length > 0) {
+      let rMinLng = Infinity, rMinLat = Infinity, rMaxLng = -Infinity, rMaxLat = -Infinity;
+      regionalPoints.forEach(p => {
+        const [lng, lat] = p.geometry.coordinates;
+        rMinLng = Math.min(rMinLng, lng);
+        rMaxLng = Math.max(rMaxLng, lng);
+        rMinLat = Math.min(rMinLat, lat);
+        rMaxLat = Math.max(rMaxLat, lat);
+      });
+      map.fitBounds([[rMinLng, rMinLat], [rMaxLng, rMaxLat]], {
+        padding: 50,
+        maxZoom: 13.8,
+        duration: 1200
+      });
+    } else {
+      map.flyTo({ center: [-60.7005, -31.6333], zoom: 12.8, duration: 1200 });
+    }
   }
 
   // Dispatch custom event for app stats
