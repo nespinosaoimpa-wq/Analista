@@ -1802,3 +1802,279 @@ textarea.form-input { resize: vertical; min-height: 60px; }
   box-shadow: 0 0 6px var(--accent-success);
 }
 
+/* ============================================================
+   INSPECCIÓN DE UBICACIÓN Y CRUCE RELACIONAL (CRIMINT)
+   ============================================================ */
+
+.inspection-panel {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  width: 390px;
+  max-height: calc(100% - 80px);
+  z-index: 26;
+  background: rgba(11, 17, 32, 0.96);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  border: 1px solid rgba(14, 165, 233, 0.3);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.75), 0 0 20px rgba(14, 165, 233, 0.12);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: slideInLeft 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.inspection-panel.hidden {
+  display: none;
+}
+
+@keyframes slideInLeft {
+  from { opacity: 0; transform: translateX(-20px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+.inspection-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 14px 16px 10px;
+  background: rgba(255, 255, 255, 0.02);
+  border-bottom: 1px solid var(--border-default);
+}
+
+.inspection-badge {
+  display: inline-block;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.8px;
+  color: var(--accent-secondary);
+  background: rgba(14, 165, 233, 0.12);
+  border: 1px solid rgba(14, 165, 233, 0.3);
+  padding: 2px 7px;
+  border-radius: 4px;
+  margin-bottom: 4px;
+}
+
+.inspection-address {
+  font-size: 14px;
+  font-weight: 700;
+  color: #fff;
+  margin: 0 0 2px 0;
+  line-height: 1.3;
+}
+
+.inspection-coords {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+}
+
+.inspection-close-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-size: 20px;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 4px;
+  line-height: 1;
+}
+
+.inspection-close-btn:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.inspection-radius-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 16px;
+  background: rgba(6, 10, 19, 0.6);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.inspection-radius-bar .radius-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.inspection-summary-cards {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+  padding: 10px 16px;
+  background: rgba(11, 17, 32, 0.5);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.inspection-summary-cards .summary-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  padding: 6px 4px;
+  text-align: center;
+}
+
+.inspection-summary-cards .summary-val {
+  font-size: 14px;
+  font-weight: 800;
+  font-family: var(--font-mono);
+  color: var(--text-primary);
+}
+
+.inspection-summary-cards .summary-lbl {
+  font-size: 9px;
+  color: var(--text-muted);
+  margin-top: 2px;
+  line-height: 1.1;
+  text-transform: uppercase;
+}
+
+.inspection-tabs {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  background: rgba(6, 10, 19, 0.7);
+  border-bottom: 1px solid var(--border-default);
+}
+
+.inspection-tab-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 9px 4px;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  transition: all var(--transition-fast);
+  text-align: center;
+}
+
+.inspection-tab-btn:hover {
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.inspection-tab-btn.active {
+  color: var(--accent-secondary);
+  border-bottom-color: var(--accent-secondary);
+  background: rgba(14, 165, 233, 0.08);
+  font-weight: 700;
+}
+
+.inspection-content {
+  padding: 12px 16px;
+  overflow-y: auto;
+  max-height: calc(75vh - 200px);
+}
+
+.inspection-tab-content {
+  display: none;
+}
+
+.inspection-tab-content.active {
+  display: block;
+}
+
+.inspection-section-header {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+  font-weight: 500;
+}
+
+.inspection-cross-search-box {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.inspection-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.insp-card {
+  padding: 8px 10px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  font-size: 12px;
+  transition: all var(--transition-fast);
+}
+
+.insp-card:hover {
+  background: var(--bg-tertiary);
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+.insp-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+
+.insp-badge-dist {
+  font-size: 10px;
+  font-weight: 700;
+  background: rgba(14, 165, 233, 0.15);
+  color: var(--accent-secondary);
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-family: var(--font-mono);
+}
+
+.insp-cross-alert-box {
+  background: rgba(245, 158, 11, 0.08);
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin-bottom: 8px;
+}
+
+.insp-cross-alert-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--accent-primary);
+}
+
+.insp-discrepancy-chip {
+  background: rgba(239, 68, 68, 0.18);
+  color: #EF4444;
+  border: 1px solid rgba(239, 68, 68, 0.4);
+  font-size: 10px;
+  font-weight: 800;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.insp-cross-detail-row {
+  font-size: 11px;
+  color: var(--text-secondary);
+  margin-bottom: 3px;
+  line-height: 1.35;
+}
+
+.insp-cross-detail-row strong {
+  color: var(--text-primary);
+}
+
+.inspection-footer {
+  padding: 10px 16px;
+  background: rgba(6, 10, 19, 0.6);
+  border-top: 1px solid var(--border-subtle);
+}
+

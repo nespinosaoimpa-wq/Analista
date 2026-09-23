@@ -454,3 +454,254 @@ export function filterFeatures(features = [], filters = {}) {
     return true;
   });
 }
+
+// ============================================================
+// 6. ANÁLISIS DE PROXIMIDAD Y CRUCE RELACIONAL DE DOMICILIOS
+// ============================================================
+
+/**
+ * Calcula la distancia geodésica en metros entre dos coordenadas (Fórmula de Haversine).
+ */
+export function getDistanceMeters(lat1, lon1, lat2, lon2) {
+  if (lat1 === undefined || lon1 === undefined || lat2 === undefined || lon2 === undefined) {
+    return Infinity;
+  }
+  const R = 6371000; // Radio de la Tierra en metros
+  const dLat = (lat2 - lat1) * (Math.PI / 180);
+  const dLon = (lon2 - lon1) * (Math.PI / 180);
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(lat1 * (Math.PI / 180)) * Math.cos(lat2 * (Math.PI / 180)) *
+    Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return Math.round(R * c);
+}
+
+/**
+ * Genera un polígono GeoJSON circular preciso alrededor de un centro.
+ * @param {[number, number]} center - [lng, lat]
+ * @param {number} radiusInMeters - Radio de cobertura en metros
+ * @param {number} points - Número de vértices para suavidad de la curva
+ */
+export function createGeoJSONCircle(center, radiusInMeters, points = 64) {
+  if (!center || isNaN(center[0]) || isNaN(center[1])) return null;
+  const [lng, lat] = center;
+  const coords = [];
+  const distanceX = radiusInMeters / (111320 * Math.cos(lat * (Math.PI / 180)));
+  const distanceY = radiusInMeters / 110540;
+
+  for (let i = 0; i < points; i++) {
+    const theta = (i / points) * (2 * Math.PI);
+    const x = distanceX * Math.cos(theta);
+    const y = distanceY * Math.sin(theta);
+    coords.push([lng + x, lat + y]);
+  }
+  coords.push(coords[0]); // Cerrar el polígono
+
+  return {
+    type: 'Feature',
+    geometry: {
+      type: 'Polygon',
+      coordinates: [coords]
+    },
+    properties: {
+      radius: radiusInMeters,
+      centerLng: lng,
+      centerLat: lat
+    }
+  };
+}
+
+/**
+ * Analiza el entorno inmediato de una coordenada en un radio determinado.
+ * Cruza incidencias registradas, personas con domicilio legal en el área y allanamientos judiciales.
+ */
+export function analyzeLocationEnvironment({
+  centerCoords, // [lng, lat]
+  radiusMeters = 300,
+  features = [],
+  personas = [],
+  allanamientos = [],
+  zonas = []
+}) {
+  if (!centerCoords || isNaN(centerCoords[0]) || isNaN(centerCoords[1])) {
+    return null;
+  }
+
+  const [centerLng, centerLat] = centerCoords;
+
+  // 1. Filtrar incidencias dentro del radio perimetral
+  const nearbyIncidents = [];
+  const thematicBreakdown = {};
+  let totalLesividad = 0;
+
+  features.forEach(f => {
+    if (f.geometry?.type !== 'Point') return;
+    const [lng, lat] = f.geometry.coordinates;
+    const dist = getDistanceMeters(centerLat, centerLng, lat, lng);
+    if (dist <= radiusMeters) {
+      const props = f.properties || {};
+      const themId = props.tematica_id || 'otros';
+      thematicBreakdown[themId] = (thematicBreakdown[themId] || 0) + 1;
+      totalLesividad += (props.lesividad || 3);
+      nearbyIncidents.push({
+        ...f,
+        properties: {
+          ...props,
+          distancia_metros: dist
+        }
+      });
+    }
+  });
+
+  // Ordenar hechos por cercanía
+  nearbyIncidents.sort((a, b) => a.properties.distancia_metros - b.properties.distancia_metros);
+
+  // 2. Filtrar personas de interés cuyo domicilio legal o base registrada cae en el radio
+  const nearbyPersons = [];
+  personas.forEach(p => {
+    let pCoords = null;
+    if (p.domicilio_principal_geom) {
+      if (typeof p.domicilio_principal_geom === 'string') {
+        const m = p.domicilio_principal_geom.match(/POINT\s*\(\s*([-\d.]+)\s+([-\d.]+)\s*\)/i);
+        if (m) pCoords = { lng: parseFloat(m[1]), lat: parseFloat(m[2]) };
+      } else if (p.domicilio_principal_geom.coordinates) {
+        pCoords = { lng: p.domicilio_principal_geom.coordinates[0], lat: p.domicilio_principal_geom.coordinates[1] };
+      }
+    }
+    if (pCoords) {
+      const dist = getDistanceMeters(centerLat, centerLng, pCoords.lat, pCoords.lng);
+      if (dist <= radiusMeters) {
+        nearbyPersons.push({
+          ...p,
+          distancia_metros: dist,
+          coords: pCoords
+        });
+      }
+    }
+  });
+
+  nearbyPersons.sort((a, b) => a.distancia_metros - b.distancia_metros);
+
+  // 3. Filtrar allanamientos judiciales en el radio
+  const nearbyAllanamientos = [];
+  allanamientos.forEach(a => {
+    let aCoords = null;
+    if (a.geom) {
+      if (typeof a.geom === 'string') {
+        const m = a.geom.match(/POINT\s*\(\s*([-\d.]+)\s+([-\d.]+)\s*\)/i);
+        if (m) aCoords = { lng: parseFloat(m[1]), lat: parseFloat(m[2]) };
+      } else if (a.geom.coordinates) {
+        aCoords = { lng: a.geom.coordinates[0], lat: a.geom.coordinates[1] };
+      }
+    }
+    if (aCoords) {
+      const dist = getDistanceMeters(centerLat, centerLng, aCoords.lat, aCoords.lng);
+      if (dist <= radiusMeters) {
+        nearbyAllanamientos.push({
+          ...a,
+          distancia_metros: dist,
+          coords: aCoords
+        });
+      }
+    }
+  });
+
+  nearbyAllanamientos.sort((a, b) => a.distancia_metros - b.distancia_metros);
+
+  // 4. Identificar zonas territoriales o de organizaciones que contengan el punto
+  const matchingZones = [];
+  zonas.forEach(z => {
+    // Si la zona tiene barrio o descripción, verificar si coincide
+    matchingZones.push(z);
+  });
+
+  return {
+    center: [centerLng, centerLat],
+    radiusMeters,
+    totalIncidents: nearbyIncidents.length,
+    averageLesividad: nearbyIncidents.length > 0 ? (totalLesividad / nearbyIncidents.length).toFixed(1) : 0,
+    thematicBreakdown,
+    incidents: nearbyIncidents,
+    persons: nearbyPersons,
+    allanamientos: nearbyAllanamientos,
+    zones: matchingZones
+  };
+}
+
+/**
+ * Realiza el cruce relacional entre el lugar del hecho investigado y los domicilios legales o
+ * antecedentes remotos de una persona de interés o imputado.
+ */
+export function analyzePersonLocationCross({
+  personIdentifier, // Nombre, alias o ID de la persona
+  incidentCoords,   // [lng, lat] donde ocurrió el hecho analizado
+  personas = [],
+  allFeatures = [],
+  allanamientos = []
+}) {
+  if (!personIdentifier || !incidentCoords) return null;
+
+  const q = String(personIdentifier).toLowerCase().trim();
+  const matchedPerson = personas.find(p => {
+    const fullName = `${p.nombre || ''} ${p.apellido || ''}`.toLowerCase();
+    const matchesAlias = (p.alias || []).some(a => a.toLowerCase().includes(q));
+    return p.id === personIdentifier || fullName.includes(q) || matchesAlias || (p.dni && p.dni === q);
+  });
+
+  if (!matchedPerson) return null;
+
+  const [incLng, incLat] = incidentCoords;
+
+  // Extraer coordenadas de su domicilio legal
+  let homeCoords = null;
+  if (matchedPerson.domicilio_principal_geom) {
+    if (typeof matchedPerson.domicilio_principal_geom === 'string') {
+      const m = matchedPerson.domicilio_principal_geom.match(/POINT\s*\(\s*([-\d.]+)\s+([-\d.]+)\s*\)/i);
+      if (m) homeCoords = [parseFloat(m[1]), parseFloat(m[2])];
+    } else if (matchedPerson.domicilio_principal_geom.coordinates) {
+      homeCoords = [matchedPerson.domicilio_principal_geom.coordinates[0], matchedPerson.domicilio_principal_geom.coordinates[1]];
+    }
+  }
+
+  // Calcular distancia entre hecho y domicilio legal
+  let distanceToHomeMeters = null;
+  if (homeCoords) {
+    distanceToHomeMeters = getDistanceMeters(incLat, incLng, homeCoords[1], homeCoords[0]);
+  }
+
+  // Buscar todas las incidencias históricas donde figure esta persona
+  const personIncidents = allFeatures.filter(f => {
+    const props = f.properties || {};
+    const dens = props.denunciados || [];
+    return dens.some(d => d.toLowerCase().includes(q)) ||
+           (props.nombre && props.nombre.toLowerCase().includes(q)) ||
+           (props.resumen && props.resumen.toLowerCase().includes(q));
+  }).map(f => {
+    const [fLng, fLat] = f.geometry.coordinates;
+    return {
+      ...f,
+      distancia_al_hecho_metros: getDistanceMeters(incLat, incLng, fLat, fLng)
+    };
+  });
+
+  // Buscar allanamientos vinculados por CUIJ o domicilio
+  const associatedCUIJs = new Set(matchedPerson.cuij_asociados || []);
+  const relatedAllanamientos = allanamientos.filter(a => {
+    return associatedCUIJs.has(a.cuij) ||
+           (a.direccion && matchedPerson.domicilio_principal &&
+            a.direccion.toLowerCase().includes(matchedPerson.domicilio_principal.toLowerCase().split(',')[0]));
+  });
+
+  return {
+    person: matchedPerson,
+    incidentCoords: [incLng, incLat],
+    homeCoords,
+    distanceToHomeMeters,
+    distanceToHomeKm: distanceToHomeMeters ? (distanceToHomeMeters / 1000).toFixed(2) : null,
+    isDiscrepancy: distanceToHomeMeters !== null && distanceToHomeMeters > 400,
+    historicalIncidentsCount: personIncidents.length,
+    historicalIncidents: personIncidents,
+    relatedAllanamientos
+  };
+}

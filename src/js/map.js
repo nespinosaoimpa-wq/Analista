@@ -1,7 +1,7 @@
 import mapboxgl from 'mapbox-gl';
 import { CONFIG, getLesividadColor, formatDateTime, formatDate } from './config.js';
 import { getHechosGeoJSON, getZonas, getAllanamientos, parseGeom, parsePolygonGeom } from './supabase-client.js';
-import { enrichTacticalFeature, filterFeatures, CRIME_THEMATICS } from './analytics-engine.js';
+import { enrichTacticalFeature, filterFeatures, CRIME_THEMATICS, createGeoJSONCircle } from './analytics-engine.js';
 
 let map = null;
 let popup = null;
@@ -9,6 +9,7 @@ let allMasterFeatures = []; // Master cache of all points
 let activeMapFeatures = [];   // Currently visible/filtered points
 let masterPolygons = [];      // Polygons (barrios / zonas)
 let currentFilterCriteria = {};
+let activeInspection = null;  // Estado de la inspección de ubicación actual
 
 export function getAllMasterFeatures() {
   return allMasterFeatures;
@@ -98,6 +99,27 @@ function setupSources() {
 
   // Allanamientos
   map.addSource('allanamientos', {
+    type: 'geojson',
+    data: { type: 'FeatureCollection', features: [] },
+  });
+
+  // Fuentes de Inspección de Ubicación y Cruce Espacial
+  map.addSource('inspection-radius', {
+    type: 'geojson',
+    data: { type: 'FeatureCollection', features: [] },
+  });
+
+  map.addSource('inspection-center', {
+    type: 'geojson',
+    data: { type: 'FeatureCollection', features: [] },
+  });
+
+  map.addSource('inspection-links', {
+    type: 'geojson',
+    data: { type: 'FeatureCollection', features: [] },
+  });
+
+  map.addSource('inspection-endpoints', {
     type: 'geojson',
     data: { type: 'FeatureCollection', features: [] },
   });
@@ -250,6 +272,85 @@ function setupLayers() {
     },
     paint: { 'text-color': '#ffffff' },
   });
+
+  // --- Capas de Inspección de Entorno y Vínculos Espaciales ---
+  map.addLayer({
+    id: 'inspection-radius-fill',
+    type: 'fill',
+    source: 'inspection-radius',
+    paint: {
+      'fill-color': '#0EA5E9',
+      'fill-opacity': 0.12,
+    },
+  });
+
+  map.addLayer({
+    id: 'inspection-radius-line',
+    type: 'line',
+    source: 'inspection-radius',
+    paint: {
+      'line-color': '#0EA5E9',
+      'line-width': 2,
+      'line-dasharray': [3, 2],
+      'line-opacity': 0.85,
+    },
+  });
+
+  map.addLayer({
+    id: 'inspection-links-line',
+    type: 'line',
+    source: 'inspection-links',
+    paint: {
+      'line-color': '#F59E0B',
+      'line-width': 2.5,
+      'line-dasharray': [4, 3],
+      'line-opacity': 0.9,
+    },
+  });
+
+  map.addLayer({
+    id: 'inspection-endpoints-circle',
+    type: 'circle',
+    source: 'inspection-endpoints',
+    paint: {
+      'circle-radius': 7,
+      'circle-color': '#F59E0B',
+      'circle-stroke-width': 2,
+      'circle-stroke-color': '#FFFFFF',
+      'circle-opacity': 0.95,
+    },
+  });
+
+  map.addLayer({
+    id: 'inspection-endpoints-label',
+    type: 'symbol',
+    source: 'inspection-endpoints',
+    layout: {
+      'text-field': ['get', 'label'],
+      'text-font': ['DIN Pro Medium', 'Arial Unicode MS Regular'],
+      'text-size': 11,
+      'text-offset': [0, 1.2],
+      'text-anchor': 'top',
+    },
+    paint: {
+      'text-color': '#FDE68A',
+      'text-halo-color': 'rgba(0,0,0,0.85)',
+      'text-halo-width': 1.5,
+    },
+  });
+
+  map.addLayer({
+    id: 'inspection-center-point',
+    type: 'circle',
+    source: 'inspection-center',
+    paint: {
+      'circle-radius': 8,
+      'circle-color': '#EF4444',
+      'circle-stroke-width': 2.5,
+      'circle-stroke-color': '#FFFFFF',
+      'circle-opacity': 0.95,
+    },
+  });
 }
 
 function setupInteractions() {
@@ -308,23 +409,46 @@ function setupInteractions() {
         <!-- Resumen -->
         ${props.resumen ? `<div style="font-size:11px;color:#8896AB;line-height:1.35;margin-top:6px;border-top:1px solid rgba(255,255,255,0.08);padding-top:6px;max-height:90px;overflow-y:auto">${props.resumen}</div>` : ''}
         
-        <!-- Acciones Tácticas -->
-        ${denunciadosList.length > 0 ? `
-          <button class="btn btn-primary btn-sm btn-focus-denunciado" data-name="${denunciadosList[0]}" style="margin-top:8px;width:100%;font-size:11px;padding:4px 8px">
-            🎯 Ver Todas las Incidencias de ${denunciadosList[0]}
+        <!-- Acciones de Análisis Profesional -->
+        <div style="display:flex;gap:6px;margin-top:8px;flex-direction:column">
+          <button class="btn btn-primary btn-sm btn-inspect-this-point" data-lng="${coords[0]}" data-lat="${coords[1]}" data-label="${(props.direccion || props.nombre || 'Ubicación seleccionada').replace(/"/g, '&quot;')}" style="width:100%;font-size:11px;padding:5px 8px;display:flex;align-items:center;justify-content:center;gap:4px">
+            📍 Analizar Entorno de esta Ubicación
           </button>
-        ` : ''}
+          ${denunciadosList.length > 0 ? `
+            <button class="btn btn-secondary btn-sm btn-cross-this-person" data-name="${denunciadosList[0]}" data-lng="${coords[0]}" data-lat="${coords[1]}" style="width:100%;font-size:11px;padding:5px 8px;display:flex;align-items:center;justify-content:center;gap:4px">
+              🔗 Cruce Domiciliario de ${denunciadosList[0]}
+            </button>
+          ` : ''}
+        </div>
       </div>
     `;
 
     popup.setLngLat(coords).setHTML(html).addTo(map);
 
-    // Event listener para el botón dentro del popup
+    // Event listeners dentro del popup
     setTimeout(() => {
-      const btn = document.querySelector('.btn-focus-denunciado');
-      btn?.addEventListener('click', (ev) => {
-        const name = ev.currentTarget.dataset.name;
-        if (name) focusOnDenunciado(name);
+      document.querySelector('.btn-inspect-this-point')?.addEventListener('click', (ev) => {
+        const btn = ev.currentTarget;
+        const lng = parseFloat(btn.dataset.lng);
+        const lat = parseFloat(btn.dataset.lat);
+        const label = btn.dataset.label;
+        if (!isNaN(lng) && !isNaN(lat)) {
+          window.dispatchEvent(new CustomEvent('crimint:request-inspection', {
+            detail: { coords: [lng, lat], label }
+          }));
+        }
+      });
+
+      document.querySelector('.btn-cross-this-person')?.addEventListener('click', (ev) => {
+        const btn = ev.currentTarget;
+        const name = btn.dataset.name;
+        const lng = parseFloat(btn.dataset.lng);
+        const lat = parseFloat(btn.dataset.lat);
+        if (name && !isNaN(lng) && !isNaN(lat)) {
+          window.dispatchEvent(new CustomEvent('crimint:request-cross-reference', {
+            detail: { personName: name, coords: [lng, lat] }
+          }));
+        }
       });
     }, 50);
   });
@@ -685,4 +809,156 @@ export function flyTo(lng, lat, zoom = 16) {
 
 export function getMapInstance() {
   return map;
+}
+
+// ============================================================
+// INSPECCIÓN DE UBICACIÓN Y CRUCE RELACIONAL ESPACIAL
+// ============================================================
+
+/**
+ * Establece la inspección perimetral de una coordenada en el mapa.
+ * Dibuja el radio de cobertura, sitúa el marcador central y opcionalmente
+ * proyecta los enlaces a domicilios legales o causas remotas.
+ */
+export function inspectLocation({
+  coords, // [lng, lat]
+  label = 'Ubicación bajo análisis',
+  radiusMeters = 300,
+  crossLinks = [] // Array de { coords: [lng, lat], label: string, distanceKm: string }
+}) {
+  if (!map || !coords || isNaN(coords[0]) || isNaN(coords[1])) return null;
+
+  const [lng, lat] = coords;
+
+  activeInspection = {
+    coords: [lng, lat],
+    label,
+    radiusMeters,
+    crossLinks
+  };
+
+  // 1. Generar y cargar el círculo de radio perimetral
+  const circleFeature = createGeoJSONCircle([lng, lat], radiusMeters);
+  const radiusGeoJSON = {
+    type: 'FeatureCollection',
+    features: circleFeature ? [circleFeature] : []
+  };
+  map.getSource('inspection-radius')?.setData(radiusGeoJSON);
+
+  // 2. Marcador del punto central
+  const centerGeoJSON = {
+    type: 'FeatureCollection',
+    features: [
+      {
+        type: 'Feature',
+        geometry: { type: 'Point', coordinates: [lng, lat] },
+        properties: { label }
+      }
+    ]
+  };
+  map.getSource('inspection-center')?.setData(centerGeoJSON);
+
+  // 3. Proyectar líneas de conexión espacial (Vínculos Hecho ↔ Domicilio)
+  const lineFeatures = [];
+  const endpointFeatures = [];
+
+  crossLinks.forEach(link => {
+    if (link.coords && !isNaN(link.coords[0]) && !isNaN(link.coords[1])) {
+      lineFeatures.push({
+        type: 'Feature',
+        geometry: {
+          type: 'LineString',
+          coordinates: [[lng, lat], link.coords]
+        },
+        properties: {
+          label: link.label || 'Vínculo Domiciliario',
+          distanceKm: link.distanceKm || ''
+        }
+      });
+
+      endpointFeatures.push({
+        type: 'Feature',
+        geometry: { type: 'Point', coordinates: link.coords },
+        properties: {
+          label: link.label || 'Domicilio Legal'
+        }
+      });
+    }
+  });
+
+  map.getSource('inspection-links')?.setData({
+    type: 'FeatureCollection',
+    features: lineFeatures
+  });
+
+  map.getSource('inspection-endpoints')?.setData({
+    type: 'FeatureCollection',
+    features: endpointFeatures
+  });
+
+  // 4. Ajuste de cámara inteligente
+  if (crossLinks.length > 0 && crossLinks[0].coords) {
+    // Si hay cruce con domicilio distante, encuadrar ambos puntos
+    const allLngs = [lng, ...crossLinks.map(l => l.coords[0])];
+    const allLats = [lat, ...crossLinks.map(l => l.coords[1])];
+    const minLng = Math.min(...allLngs);
+    const maxLng = Math.max(...allLngs);
+    const minLat = Math.min(...allLats);
+    const maxLat = Math.max(...allLats);
+
+    map.fitBounds([[minLng, minLat], [maxLng, maxLat]], {
+      padding: { top: 90, bottom: 90, left: 100, right: 380 },
+      maxZoom: 15,
+      duration: 1400
+    });
+  } else {
+    // Zoom enfocado en el radio de cobertura
+    const zoomLevel = radiusMeters <= 150 ? 16.5 : radiusMeters <= 400 ? 15.5 : radiusMeters <= 800 ? 14.5 : 13.8;
+    map.flyTo({
+      center: [lng, lat],
+      zoom: zoomLevel,
+      duration: 1200
+    });
+  }
+
+  return activeInspection;
+}
+
+/**
+ * Actualiza dinámicamente el radio de cobertura de la inspección activa.
+ */
+export function updateInspectionRadius(newRadiusMeters) {
+  if (!activeInspection || !map) return;
+  activeInspection.radiusMeters = newRadiusMeters;
+
+  const circleFeature = createGeoJSONCircle(activeInspection.coords, newRadiusMeters);
+  map.getSource('inspection-radius')?.setData({
+    type: 'FeatureCollection',
+    features: circleFeature ? [circleFeature] : []
+  });
+
+  // Ajustar nivel de zoom acorde al nuevo radio
+  const zoomLevel = newRadiusMeters <= 150 ? 16.5 : newRadiusMeters <= 400 ? 15.5 : newRadiusMeters <= 800 ? 14.5 : 13.8;
+  map.easeTo({ zoom: zoomLevel, duration: 800 });
+}
+
+/**
+ * Limpia y retira la inspección activa del mapa.
+ */
+export function clearInspection() {
+  if (!map) return;
+  activeInspection = null;
+
+  const emptyFC = { type: 'FeatureCollection', features: [] };
+  map.getSource('inspection-radius')?.setData(emptyFC);
+  map.getSource('inspection-center')?.setData(emptyFC);
+  map.getSource('inspection-links')?.setData(emptyFC);
+  map.getSource('inspection-endpoints')?.setData(emptyFC);
+}
+
+/**
+ * Devuelve la inspección activa en memoria.
+ */
+export function getActiveInspection() {
+  return activeInspection;
 }

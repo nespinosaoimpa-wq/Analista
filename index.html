@@ -150,6 +150,11 @@
           </div>
           <button class="btn btn-primary btn-sm" id="btn-apply-filters">Aplicar</button>
           <button class="btn btn-ghost btn-sm" id="btn-clear-filters">Limpiar</button>
+          <div style="width: 1px; height: 22px; background: rgba(255,255,255,0.12); margin: 0 4px;"></div>
+          <button class="btn btn-secondary btn-sm" id="btn-open-address-inspector" title="Inspeccionar una dirección o caso específico">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            <span>Inspeccionar Dirección</span>
+          </button>
         </div>
 
         <div class="map-layer-panel" id="map-layer-panel">
@@ -234,6 +239,86 @@
               <canvas id="hud-chart-evolution"></canvas>
             </div>
           </div>
+        </div>
+      </div>
+
+      <!-- Panel de Inspección de Ubicación y Cruce Relacional -->
+      <div class="inspection-panel hidden" id="inspection-panel">
+        <div class="inspection-header">
+          <div class="inspection-title-block">
+            <div class="inspection-badge">INSPECCIÓN DE UBICACIÓN</div>
+            <h3 class="inspection-address" id="inspection-address-title">Dirección bajo análisis</h3>
+            <span class="inspection-coords" id="inspection-coords-label">Coordenadas: —</span>
+          </div>
+          <button class="inspection-close-btn" id="btn-close-inspection" title="Cerrar panel">&times;</button>
+        </div>
+
+        <!-- Selector de Radio de Cobertura -->
+        <div class="inspection-radius-bar">
+          <span class="radius-label">Radio de Cobertura:</span>
+          <div class="btn-group-segmented" id="inspection-radius-group">
+            <button class="btn-segment" data-radius="100">100 m</button>
+            <button class="btn-segment active" data-radius="300">300 m</button>
+            <button class="btn-segment" data-radius="500">500 m</button>
+            <button class="btn-segment" data-radius="1000">1.000 m</button>
+          </div>
+        </div>
+
+        <!-- Resumen de Indicadores -->
+        <div class="inspection-summary-cards" id="inspection-summary-cards">
+          <div class="summary-card">
+            <span class="summary-val" id="insp-stat-hechos">0</span>
+            <span class="summary-lbl">Incidencias en Radio</span>
+          </div>
+          <div class="summary-card">
+            <span class="summary-val" id="insp-stat-personas">0</span>
+            <span class="summary-lbl">Personas Radicadas</span>
+          </div>
+          <div class="summary-card">
+            <span class="summary-val" id="insp-stat-allanamientos">0</span>
+            <span class="summary-lbl">Allanamientos</span>
+          </div>
+          <div class="summary-card">
+            <span class="summary-val" id="insp-stat-lesividad" style="color:var(--accent-primary)">-</span>
+            <span class="summary-lbl">Gravedad Promedio</span>
+          </div>
+        </div>
+
+        <!-- Pestañas del Panel de Inspección -->
+        <div class="inspection-tabs">
+          <button class="inspection-tab-btn active" data-tab="entorno">📍 Incidencias en Sector</button>
+          <button class="inspection-tab-btn" data-tab="residentes">👤 Personas Radicadas</button>
+          <button class="inspection-tab-btn" data-tab="cruces">🔗 Cruce Domiciliario</button>
+        </div>
+
+        <!-- Contenido de las Pestañas -->
+        <div class="inspection-content">
+          <!-- Pestaña 1: Incidencias en el Sector -->
+          <div class="inspection-tab-content active" id="tab-insp-entorno">
+            <div class="inspection-section-header">Delitos registrados dentro del perímetro:</div>
+            <div class="inspection-list" id="insp-incidents-list"></div>
+          </div>
+
+          <!-- Pestaña 2: Personas Radicadas -->
+          <div class="inspection-tab-content" id="tab-insp-residentes">
+            <div class="inspection-section-header">Personas que declaran domicilio legal o base en este sector:</div>
+            <div class="inspection-list" id="insp-persons-list"></div>
+          </div>
+
+          <!-- Pestaña 3: Cruce Domiciliario y Vínculos Espaciales -->
+          <div class="inspection-tab-content" id="tab-insp-cruces">
+            <div class="inspection-section-header">Discrepancias territoriales y antecedentes remotos:</div>
+            <div class="inspection-cross-search-box">
+              <input type="text" id="insp-cross-person-input" placeholder="Buscar imputado para cruce de domicilio..." class="filter-input">
+              <button class="btn btn-primary btn-sm" id="btn-do-person-cross">Cruzar</button>
+            </div>
+            <div class="inspection-list" id="insp-cross-list"></div>
+          </div>
+        </div>
+
+        <!-- Pie de Panel -->
+        <div class="inspection-footer">
+          <button class="btn btn-ghost btn-sm" id="btn-clear-inspection-map" style="width:100%">Limpiar Inspección del Mapa</button>
         </div>
       </div>
 
@@ -628,6 +713,7 @@
             <div class="form-group">
               <label for="hecho-direccion">Dirección</label>
               <input type="text" id="hecho-direccion" class="form-input" placeholder="Ej: Esmeralda y Riobamba">
+              <button type="button" class="btn btn-outline btn-xs" id="btn-pre-inspect-hecho" style="margin-top:4px;font-size:11px;">🔍 Analizar Entorno de esta Dirección</button>
             </div>
             <div class="form-group">
               <label for="hecho-barrio">Barrio</label>
@@ -994,6 +1080,46 @@
         <button class="modal-close" data-close="modal-detalle">&times;</button>
       </div>
       <div class="modal-body" id="detalle-contenido"></div>
+    </div>
+  </div>
+
+  <!-- Modal: Inspeccionar Dirección / Caso -->
+  <div class="modal-overlay hidden" id="modal-inspeccion-direccion">
+    <div class="modal" style="max-width: 500px;">
+      <div class="modal-header">
+        <h2>Inspeccionar Dirección / Nuevo Caso</h2>
+        <button class="modal-close" data-close="modal-inspeccion-direccion">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p style="font-size:12px;color:var(--text-secondary);margin-bottom:14px;line-height:1.4">
+          Ingrese la dirección o intersección a investigar para analizar el entorno inmediato (100 a 1.000 metros) y verificar cruces con domicilios legales de personas de interés.
+        </p>
+        <form id="form-inspeccion-direccion">
+          <div class="form-group">
+            <label for="input-inspect-address">Dirección o Esquina</label>
+            <input type="text" id="input-inspect-address" class="form-input" placeholder="Ej: San Lorenzo / Pasaje Zazpe 1700, o Rodríguez Peña y Colón" required>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="select-inspect-radius">Radio Inicial</label>
+              <select id="select-inspect-radius" class="form-input">
+                <option value="100">100 metros (Cuadra inmediata)</option>
+                <option value="300" selected>300 metros (Entorno barrial)</option>
+                <option value="500">500 metros (Sector ampliado)</option>
+                <option value="1000">1.000 metros (Jurisdicción)</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="input-inspect-person">Persona Involucrada (Opcional)</label>
+              <input type="text" id="input-inspect-person" class="form-input" placeholder="Nombre, alias o DNI">
+            </div>
+          </div>
+          <div class="form-actions" style="margin-top:16px;">
+            <button type="button" class="btn btn-ghost" data-close="modal-inspeccion-direccion">Cancelar</button>
+            <button type="submit" class="btn btn-primary" id="btn-submit-inspect-address">Ejecutar Inspección</button>
+          </div>
+        </form>
+      </div>
     </div>
   </div>
 

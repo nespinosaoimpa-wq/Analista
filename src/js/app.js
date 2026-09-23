@@ -1,17 +1,23 @@
 // ============================================================
 // CRIMINT — Main Application Orchestrator
 // ============================================================
-import { initMap, loadMapData, toggleLayer, flyTo, loadTacticalGeoJSON, applyMapFilters, resetMapFilters } from './map.js';
+import {
+  initMap, loadMapData, toggleLayer, flyTo, loadTacticalGeoJSON, applyMapFilters, resetMapFilters,
+  inspectLocation, updateInspectionRadius, clearInspection, getActiveInspection, getAllMasterFeatures
+} from './map.js';
 import { initDashboard, refreshDashboard } from './dashboard.js';
 import { initTacticalHUD, initTacticalTimeline } from './tactical-hud.js';
 import {
   globalSearch, insertHecho, insertPersona, insertBanda,
   getHechos, getPersonas, getBandas, getAllanamientos, insertAllanamiento, insertVinculo,
   getGrafoPersona, getAllVinculos, geocodeAddress, logAction, parseGeom,
-  getPersonaById, getBandaById, getAllanamientoById, getHechoById,
+  getPersonaById, getBandaById, getAllanamientoById, getHechoById, getZonas
 } from './supabase-client.js';
 import { parseKML, parseKMZ, parseExcel, importExcelRows, importKMLGeoJSON, saveTacticalToLocal, getTacticalFromLocal } from './importers.js';
-import { CONFIG, getLesividadClass, formatDate, formatDateTime } from './config.js';
+import { CONFIG, getLesividadClass, formatDate, formatDateTime, getLesividadColor } from './config.js';
+import {
+  analyzeLocationEnvironment, analyzePersonLocationCross, getDistanceMeters
+} from './analytics-engine.js';
 import { Network } from 'vis-network';
 import { DataSet } from 'vis-data';
 
@@ -32,6 +38,7 @@ document.addEventListener('DOMContentLoaded', () => {
   setupIngestion();
   setupRangeSliders();
   setupKeyboard();
+  setupInspectionModule();
   updateHeaderStats();
   window.addEventListener('crimint:data-loaded', updateHeaderStats);
 
@@ -1860,9 +1867,10 @@ async function showEntityDetail(type, id) {
           ${p.cuij_asociados?.length ? `<div><span style="color:var(--text-muted);display:block;font-size:11px;margin-bottom:2px">CAUSAS CUIJ EN TRÁMITE</span><div style="font-family:var(--font-mono);color:var(--accent-primary);font-size:12px;">${p.cuij_asociados.join(' | ')}</div></div>` : ''}
           ${p.antecedentes_texto ? `<div><span style="color:var(--text-muted);display:block;font-size:11px;margin-bottom:2px">ANTECEDENTES E HISTORIAL</span><div style="font-size:13px;color:var(--text-secondary);max-height:200px;overflow-y:auto;padding:8px;background:var(--bg-primary);border-radius:8px">${p.antecedentes_texto}</div></div>` : ''}
 
-          <div style="display:flex;gap:8px;margin-top:12px">
+          <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
             <button class="btn btn-primary btn-sm" onclick="document.getElementById('modal-detalle').classList.add('hidden'); window.enfocarPersonaEnGrafo('${p.id}');">🕸️ Ver en Red de Vínculos</button>
-            ${p.domicilio_principal_geom ? '<button class="btn btn-secondary btn-sm" id="btn-ver-en-mapa">Ver en Mapa</button>' : ''}
+            <button class="btn btn-secondary btn-sm" onclick="document.getElementById('modal-detalle').classList.add('hidden'); window.analizarEntornoDePersona('${p.id}');">📍 Analizar Entorno de Domicilio</button>
+            ${p.domicilio_principal_geom ? '<button class="btn btn-outline btn-sm" id="btn-ver-en-mapa">Centrar Mapa</button>' : ''}
           </div>
         </div>
       `;
@@ -1916,6 +1924,9 @@ async function showEntityDetail(type, id) {
           </div>
           <div><span style="color:var(--text-muted);display:block;font-size:11px">MODUS OPERANDI</span><div style="font-size:13px;margin-top:4px">${h.modus_operandi || '—'}</div></div>
           <div><span style="color:var(--text-muted);display:block;font-size:11px">RESUMEN</span><div style="font-size:13px;margin-top:4px">${h.resumen || '—'}</div></div>
+          <div style="display:flex;gap:8px;margin-top:10px">
+            <button class="btn btn-primary btn-sm" onclick="document.getElementById('modal-detalle').classList.add('hidden'); window.analizarEntornoDeHecho('${h.id}');">📍 Analizar Entorno de este Hecho</button>
+          </div>
         </div>
       `;
     }
@@ -1997,3 +2008,559 @@ function showLoading(text = 'Cargando...') {
 function hideLoading() {
   document.getElementById('loading-overlay')?.classList.add('hidden');
 }
+
+// ============================================================
+// INSPECCIÓN DE UBICACIÓN Y CRUCE RELACIONAL DE DOMICILIOS
+// ============================================================
+
+let currentInspectionState = null;
+
+function setupInspectionModule() {
+  // Botón en la barra del mapa para abrir el modal de inspección
+  document.getElementById('btn-open-address-inspector')?.addEventListener('click', () => {
+    openModal('modal-inspeccion-direccion');
+    setTimeout(() => {
+      document.getElementById('input-inspect-address')?.focus();
+    }, 100);
+  });
+
+  // Envío del formulario de inspección
+  document.getElementById('form-inspeccion-direccion')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const address = document.getElementById('input-inspect-address')?.value?.trim();
+    const radius = parseInt(document.getElementById('select-inspect-radius')?.value) || 300;
+    const person = document.getElementById('input-inspect-person')?.value?.trim() || '';
+
+    if (!address) {
+      showToast('Por favor ingrese una dirección o punto de interés', 'warning');
+      return;
+    }
+
+    closeModal('modal-inspeccion-direccion');
+    await executeAddressInspection({ address, radius, person });
+  });
+
+  // Botón en formulario de nuevo hecho para pre-analizar la dirección
+  document.getElementById('btn-pre-inspect-hecho')?.addEventListener('click', async () => {
+    const dir = document.getElementById('hecho-direccion')?.value?.trim();
+    if (!dir) {
+      showToast('Ingrese primero una dirección en el campo correspondiente', 'warning');
+      return;
+    }
+    closeModal('modal-hecho');
+    await executeAddressInspection({ address: dir, radius: 300 });
+  });
+
+  // Evento desde popup del mapa: "Analizar Entorno de esta Ubicación"
+  window.addEventListener('crimint:request-inspection', async (e) => {
+    const { coords, label } = e.detail || {};
+    if (coords) {
+      await executeAddressInspection({ coords, address: label || 'Ubicación seleccionada', radius: 300 });
+    }
+  });
+
+  // Evento desde popup del mapa: "Cruce Domiciliario de [Nombre]"
+  window.addEventListener('crimint:request-cross-reference', async (e) => {
+    const { coords, personName } = e.detail || {};
+    if (coords && personName) {
+      await executeAddressInspection({ coords, person: personName, radius: 300 });
+    }
+  });
+
+  // Botón cerrar panel
+  document.getElementById('btn-close-inspection')?.addEventListener('click', () => {
+    document.getElementById('inspection-panel')?.classList.add('hidden');
+    clearInspection();
+    currentInspectionState = null;
+  });
+
+  // Botón limpiar mapa
+  document.getElementById('btn-clear-inspection-map')?.addEventListener('click', () => {
+    document.getElementById('inspection-panel')?.classList.add('hidden');
+    clearInspection();
+    currentInspectionState = null;
+    showToast('Inspección perimetral finalizada', 'info');
+  });
+
+  // Selector segmentado de radio de cobertura
+  document.querySelectorAll('#inspection-radius-group .btn-segment').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      document.querySelectorAll('#inspection-radius-group .btn-segment').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      const r = parseInt(btn.dataset.radius);
+      if (r && currentInspectionState) {
+        currentInspectionState.radius = r;
+        updateInspectionRadius(r);
+        await refreshInspectionData();
+      }
+    });
+  });
+
+  // Pestañas del panel de inspección
+  document.querySelectorAll('.inspection-tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.inspection-tab-btn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.inspection-tab-content').forEach(c => c.classList.remove('active'));
+      btn.classList.add('active');
+      const target = document.getElementById(`tab-insp-${btn.dataset.tab}`);
+      if (target) target.classList.add('active');
+    });
+  });
+
+  // Búsqueda manual de persona para cruce
+  document.getElementById('btn-do-person-cross')?.addEventListener('click', async () => {
+    const query = document.getElementById('insp-cross-person-input')?.value?.trim();
+    if (!query) {
+      showToast('Ingrese un nombre o alias para realizar el cruce', 'warning');
+      return;
+    }
+    if (!currentInspectionState) return;
+    await executePersonCrossForInspection(query);
+  });
+}
+
+/**
+ * Ejecuta el análisis de proximidad y cruce de datos para una dirección o coordenadas dadas.
+ */
+async function executeAddressInspection({ address = '', coords = null, radius = 300, person = '' }) {
+  showLoading('Analizando ubicación y cruce de datos...');
+
+  let targetCoords = coords;
+  let targetAddress = address;
+
+  try {
+    // Si no hay coordenadas, intentar geocodificar o detectar formato numérico
+    if (!targetCoords && targetAddress) {
+      const coordMatch = targetAddress.match(/([-\d.]+)\s*,\s*([-\d.]+)/);
+      if (coordMatch) {
+        const p1 = parseFloat(coordMatch[1]);
+        const p2 = parseFloat(coordMatch[2]);
+        if (p1 < -55 && p1 > -65) {
+          targetCoords = [p1, p2];
+        } else if (p2 < -55 && p2 > -65) {
+          targetCoords = [p2, p1];
+        }
+      }
+
+      if (!targetCoords) {
+        const geocoded = await geocodeAddress(targetAddress);
+        if (geocoded && geocoded.lng && geocoded.lat) {
+          targetCoords = [geocoded.lng, geocoded.lat];
+          if (geocoded.place_name) targetAddress = geocoded.place_name;
+        }
+      }
+    }
+
+    if (!targetCoords) {
+      hideLoading();
+      showToast('No se pudieron obtener coordenadas precisas para esta dirección. Utilice una esquina o calle conocida.', 'warning');
+      return;
+    }
+
+    // Asegurar vista en mapa
+    document.querySelector('[data-view="mapa"]')?.click();
+
+    // Obtener datos maestros en memoria o base de datos
+    const allPoints = getAllMasterFeatures();
+    const personas = await getPersonas({ limit: 500 });
+    const allanamientos = await getAllanamientos({ limit: 500 });
+    const zonas = await getZonas();
+
+    // Ejecutar análisis de entorno inmediato
+    const envAnalysis = analyzeLocationEnvironment({
+      centerCoords: targetCoords,
+      radiusMeters: radius,
+      features: allPoints,
+      personas,
+      allanamientos,
+      zonas
+    });
+
+    // Ejecutar análisis de cruce si se indicó persona o si hay residentes en el área
+    let crossAnalysis = null;
+    const crossLinks = [];
+
+    if (person) {
+      crossAnalysis = analyzePersonLocationCross({
+        personIdentifier: person,
+        incidentCoords: targetCoords,
+        personas,
+        allFeatures: allPoints,
+        allanamientos
+      });
+
+      if (crossAnalysis && crossAnalysis.homeCoords) {
+        crossLinks.push({
+          coords: crossAnalysis.homeCoords,
+          label: `Domicilio Legal: ${crossAnalysis.person.nombre || ''} ${crossAnalysis.person.apellido || ''}`,
+          distanceKm: crossAnalysis.distanceToHomeKm
+        });
+      }
+    } else if (envAnalysis.persons && envAnalysis.persons.length > 0) {
+      // Tomar a la persona principal para cruce sugerido
+      crossAnalysis = analyzePersonLocationCross({
+        personIdentifier: envAnalysis.persons[0].id,
+        incidentCoords: targetCoords,
+        personas,
+        allFeatures: allPoints,
+        allanamientos
+      });
+
+      if (crossAnalysis && crossAnalysis.homeCoords && crossAnalysis.isDiscrepancy) {
+        crossLinks.push({
+          coords: crossAnalysis.homeCoords,
+          label: `Domicilio Legal: ${crossAnalysis.person.nombre || ''} ${crossAnalysis.person.apellido || ''}`,
+          distanceKm: crossAnalysis.distanceToHomeKm
+        });
+      }
+    }
+
+    // Actualizar estado de inspección
+    currentInspectionState = {
+      coords: targetCoords,
+      address: targetAddress,
+      radius,
+      envAnalysis,
+      crossAnalysis,
+      personas,
+      allPoints,
+      allanamientos,
+      zonas
+    };
+
+    // Proyectar en Mapbox (cobertura + enlaces espaciales)
+    inspectLocation({
+      coords: targetCoords,
+      label: targetAddress || 'Ubicación bajo análisis',
+      radiusMeters: radius,
+      crossLinks
+    });
+
+    // Renderizar panel de resultados
+    renderInspectionPanel(currentInspectionState);
+
+    // Abrir panel lateral
+    document.getElementById('inspection-panel')?.classList.remove('hidden');
+
+    hideLoading();
+    showToast(`Análisis de proximidad activo (${radius}m)`, 'info');
+
+  } catch (err) {
+    hideLoading();
+    console.error('Error en executeAddressInspection:', err);
+    showToast('Ocurrió un error al procesar el análisis de ubicación', 'error');
+  }
+}
+
+/**
+ * Recalcula el análisis cuando el usuario cambia el radio desde el panel.
+ */
+async function refreshInspectionData() {
+  if (!currentInspectionState) return;
+  const { coords, radius, allPoints, personas, allanamientos, zonas, crossAnalysis } = currentInspectionState;
+
+  const envAnalysis = analyzeLocationEnvironment({
+    centerCoords: coords,
+    radiusMeters: radius,
+    features: allPoints,
+    personas,
+    allanamientos,
+    zonas
+  });
+
+  currentInspectionState.envAnalysis = envAnalysis;
+  renderInspectionPanel(currentInspectionState);
+}
+
+/**
+ * Ejecuta el cruce específico con una persona buscada manualmente en la pestaña de cruces.
+ */
+async function executePersonCrossForInspection(personName) {
+  if (!currentInspectionState) return;
+  const { coords, personas, allPoints, allanamientos, address, radius } = currentInspectionState;
+
+  const crossAnalysis = analyzePersonLocationCross({
+    personIdentifier: personName,
+    incidentCoords: coords,
+    personas,
+    allFeatures: allPoints,
+    allanamientos
+  });
+
+  if (!crossAnalysis) {
+    showToast(`No se encontraron registros de "${personName}" en la base de personas`, 'warning');
+    return;
+  }
+
+  currentInspectionState.crossAnalysis = crossAnalysis;
+
+  // Actualizar líneas en el mapa
+  const crossLinks = [];
+  if (crossAnalysis.homeCoords) {
+    crossLinks.push({
+      coords: crossAnalysis.homeCoords,
+      label: `Domicilio Legal: ${crossAnalysis.person.nombre || ''} ${crossAnalysis.person.apellido || ''}`,
+      distanceKm: crossAnalysis.distanceToHomeKm
+    });
+  }
+
+  inspectLocation({
+    coords,
+    label: address || 'Ubicación bajo análisis',
+    radiusMeters: radius,
+    crossLinks
+  });
+
+  renderInspectionPanel(currentInspectionState);
+  showToast(`Cruce relacional generado para ${crossAnalysis.person.nombre || ''} ${crossAnalysis.person.apellido || ''}`, 'success');
+
+  // Activar la pestaña de cruce
+  document.querySelector('.inspection-tab-btn[data-tab="cruces"]')?.click();
+}
+
+/**
+ * Renderiza todos los datos en el panel de inspección.
+ */
+function renderInspectionPanel(state) {
+  const { address, coords, envAnalysis, crossAnalysis } = state;
+
+  // Cabecera
+  const titleEl = document.getElementById('inspection-address-title');
+  const coordsEl = document.getElementById('inspection-coords-label');
+  if (titleEl) titleEl.textContent = address || 'Ubicación seleccionada';
+  if (coordsEl) coordsEl.textContent = `Coordenadas: [${coords[0].toFixed(5)}, ${coords[1].toFixed(5)}]`;
+
+  // Resumen cuantitativo
+  document.getElementById('insp-stat-hechos').textContent = envAnalysis.totalIncidents;
+  document.getElementById('insp-stat-personas').textContent = envAnalysis.persons.length;
+  document.getElementById('insp-stat-allanamientos').textContent = envAnalysis.allanamientos.length;
+  document.getElementById('insp-stat-lesividad').textContent = envAnalysis.averageLesividad > 0 ? `L${envAnalysis.averageLesividad}` : '—';
+
+  // -------------------------------------------------------------
+  // Pestaña 1: Incidencias en el Sector
+  // -------------------------------------------------------------
+  const incidentsListEl = document.getElementById('insp-incidents-list');
+  if (incidentsListEl) {
+    if (envAnalysis.incidents.length === 0) {
+      incidentsListEl.innerHTML = `
+        <div style="text-align:center;padding:24px 12px;color:var(--text-muted);font-size:12px;">
+          No se registran incidencias penales en este radio de cobertura.
+        </div>
+      `;
+    } else {
+      incidentsListEl.innerHTML = envAnalysis.incidents.map(inc => {
+        const p = inc.properties || {};
+        const themColor = p.color || '#0EA5E9';
+        const themIcon = p.tematica_icon || '📌';
+        const themName = p.tematica_nombre || p.tipo || 'Incidencia';
+        const lesColor = getLesividadColor(p.lesividad);
+
+        return `
+          <div class="insp-card" style="cursor:pointer;" onclick="window.centrarHechoEnMapa(${inc.geometry.coordinates[0]}, ${inc.geometry.coordinates[1]})">
+            <div class="insp-card-header">
+              <span style="display:inline-flex;align-items:center;gap:4px;color:${themColor};font-size:11px;font-weight:700;">
+                ${themIcon} ${themName}
+              </span>
+              <div style="display:flex;align-items:center;gap:6px">
+                <span class="insp-badge-dist">${p.distancia_metros} m</span>
+                <span style="background:${lesColor};color:#fff;padding:1px 6px;border-radius:10px;font-size:10px;font-weight:700;">L${p.lesividad}</span>
+              </div>
+            </div>
+            <div style="color:var(--text-primary);font-size:12px;font-weight:500;margin-bottom:2px;">
+              ${p.direccion || p.barrio || 'Sin dirección exacta'}
+            </div>
+            ${p.cuij ? `<div style="font-size:11px;color:#F59E0B;font-family:var(--font-mono);font-weight:600;">CUIJ: ${p.cuij}</div>` : ''}
+            ${p.fecha ? `<div style="font-size:10px;color:var(--text-muted);margin-top:2px;">📅 ${formatDate(p.fecha)}</div>` : ''}
+          </div>
+        `;
+      }).join('');
+    }
+  }
+
+  // -------------------------------------------------------------
+  // Pestaña 2: Personas Radicadas en el Sector
+  // -------------------------------------------------------------
+  const personsListEl = document.getElementById('insp-persons-list');
+  if (personsListEl) {
+    if (envAnalysis.persons.length === 0) {
+      personsListEl.innerHTML = `
+        <div style="text-align:center;padding:24px 12px;color:var(--text-muted);font-size:12px;">
+          No se encuentran domicilios legales de personas de interés registradas en este radio.
+        </div>
+      `;
+    } else {
+      personsListEl.innerHTML = envAnalysis.persons.map(per => {
+        const isCaptura = per.pedido_captura;
+        const nombreCompleto = `${per.nombre || ''} ${per.apellido || ''}`.trim() || 'Sin nombre';
+
+        return `
+          <div class="insp-card">
+            <div class="insp-card-header">
+              <span style="font-size:12px;font-weight:700;color:var(--text-primary);">
+                👤 ${nombreCompleto} ${per.alias?.length ? `("${per.alias[0]}")` : ''}
+              </span>
+              <span class="insp-badge-dist">${per.distancia_metros} m</span>
+            </div>
+            ${isCaptura ? `
+              <div style="display:inline-block;background:rgba(239,68,68,0.2);color:#EF4444;border:1px solid rgba(239,68,68,0.4);padding:1px 6px;border-radius:4px;font-size:10px;font-weight:800;margin-bottom:4px;">
+                🚨 PEDIDO DE CAPTURA ACTIVO
+              </div>
+            ` : ''}
+            <div style="font-size:11px;color:var(--text-secondary);margin-bottom:3px;">
+              <strong>Domicilio registrado:</strong> ${per.domicilio_principal || '—'}
+            </div>
+            <div style="font-size:11px;color:var(--text-secondary);margin-bottom:4px;">
+              <strong>Banda:</strong> <span style="color:#0EA5E9;font-weight:600;">${per.banda_nombre || 'Individual'}</span>
+              ${per.roles?.length ? ` | <strong>Rol:</strong> ${per.roles.join(', ')}` : ''}
+            </div>
+            <div style="display:flex;gap:6px;margin-top:6px;">
+              <button class="btn btn-outline btn-xs" onclick="window.verFichaDesdeInspeccion('${per.id}')" style="font-size:10px;">Ficha Judicial</button>
+              <button class="btn btn-primary btn-xs" onclick="window.cruzarPersonaDesdeInspeccion('${per.id}')" style="font-size:10px;">Analizar Cruce</button>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+  }
+
+  // -------------------------------------------------------------
+  // Pestaña 3: Cruce Domiciliario y Vínculos Espaciales
+  // -------------------------------------------------------------
+  const crossListEl = document.getElementById('insp-cross-list');
+  if (crossListEl) {
+    if (!crossAnalysis) {
+      crossListEl.innerHTML = `
+        <div style="text-align:center;padding:24px 12px;color:var(--text-muted);font-size:12px;line-height:1.4;">
+          Ingrese el nombre o alias de una persona arriba, o seleccione un imputado de la pestaña "Personas Radicadas" para analizar la conexión espacial con su domicilio legal registrado.
+        </div>
+      `;
+    } else {
+      const p = crossAnalysis.person;
+      const isDiscrepancy = crossAnalysis.isDiscrepancy;
+      const nombreCompleto = `${p.nombre || ''} ${p.apellido || ''}`.trim() || 'Sin nombre';
+
+      crossListEl.innerHTML = `
+        <div class="insp-cross-alert-box">
+          <div class="insp-cross-alert-header">
+            <span>INFORMACIÓN DE LA PERSONA ANALIZADA</span>
+            ${isDiscrepancy ? '<span class="insp-discrepancy-chip">DISCREPANCIA ESPACIAL</span>' : '<span style="font-size:10px;color:var(--accent-success);font-weight:700;">EN ZONA DE RESIDENCIA</span>'}
+          </div>
+
+          <div style="font-size:13px;font-weight:700;color:#fff;margin-bottom:4px;">
+            👤 ${nombreCompleto} ${p.alias?.length ? `("${p.alias.join(', ')}")` : ''}
+          </div>
+
+          <div class="insp-cross-detail-row">
+            <strong>Banda u Organización:</strong> <span style="color:#0EA5E9;font-weight:600;">${p.banda_nombre || 'Individual'}</span>
+            (Nivel de peligrosidad: ${p.score_peligrosidad || 5}/10)
+          </div>
+
+          <div class="insp-cross-detail-row" style="margin-top:6px;padding-top:6px;border-top:1px solid rgba(255,255,255,0.08);">
+            <strong>Lugar del Hecho / Caso:</strong> ${address || 'Coordenada bajo análisis'}
+          </div>
+
+          <div class="insp-cross-detail-row">
+            <strong>Domicilio Legal Registrado:</strong> ${p.domicilio_principal || 'Sin domicilio registrado'}
+          </div>
+
+          ${crossAnalysis.distanceToHomeKm ? `
+            <div style="display:flex;align-items:center;gap:6px;margin:8px 0;padding:6px 10px;background:rgba(245,158,11,0.15);border-radius:6px;border:1px solid rgba(245,158,11,0.3);">
+              <span style="font-size:16px;">📏</span>
+              <div style="font-size:12px;color:#FDE68A;">
+                <strong>Distancia Hecho ↔ Domicilio:</strong> ${crossAnalysis.distanceToHomeKm} km de separación.
+              </div>
+            </div>
+          ` : ''}
+
+          ${p.cuij_asociados?.length ? `
+            <div class="insp-cross-detail-row">
+              <strong>Causas CUIJ asociadas al domicilio:</strong>
+              <div style="font-family:var(--font-mono);color:var(--accent-primary);font-size:11px;margin-top:2px;">
+                ${p.cuij_asociados.join(' | ')}
+              </div>
+            </div>
+          ` : ''}
+
+          ${p.antecedentes_texto ? `
+            <div class="insp-cross-detail-row" style="margin-top:6px;">
+              <strong>Antecedentes e Inteligencia en Domicilio:</strong>
+              <div style="font-size:11px;color:var(--text-secondary);background:rgba(0,0,0,0.3);padding:6px 8px;border-radius:4px;margin-top:2px;">
+                ${p.antecedentes_texto}
+              </div>
+            </div>
+          ` : ''}
+
+          ${crossAnalysis.homeCoords ? `
+            <div style="display:flex;gap:6px;margin-top:10px;">
+              <button class="btn btn-secondary btn-xs" onclick="window.centrarHechoEnMapa(${crossAnalysis.homeCoords[0]}, ${crossAnalysis.homeCoords[1]})" style="font-size:10px;width:100%;">
+                🎯 Ver Domicilio Legal en el Mapa
+              </button>
+            </div>
+          ` : ''}
+        </div>
+
+        ${crossAnalysis.historicalIncidents.length > 0 ? `
+          <div style="font-size:11px;font-weight:700;color:var(--text-secondary);margin:10px 0 6px;">
+            Otros hechos históricos vinculados a esta persona (${crossAnalysis.historicalIncidents.length}):
+          </div>
+          <div class="inspection-list">
+            ${crossAnalysis.historicalIncidents.slice(0, 6).map(inc => {
+              const ip = inc.properties || {};
+              const iThem = ip.tematica_nombre || ip.tipo || 'Incidencia';
+              const distKm = (inc.distancia_al_hecho_metros / 1000).toFixed(2);
+              return `
+                <div class="insp-card" style="cursor:pointer;" onclick="window.centrarHechoEnMapa(${inc.geometry.coordinates[0]}, ${inc.geometry.coordinates[1]})">
+                  <div class="insp-card-header">
+                    <span style="font-weight:600;color:#fff;">${iThem}</span>
+                    <span class="insp-badge-dist">${distKm} km del caso</span>
+                  </div>
+                  <div style="font-size:11px;color:var(--text-secondary);">${ip.direccion || ip.barrio || 'Santa Fe'}</div>
+                  ${ip.cuij ? `<div style="font-size:10px;color:#F59E0B;font-family:var(--font-mono);">CUIJ: ${ip.cuij}</div>` : ''}
+                </div>
+              `;
+            }).join('')}
+          </div>
+        ` : ''}
+      `;
+    }
+  }
+}
+
+// Ventanas y llamadas globales para interacción dentro del panel
+window.centrarHechoEnMapa = function(lng, lat) {
+  flyTo(lng, lat, 16);
+};
+
+window.verFichaDesdeInspeccion = function(personaId) {
+  showEntityDetail('persona', personaId);
+};
+
+window.cruzarPersonaDesdeInspeccion = function(personaId) {
+  executePersonCrossForInspection(personaId);
+};
+
+window.analizarEntornoDePersona = async function(personaId) {
+  const p = await getPersonaById(personaId);
+  if (!p) return;
+  const coords = parseGeom(p.domicilio_principal_geom);
+  if (coords) {
+    await executeAddressInspection({ coords: [coords.lng, coords.lat], address: p.domicilio_principal || 'Domicilio Legal', person: p.id, radius: 300 });
+  } else if (p.domicilio_principal) {
+    await executeAddressInspection({ address: p.domicilio_principal, person: p.id, radius: 300 });
+  } else {
+    showToast('La persona no posee domicilio registrado para geolocalizar.', 'warning');
+  }
+};
+
+window.analizarEntornoDeHecho = async function(hechoId) {
+  const h = await getHechoById(hechoId);
+  if (!h) return;
+  const coords = parseGeom(h.geom);
+  if (coords) {
+    await executeAddressInspection({ coords: [coords.lng, coords.lat], address: h.direccion || h.barrio || 'Lugar del Hecho', radius: 300 });
+  } else if (h.direccion) {
+    await executeAddressInspection({ address: h.direccion, radius: 300 });
+  } else {
+    showToast('El hecho no posee coordenadas ni dirección para analizar.', 'warning');
+  }
+};
