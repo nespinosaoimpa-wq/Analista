@@ -1899,11 +1899,11 @@ function renderDossierDigitalBody(p) {
           </div>
         </div>
 
-        <div style="display:flex;gap:6px;flex-direction:column;flex-shrink:0" class="dossier-actions-bar">
-          <button class="btn btn-outline btn-xs" onclick="window.centrarPersonaEnMapa('${p.id}'); closeModal('modal-dossier-digital');" style="display:flex;align-items:center;gap:6px;padding:6px 10px">
+        <div style="display:flex;gap:8px;flex-direction:column;flex-shrink:0" class="dossier-actions-bar">
+          <button class="btn btn-secondary btn-sm" onclick="window.centrarPersonaEnMapa('${p.id}'); closeModal('modal-dossier-digital');" style="display:flex;align-items:center;gap:6px;padding:6px 12px;font-size:11px;font-weight:600">
             📍 Centrar en Mapa
           </button>
-          <button class="btn btn-outline btn-xs" onclick="window.enfocarPersonaEnGrafo('${p.id}'); closeModal('modal-dossier-digital');" style="display:flex;align-items:center;gap:6px;padding:6px 10px">
+          <button class="btn btn-accent btn-sm" onclick="window.enfocarPersonaEnGrafo('${p.id}'); closeModal('modal-dossier-digital');" style="display:flex;align-items:center;gap:6px;padding:6px 12px;font-size:11px;font-weight:600">
             🕸️ Ver en Red de Vínculos
           </button>
         </div>
@@ -2988,7 +2988,7 @@ async function mostrarDossierNodo(nodeId) {
       ${p.domicilio_principal ? `<div style="font-size:11px;margin-bottom:6px;"><span style="color:var(--text-muted);">Domicilio:</span> ${p.domicilio_principal}</div>` : ''}
       ${p.cuij_asociados?.length ? `<div style="font-size:11px;margin-bottom:6px;"><span style="color:var(--text-muted);">CUIJ:</span> <span style="font-family:var(--font-mono);color:var(--accent-primary);">${p.cuij_asociados.join(', ')}</span></div>` : ''}
       <div style="margin-top:14px;display:flex;gap:6px;">
-        <button class="btn btn-outline btn-xs" onclick="showEntityDetail('persona', '${p.id}')">Ficha Judicial</button>
+        <button class="btn btn-secondary btn-xs" onclick="window.abrirDossierDigital('${p.id}')">📋 Dossier Digital</button>
         <button class="btn btn-primary btn-xs" onclick="renderGrafo('${p.id}')">Enfocar Vínculos</button>
       </div>
     `;
@@ -3706,7 +3706,7 @@ function renderInspectionPanel(state) {
               ${per.roles?.length ? ` | <strong>Rol:</strong> ${per.roles.join(', ')}` : ''}
             </div>
             <div style="display:flex;gap:6px;margin-top:6px;">
-              <button class="btn btn-outline btn-xs" onclick="window.verFichaDesdeInspeccion('${per.id}')" style="font-size:10px;">Ficha Judicial</button>
+              <button class="btn btn-secondary btn-xs" onclick="window.verFichaDesdeInspeccion('${per.id}')" style="font-size:10px;">📋 Dossier</button>
               <button class="btn btn-primary btn-xs" onclick="window.cruzarPersonaDesdeInspeccion('${per.id}')" style="font-size:10px;">Analizar Cruce</button>
             </div>
           </div>
