@@ -631,7 +631,7 @@ function setupInteractions() {
         ${props.direccion ? `<div style="font-size:11px;color:#cbd5e1;margin-bottom:3px">📍 <strong>Ubicación:</strong> ${props.direccion}</div>` : ''}
         ${props.barrio ? `<div style="font-size:11px;color:#8896AB;margin-bottom:4px">🏘️ <strong>Barrio:</strong> ${props.barrio}</div>` : ''}
         
-        <!-- CUIJ Judicial -->
+        <!-- CUIJ / Causa Penal -->
         ${props.cuij ? `<div style="font-size:11px;color:#F59E0B;font-family:monospace;margin-bottom:4px;font-weight:600">⚖️ CUIJ: ${props.cuij}</div>` : ''}
         
         <!-- Resumen -->
@@ -716,10 +716,10 @@ function setupInteractions() {
     const coords = e.features[0].geometry.coordinates.slice();
     const isCaptura = props.pedido_captura === true || props.pedido_captura === 'true';
     const bandaColor = props.banda_color || '#0EA5E9';
-    const hasDossier = Boolean(props.link_dossier);
+    const tipoDomLabel = props.tipo_domicilio ? ` (${props.tipo_domicilio})` : '';
 
     const html = `
-      <div style="min-width: 260px; max-width: 330px; font-family: var(--font-sans, sans-serif);">
+      <div style="min-width: 270px; max-width: 340px; font-family: var(--font-sans, sans-serif);">
         <!-- Header con Banda y Peligrosidad -->
         <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px">
           <span style="display:inline-flex;align-items:center;gap:4px;background:${bandaColor}22;border:1px solid ${bandaColor}66;color:${bandaColor};padding:3px 8px;border-radius:12px;font-size:11px;font-weight:800">
@@ -730,7 +730,7 @@ function setupInteractions() {
 
         ${isCaptura ? `
           <div style="background:rgba(239,68,68,0.2);border:1px solid #EF4444;border-radius:6px;padding:4px 8px;color:#FCA5A5;font-size:10px;font-weight:800;margin-bottom:6px;display:flex;align-items:center;gap:4px">
-            🚨 ORDEN JUDICIAL DE CAPTURA ACTIVA
+            🚨 REQUERIMIENTO DE CAPTURA ACTIVA
           </div>
         ` : ''}
 
@@ -742,20 +742,14 @@ function setupInteractions() {
         <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:6px;padding:6px 8px;margin-bottom:8px;font-size:11px">
           ${props.dni ? `<div style="color:#cbd5e1;margin-bottom:2px"><strong>DNI:</strong> ${props.dni} ${props.cuit ? `| <strong>CUIT:</strong> ${props.cuit}` : ''}</div>` : ''}
           ${props.fecha_nacimiento ? `<div style="color:#8896AB;margin-bottom:2px">🎂 <strong>Nacimiento:</strong> ${props.fecha_nacimiento}</div>` : ''}
-          ${props.domicilio_principal ? `<div style="color:#cbd5e1;margin-bottom:2px">📍 <strong>Domicilio:</strong> ${props.domicilio_principal}</div>` : ''}
+          ${props.domicilio_principal ? `<div style="color:#cbd5e1;margin-bottom:2px">📍 <strong>Domicilio${tipoDomLabel}:</strong> ${props.domicilio_principal}</div>` : ''}
           ${props.roles ? `<div style="color:#8896AB">⚔️ <strong>Rol:</strong> ${Array.isArray(props.roles) ? props.roles.join(', ') : props.roles}</div>` : ''}
         </div>
 
-        <!-- Botón Destacado: Dossier Judicial de Google Drive / Docs -->
-        ${hasDossier ? `
-          <a href="${props.link_dossier}" target="_blank" rel="noopener noreferrer" style="background:#2563EB;border:1px solid #3B82F6;color:#ffffff;font-size:11px;font-weight:800;display:flex;align-items:center;justify-content:center;gap:6px;padding:7px 10px;margin-bottom:6px;text-decoration:none;border-radius:6px;box-shadow:0 2px 8px rgba(37,99,235,0.4)">
-            📄 ABRIR DOSSIER JUDICIAL (Drive / Docs) ↗
-          </a>
-        ` : `
-          <button class="btn btn-outline btn-xs btn-add-dossier" data-id="${props.id}" style="width:100%;font-size:10px;margin-bottom:6px;padding:4px 6px">
-            + Asociar Link de Dossier (Drive)
-          </button>
-        `}
+        <!-- Botón Destacado: Abrir Dossier Digital Centralizado -->
+        <button class="btn btn-primary btn-sm btn-open-dossier-direct" data-id="${props.id}" style="width:100%;font-size:11px;font-weight:800;display:flex;align-items:center;justify-content:center;gap:6px;padding:8px 10px;margin-bottom:6px;background:linear-gradient(135deg, #0284c7 0%, #0369a1 100%);border:1px solid #38bdf8;border-radius:6px;color:#fff;box-shadow:0 3px 10px rgba(2,132,199,0.35);cursor:pointer">
+          📋 ABRIR DOSSIER DIGITAL
+        </button>
 
         <!-- Acciones Rápidas -->
         <div style="display:flex;gap:4px">
@@ -772,6 +766,11 @@ function setupInteractions() {
     popup.setLngLat(coords).setHTML(html).addTo(map);
 
     setTimeout(() => {
+      document.querySelector('.btn-open-dossier-direct')?.addEventListener('click', (ev) => {
+        const id = ev.currentTarget.dataset.id;
+        if (id && window.abrirDossierDigital) window.abrirDossierDigital(id);
+      });
+
       document.querySelector('.btn-inspect-this-point')?.addEventListener('click', (ev) => {
         const btn = ev.currentTarget;
         const lng = parseFloat(btn.dataset.lng);
@@ -783,11 +782,6 @@ function setupInteractions() {
       });
 
       document.querySelector('.btn-edit-persona-direct')?.addEventListener('click', (ev) => {
-        const id = ev.currentTarget.dataset.id;
-        if (id && window.abrirEdicionPersona) window.abrirEdicionPersona(id);
-      });
-
-      document.querySelector('.btn-add-dossier')?.addEventListener('click', (ev) => {
         const id = ev.currentTarget.dataset.id;
         if (id && window.abrirEdicionPersona) window.abrirEdicionPersona(id);
       });
@@ -815,7 +809,7 @@ function setupInteractions() {
         <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px">
           <span style="background:rgba(139,92,246,0.2);color:#A78BFA;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:700">TERRITORIO / BARRIO</span>
         </div>
-        <strong style="font-size:14px;color:#fff;display:block;margin-bottom:6px">${props.nombre || props.barrio || 'Zona Táctica'}</strong>
+        <strong style="font-size:14px;color:#fff;display:block;margin-bottom:6px">${props.nombre || props.barrio || 'Zona Operativa'}</strong>
         ${props.tipo ? `<div style="font-size:11px;color:#8896AB;margin-bottom:4px">Capa: <strong>${props.tipo}</strong></div>` : ''}
         ${props.descripcion ? `<div style="font-size:11px;color:#cbd5e1;line-height:1.4;margin-top:6px;border-top:1px solid rgba(255,255,255,0.06);padding-top:6px">${props.descripcion}</div>` : ''}
         <button class="btn btn-secondary btn-sm btn-filter-barrio" data-barrio="${props.nombre || props.barrio}" style="margin-top:8px;width:100%;font-size:11px">

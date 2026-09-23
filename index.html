@@ -192,10 +192,10 @@
         </div>
       </div>
 
-      <!-- Tactical Analytics HUD Button -->
-      <button class="btn-tactical-hud-toggle" id="btn-hud-toggle" title="Abrir Panel de Inteligencia Táctica">
+      <!-- Operational Analytics HUD Button -->
+      <button class="btn-tactical-hud-toggle" id="btn-hud-toggle" title="Abrir Panel de Inteligencia Operativa">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.21 15.89A10 10 0 1 1 8 2.83"/><path d="M22 12A10 10 0 0 0 12 2v10z"/></svg>
-        <span>Análisis Táctico</span>
+        <span>Análisis Operativo</span>
         <span class="hud-badge" id="hud-total-count">8.206</span>
       </button>
 
@@ -772,111 +772,323 @@
     </div>
   </div>
 
-  <!-- Modal: Nueva Persona -->
+  <!-- Modal: Dossier Digital & Perfil de Persona (Formulario Completo) -->
   <div class="modal-overlay hidden" id="modal-persona">
-    <div class="modal modal-lg">
-      <div class="modal-header">
-        <h2 id="modal-persona-title">Registrar Persona de Interés</h2>
+    <div class="modal modal-dossier-xl">
+      <div class="modal-header" style="padding:14px 20px 10px;border-bottom:1px solid var(--border-default)">
+        <div>
+          <h2 id="modal-persona-title" style="margin:0;font-size:16px;font-weight:800;letter-spacing:0.5px">Registrar Perfil / Dossier Digital</h2>
+          <span style="font-size:11px;color:var(--text-muted)">Plataforma Centralizada de Perfilación e Inteligencia Criminal</span>
+        </div>
         <button class="modal-close" data-close="modal-persona">&times;</button>
       </div>
-      <div class="modal-body">
+
+      <!-- Navegación por pestañas del formulario -->
+      <div class="dossier-nav-tabs" id="persona-form-nav" style="padding:0 20px;border-bottom:1px solid var(--border-default);background:rgba(255,255,255,0.02)">
+        <button type="button" class="dossier-tab-btn active" data-form-tab="tab-f-identidad">👤 Identidad & Foto</button>
+        <button type="button" class="dossier-tab-btn" data-form-tab="tab-f-adjuntos">📎 Documentos & Adjuntos</button>
+        <button type="button" class="dossier-tab-btn" data-form-tab="tab-f-domicilios">📍 Domicilios Georreferenciados</button>
+        <button type="button" class="dossier-tab-btn" data-form-tab="tab-f-causas">⚖️ Causas & Procesos CUIJ</button>
+        <button type="button" class="dossier-tab-btn" data-form-tab="tab-f-vehiculos">🚗 Vehículos</button>
+        <button type="button" class="dossier-tab-btn" data-form-tab="tab-f-familia">👥 Red Familiar</button>
+        <button type="button" class="dossier-tab-btn" data-form-tab="tab-f-credito">💳 Perfil Financiero</button>
+        <button type="button" class="dossier-tab-btn" data-form-tab="tab-f-organizacion">🏴 Organización & Captura</button>
+      </div>
+
+      <div class="modal-body" style="padding:20px;max-height:calc(85vh - 120px);overflow-y:auto">
         <form id="form-persona">
           <input type="hidden" id="persona-edit-id" value="">
-          <div class="form-section-title">Datos de Identidad</div>
-          <div class="form-row">
-            <div class="form-group">
-              <label for="persona-nombre">Nombre</label>
-              <input type="text" id="persona-nombre" class="form-input">
+
+          <!-- TAB 1: IDENTIDAD & FOTO -->
+          <div class="persona-tab-pane active" id="tab-f-identidad">
+            <div class="form-section-title">Datos Personales y Fotografía</div>
+            
+            <div style="display:flex;gap:18px;margin-bottom:16px;align-items:flex-start">
+              <div style="display:flex;flex-direction:column;align-items:center;gap:8px">
+                <div id="persona-foto-container" style="width:96px;height:96px;border-radius:10px;background:rgba(255,255,255,0.04);border:2px dashed rgba(255,255,255,0.2);display:flex;align-items:center;justify-content:center;overflow:hidden;position:relative">
+                  <img id="persona-foto-preview" src="" alt="Foto" style="width:100%;height:100%;object-fit:cover;display:none">
+                  <span id="persona-foto-placeholder" style="font-size:32px;color:var(--text-muted)">👤</span>
+                </div>
+                <input type="file" id="persona-foto-file-input" accept="image/*" class="hidden">
+                <button type="button" class="btn btn-secondary btn-xs" id="btn-trigger-foto-file" style="font-size:10px;padding:3px 8px">Subir Foto</button>
+              </div>
+
+              <div style="flex:1">
+                <div class="form-row">
+                  <div class="form-group" style="flex:1">
+                    <label for="persona-nombre">Nombres</label>
+                    <input type="text" id="persona-nombre" class="form-input" required placeholder="Ej: Gabriel Nicolás">
+                  </div>
+                  <div class="form-group" style="flex:1">
+                    <label for="persona-apellido">Apellidos</label>
+                    <input type="text" id="persona-apellido" class="form-input" required placeholder="Ej: Celer">
+                  </div>
+                </div>
+
+                <div class="form-group" style="margin-top:6px">
+                  <label for="persona-foto-url">O ingresar URL de Imagen de Rostro</label>
+                  <input type="url" id="persona-foto-url" class="form-input" placeholder="https://ejemplo.com/foto_rostro.jpg">
+                </div>
+              </div>
             </div>
-            <div class="form-group">
-              <label for="persona-apellido">Apellido</label>
-              <input type="text" id="persona-apellido" class="form-input">
+
+            <div class="form-row">
+              <div class="form-group">
+                <label for="persona-dni">DNI</label>
+                <input type="text" id="persona-dni" class="form-input" placeholder="37337271">
+              </div>
+              <div class="form-group">
+                <label for="persona-cuit">CUIT / CUIL</label>
+                <input type="text" id="persona-cuit" class="form-input" placeholder="20-37337271-5">
+              </div>
+              <div class="form-group">
+                <label for="persona-sexo">Sexo</label>
+                <select id="persona-sexo" class="form-input">
+                  <option value="M">Masculino</option>
+                  <option value="F">Femenino</option>
+                  <option value="X">Otro</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label for="persona-nacimiento">Fecha de Nacimiento</label>
+                <input type="date" id="persona-nacimiento" class="form-input">
+              </div>
             </div>
-            <div class="form-group">
-              <label for="persona-dni">DNI</label>
-              <input type="text" id="persona-dni" class="form-input">
-            </div>
-            <div class="form-group">
-              <label for="persona-cuit">CUIT</label>
-              <input type="text" id="persona-cuit" class="form-input" placeholder="20-37337271-5">
-            </div>
-          </div>
-          <div class="form-row">
-            <div class="form-group">
-              <label for="persona-alias">Alias (separados por coma)</label>
-              <input type="text" id="persona-alias" class="form-input" placeholder='Ej: El Tuerto, Tuerquito'>
-            </div>
-            <div class="form-group">
-              <label for="persona-sexo">Sexo</label>
-              <select id="persona-sexo" class="form-input">
-                <option value="M">Masculino</option>
-                <option value="F">Femenino</option>
-                <option value="X">Otro</option>
-              </select>
-            </div>
-            <div class="form-group">
-              <label for="persona-nacimiento">Fecha Nacimiento</label>
-              <input type="date" id="persona-nacimiento" class="form-input">
+
+            <div class="form-row">
+              <div class="form-group" style="flex:1">
+                <label for="persona-alias">Alias / Sobrenombres (separados por coma)</label>
+                <input type="text" id="persona-alias" class="form-input" placeholder="Ej: Pastorcito, Gaby">
+              </div>
+              <div class="form-group" style="flex:1">
+                <label for="persona-nacionalidad">Nacionalidad</label>
+                <input type="text" id="persona-nacionalidad" class="form-input" value="Argentina">
+              </div>
             </div>
           </div>
 
-          <div class="form-section-title">Organización y Análisis Criminal</div>
-          <div class="form-row">
-            <div class="form-group">
-              <label for="persona-banda">Banda u Organización</label>
-              <select id="persona-banda" class="form-input">
-                <option value="">Individual / Sin banda asignada</option>
-                <option value="banda-los-de-siempre">Los de Siempre</option>
-                <option value="banda-la-negrada">La Negrada</option>
-                <option value="banda-polaco-maidana">Banda del Polaco Maidana</option>
-                <option value="banda-puchingas">Los Puchingas</option>
-                <option value="banda-correntino">Banda del Correntino (Beban)</option>
-                <option value="banda-espinillos">Los Espinillos</option>
-              </select>
+          <!-- TAB 2: DOCUMENTOS Y ADJUNTOS (.pdf, .doc, .docx, imágenes) -->
+          <div class="persona-tab-pane hidden" id="tab-f-adjuntos">
+            <div class="form-section-title">Expedientes y Documentación Adjunta al Legajo</div>
+            
+            <div class="file-dropzone-box" id="persona-dropzone">
+              <div style="font-size:28px;margin-bottom:6px">📁</div>
+              <div style="font-size:13px;font-weight:700;color:#fff">Haga clic o arrastre archivos aquí para incorporar al dossier</div>
+              <div style="font-size:11px;color:var(--text-muted);margin-top:4px">Formatos admitidos: PDF, DOC, DOCX, JPG, PNG, WEBP. Se almacenan de forma nativa e integrada en la plataforma.</div>
+              <input type="file" id="persona-file-input" multiple accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.webp" class="hidden">
             </div>
-            <div class="form-group">
-              <label for="persona-roles">Roles (separados por coma)</label>
-              <input type="text" id="persona-roles" class="form-input" placeholder="cabecilla, tirador, soldadito, distribuidor...">
+
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+              <span style="font-size:12px;font-weight:700;color:var(--text-secondary)">Documentos en este Legajo (<span id="persona-adjuntos-count">0</span>)</span>
+              <button type="button" class="btn btn-secondary btn-xs" id="btn-select-more-files">+ Agregar Documento</button>
             </div>
-            <div class="form-group">
-              <label for="persona-peligrosidad">Peligrosidad (0-10)</label>
-              <input type="range" id="persona-peligrosidad" min="0" max="10" value="5" class="filter-range">
-              <span id="persona-peligrosidad-val">5</span>
+
+            <div class="file-attachments-list" id="persona-files-list">
+              <!-- Rendered dynamically -->
             </div>
           </div>
 
-          <div class="form-row">
-            <div class="form-group" style="flex:1">
-              <label for="persona-captura" style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-top:24px">
-                <input type="checkbox" id="persona-captura" style="width:16px;height:16px">
-                <span style="color:#EF4444;font-weight:700;font-size:12px">🚨 Orden Judicial de Captura Activa</span>
+          <!-- TAB 3: DOMICILIOS GEORREFERENCIADOS -->
+          <div class="persona-tab-pane hidden" id="tab-f-domicilios">
+            <div class="dossier-section-title">
+              <span>Domicilios y Puntos de Interés Territorial</span>
+              <button type="button" class="btn btn-secondary btn-xs" id="btn-add-domicilio-row">+ Agregar Domicilio</button>
+            </div>
+            <div style="background:rgba(14,165,233,0.06);border:1px solid rgba(14,165,233,0.25);border-radius:6px;padding:8px 12px;font-size:11px;color:var(--text-secondary);margin-bottom:14px">
+              📍 <strong>Georreferenciación Automática:</strong> Cada domicilio cargado se geocodifica sobre el mapa de Mapbox con su correspondiente clasificación (Real, Legal, Aguantadero o Punto de Venta).
+            </div>
+
+            <div class="dynamic-list-container" id="persona-domicilios-container">
+              <!-- Rows added dynamically -->
+            </div>
+
+            <!-- Campo legacy oculto para compatibilidad -->
+            <input type="hidden" id="persona-domicilio" value="">
+          </div>
+
+          <!-- TAB 4: CAUSAS Y PROCESOS CUIJ -->
+          <div class="persona-tab-pane hidden" id="tab-f-causas">
+            <div class="dossier-section-title">
+              <span>Causas, Investigaciones Penales Preparatorias y Procesos CUIJ</span>
+              <button type="button" class="btn btn-secondary btn-xs" id="btn-add-causa-row">+ Agregar Causa</button>
+            </div>
+
+            <div class="dynamic-list-container" id="persona-causas-container">
+              <!-- Rows added dynamically -->
+            </div>
+          </div>
+
+          <!-- TAB 5: PARQUE AUTOMOTOR / VEHÍCULOS -->
+          <div class="persona-tab-pane hidden" id="tab-f-vehiculos">
+            <div class="dossier-section-title">
+              <span>Vehículos Detectados, Dominio y Logística Operativa</span>
+              <button type="button" class="btn btn-secondary btn-xs" id="btn-add-vehiculo-row">+ Agregar Vehículo</button>
+            </div>
+
+            <div class="dynamic-list-container" id="persona-vehiculos-container">
+              <!-- Rows added dynamically -->
+            </div>
+          </div>
+
+          <!-- TAB 6: RED FAMILIAR Y VÍNCULOS -->
+          <div class="persona-tab-pane hidden" id="tab-f-familia">
+            <div class="dossier-section-title">
+              <span>Red Familiar, Convivientes y Vínculos de Interés</span>
+              <button type="button" class="btn btn-secondary btn-xs" id="btn-add-familia-row">+ Agregar Vínculo Familiar</button>
+            </div>
+
+            <div class="dynamic-list-container" id="persona-familia-container">
+              <!-- Rows added dynamically -->
+            </div>
+          </div>
+
+          <!-- TAB 7: PERFIL FINANCIERO Y SITUACIÓN CREDITICIA -->
+          <div class="persona-tab-pane hidden" id="tab-f-credito">
+            <div class="form-section-title">Evaluación Financiera, Central de Deudores BCRA y ARCA</div>
+            
+            <div class="form-row">
+              <div class="form-group" style="flex:1">
+                <label for="persona-credito-situacion">Situación Crediticia BCRA (Deudores)</label>
+                <select id="persona-credito-situacion" class="form-input">
+                  <option value="1">Situación 1 - Normal / En cumplimiento</option>
+                  <option value="2">Situación 2 - Riesgo potencial / Atraso leve</option>
+                  <option value="3">Situación 3 - Con problemas / Atraso significativo</option>
+                  <option value="4">Situación 4 - Alto riesgo de insolvencia / Deuda vencida</option>
+                  <option value="5">Situación 5 - Irrecuperable / Incobrable</option>
+                  <option value="0">Sin antecedentes en Central de Deudores</option>
+                </select>
+              </div>
+              <div class="form-group" style="flex:1">
+                <label for="persona-credito-entidad">Entidades Crediticias Informantes</label>
+                <input type="text" id="persona-credito-entidad" class="form-input" placeholder="Ej: Banco Macro, Tarjeta Naranja, Santander">
+              </div>
+              <div class="form-group" style="flex:1">
+                <label for="persona-credito-monto">Monto Estimado Deuda Registrada ($)</label>
+                <input type="text" id="persona-credito-monto" class="form-input" placeholder="Ej: $ 1.450.000">
+              </div>
+            </div>
+
+            <div class="form-row">
+              <div class="form-group" style="flex:1">
+                <label for="persona-arca-situacion">Condición Fiscal AFIP / ARCA</label>
+                <input type="text" id="persona-arca-situacion" class="form-input" placeholder="Ej: Monotributista / Sin actividad económica / No inscripto">
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label for="persona-patrimonio-inconsistencia">Inconsistencias Patrimoniales y Actividad Sospechosa</label>
+              <textarea id="persona-patrimonio-inconsistencia" class="form-input" rows="3" placeholder="Detalle de adquisición de bienes, rodados no justificados por ingresos formales, inmuebles a nombre de terceros o flujo de fondos sospechoso..."></textarea>
+            </div>
+          </div>
+
+          <!-- TAB 8: ORGANIZACIÓN & REQUERIMIENTO DE DETENCIÓN -->
+          <div class="persona-tab-pane hidden" id="tab-f-organizacion">
+            <div class="form-section-title">Estructura Criminal y Requerimiento de Detención</div>
+
+            <div class="form-row">
+              <div class="form-group" style="flex:1">
+                <label for="persona-banda">Organización Criminal Asociada</label>
+                <select id="persona-banda" class="form-input">
+                  <option value="">Individual / Sin banda asignada</option>
+                  <option value="banda-los-de-siempre">Los de Siempre</option>
+                  <option value="banda-la-negrada">La Negrada</option>
+                  <option value="banda-polaco-maidana">Banda del Polaco Maidana</option>
+                  <option value="banda-puchingas">Los Puchingas</option>
+                  <option value="banda-correntino">Banda del Correntino (Beban)</option>
+                  <option value="banda-espinillos">Los Espinillos</option>
+                </select>
+              </div>
+              <div class="form-group" style="flex:1">
+                <label for="persona-roles">Roles Desempeñados (separados por coma)</label>
+                <input type="text" id="persona-roles" class="form-input" placeholder="cabecilla, distribuidor, soldadito, logística...">
+              </div>
+              <div class="form-group" style="width:160px">
+                <label for="persona-peligrosidad">Peligrosidad (0-10)</label>
+                <input type="range" id="persona-peligrosidad" min="0" max="10" value="5" class="filter-range">
+                <span id="persona-peligrosidad-val" style="font-weight:800;color:var(--accent-primary)">5</span>
+              </div>
+            </div>
+
+            <!-- Bloque de Detención / Captura Activa -->
+            <div style="background:rgba(239,68,68,0.06);border:1px solid rgba(239,68,68,0.25);border-radius:8px;padding:14px;margin-bottom:16px">
+              <label for="persona-captura" style="display:flex;align-items:center;gap:10px;cursor:pointer;margin-bottom:8px">
+                <input type="checkbox" id="persona-captura" style="width:18px;height:18px">
+                <span style="color:#EF4444;font-weight:800;font-size:13px">🚨 REQUERIMIENTO DE DETENCIÓN / CAPTURA ACTIVA</span>
               </label>
+
+              <div id="persona-captura-fields" class="form-row hidden" style="margin-top:10px">
+                <div class="form-group" style="flex:1">
+                  <label for="persona-captura-oficio">N° Oficio / CUIJ Requerimiento</label>
+                  <input type="text" id="persona-captura-oficio" class="form-input" placeholder="Oficio N° 1248/2025">
+                </div>
+                <div class="form-group" style="flex:1">
+                  <label for="persona-captura-organo">Órgano / Fiscalía Requirente</label>
+                  <input type="text" id="persona-captura-organo" class="form-input" placeholder="MPA - Unidad Fiscal Especial de Homicidios">
+                </div>
+                <div class="form-group" style="width:160px">
+                  <label for="persona-captura-fecha">Fecha Requerimiento</label>
+                  <input type="date" id="persona-captura-fecha" class="form-input">
+                </div>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label for="persona-antecedentes">Antecedentes e Inteligencia Criminal</label>
+              <textarea id="persona-antecedentes" class="form-input" rows="3" placeholder="Información de territorialidad, zonas de influencia, modus operandi o datos de inteligencia complementarios..."></textarea>
+            </div>
+
+            <div class="form-group">
+              <label for="persona-dossier" style="color:var(--text-secondary);font-size:11px">
+                Enlace Externo de Respaldo (Opcional)
+              </label>
+              <input type="url" id="persona-dossier" class="form-input" placeholder="https://...">
             </div>
           </div>
 
-          <div class="form-section-title">Localización y Dossier Digital</div>
-          <div class="form-group">
-            <label for="persona-domicilio">Domicilio Principal / Residencia Real</label>
-            <input type="text" id="persona-domicilio" class="form-input" placeholder="Ej: Vera Mujica 674, Santa Fe">
-          </div>
-
-          <div class="form-group">
-            <label for="persona-dossier" style="color:var(--accent-secondary);font-weight:700;display:flex;align-items:center;gap:6px">
-              📄 Enlace al Dossier Judicial (Google Drive / Docs URL)
-            </label>
-            <input type="url" id="persona-dossier" class="form-input" placeholder="https://docs.google.com/document/d/... o link de Google Drive" style="border-color:rgba(14,165,233,0.4)">
-            <span style="font-size:10px;color:var(--text-muted);display:block;margin-top:2px">Al cargar este enlace, aparecerá un botón directo en el mapa y en la ficha judicial para abrir el documento completo.</span>
-          </div>
-
-          <div class="form-group">
-            <label for="persona-antecedentes">Antecedentes e Inteligencia Táctica</label>
-            <textarea id="persona-antecedentes" class="form-input" rows="3" placeholder="Información de causas, vínculos territoriales o modus operandi..."></textarea>
-          </div>
-          <div class="form-actions">
+          <div class="form-actions" style="margin-top:20px;border-top:1px solid var(--border-default);padding-top:16px;display:flex;justify-content:flex-end;gap:10px">
             <button type="button" class="btn btn-ghost" data-close="modal-persona">Cancelar</button>
-            <button type="submit" class="btn btn-primary" id="btn-submit-persona">Guardar Persona</button>
+            <button type="submit" class="btn btn-primary" id="btn-submit-persona">Guardar Ficha de Perfil</button>
           </div>
         </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Dossier Digital Centralizado (Visualizador de Legajo Institucional) -->
+  <div class="modal-overlay hidden" id="modal-dossier-digital">
+    <div class="modal modal-dossier-xl" style="display:flex;flex-direction:column;max-height:92vh">
+      <div class="modal-header dossier-header-bar" style="padding:14px 20px;border-bottom:1px solid var(--border-default);flex-shrink:0">
+        <div style="display:flex;align-items:center;gap:12px">
+          <span style="font-size:22px">📁</span>
+          <div>
+            <h2 style="font-size:16px;margin:0;color:#fff;font-weight:800;letter-spacing:0.5px">DOSSIER DIGITAL INSTITUCIONAL</h2>
+            <span style="font-size:10px;color:var(--text-muted);letter-spacing:0.5px">LEGAJO DE PERFILACIÓN E INTELIGENCIA CRIMINAL NATIVO</span>
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <button class="btn btn-primary btn-sm btn-print-dossier" id="btn-print-dossier-direct" title="Imprimir dossier completo o guardar como PDF">
+            🖨️ Imprimir Dossier / PDF
+          </button>
+          <button class="btn btn-secondary btn-sm btn-edit-dossier" id="btn-edit-dossier-direct" title="Editar todos los campos y adjuntos de este perfil">
+            ✏️ Editar Perfil
+          </button>
+          <button class="modal-close" data-close="modal-dossier-digital">&times;</button>
+        </div>
+      </div>
+
+      <div class="dossier-nav-tabs" id="dossier-view-tabs" style="padding:0 20px;border-bottom:1px solid var(--border-default);background:rgba(255,255,255,0.02);flex-shrink:0">
+        <button type="button" class="dossier-tab-btn active" data-dossier-tab="dossier-tab-general">📋 Ficha e Identidad</button>
+        <button type="button" class="dossier-tab-btn" data-dossier-tab="dossier-tab-adjuntos">📎 Documentos & Adjuntos (<span id="dossier-tab-adjuntos-badge">0</span>)</button>
+        <button type="button" class="dossier-tab-btn" data-dossier-tab="dossier-tab-domicilios">📍 Domicilios Georreferenciados (<span id="dossier-tab-domicilios-badge">0</span>)</button>
+        <button type="button" class="dossier-tab-btn" data-dossier-tab="dossier-tab-causas">⚖️ Causas CUIJ (<span id="dossier-tab-causas-badge">0</span>)</button>
+        <button type="button" class="dossier-tab-btn" data-dossier-tab="dossier-tab-vehiculos">🚗 Vehículos (<span id="dossier-tab-vehiculos-badge">0</span>)</button>
+        <button type="button" class="dossier-tab-btn" data-dossier-tab="dossier-tab-familia">👥 Red Familiar (<span id="dossier-tab-familia-badge">0</span>)</button>
+        <button type="button" class="dossier-tab-btn" data-dossier-tab="dossier-tab-financiero">💳 Perfil Financiero</button>
+        <button type="button" class="dossier-tab-btn" data-dossier-tab="dossier-tab-inteligencia">🛡️ Inteligencia Criminal</button>
+      </div>
+
+      <div class="modal-body" id="dossier-digital-content" style="padding:20px;flex:1;overflow-y:auto">
+        <!-- Contenido renderizado dinámicamente con plantilla de alta calidad institucional -->
       </div>
     </div>
   </div>
@@ -1072,7 +1284,7 @@
   <div class="modal-overlay hidden" id="modal-briefing">
     <div class="modal modal-lg">
       <div class="modal-header">
-        <h2>Ficha Táctica Operativa (Briefing)</h2>
+        <h2>Ficha Operativa de Inteligencia Criminal (Briefing)</h2>
         <div style="display:flex;gap:8px;align-items:center">
           <button class="btn btn-secondary btn-sm" id="btn-print-briefing" onclick="window.print()">Imprimir Ficha</button>
           <button class="modal-close" data-close="modal-briefing">&times;</button>

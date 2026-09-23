@@ -183,11 +183,35 @@ export async function insertPersona(persona) {
   if (typeof persona.roles === 'string') {
     persona.roles = persona.roles.split(',').map(s => s.trim()).filter(Boolean);
   }
-  if (persona.domicilio_principal && !persona.domicilio_principal_geom) {
+
+  // Geocodificación de múltiples domicilios
+  if (Array.isArray(persona.domicilios) && persona.domicilios.length > 0) {
+    for (const d of persona.domicilios) {
+      if (d.direccion && !d.geom) {
+        const coords = await geocodeAddress(d.direccion, d.barrio, d.localidad);
+        if (coords) {
+          d.geom = `SRID=4326;POINT(${coords.lng} ${coords.lat})`;
+          d.precision = coords.precision;
+        }
+      }
+    }
+    // Sincronizar el domicilio principal con el primero o el marcado como REAL
+    const realDom = persona.domicilios.find(d => (d.tipo || '').toUpperCase() === 'REAL') || persona.domicilios[0];
+    if (realDom) {
+      persona.domicilio_principal = realDom.direccion;
+      if (realDom.geom) persona.domicilio_principal_geom = realDom.geom;
+    }
+  } else if (persona.domicilio_principal && !persona.domicilio_principal_geom) {
     const coords = await geocodeAddress(persona.domicilio_principal);
     if (coords) {
       persona.domicilio_principal_geom = `SRID=4326;POINT(${coords.lng} ${coords.lat})`;
     }
+  }
+
+  // Si tiene banda, asignar el color distintivo
+  if (persona.banda_id || persona.banda_nombre) {
+    const b = INITIAL_BANDAS.find(x => x.id === persona.banda_id || x.nombre.toLowerCase() === (persona.banda_nombre || '').toLowerCase());
+    if (b && b.color_hex) persona.banda_color = b.color_hex;
   }
 
   try {
@@ -212,7 +236,24 @@ export async function updatePersona(id, updates = {}) {
   if (typeof updates.roles === 'string') {
     updates.roles = updates.roles.split(',').map(s => s.trim()).filter(Boolean);
   }
-  if (updates.domicilio_principal && !updates.domicilio_principal_geom) {
+
+  // Geocodificación de múltiples domicilios en edición
+  if (Array.isArray(updates.domicilios) && updates.domicilios.length > 0) {
+    for (const d of updates.domicilios) {
+      if (d.direccion && !d.geom) {
+        const coords = await geocodeAddress(d.direccion, d.barrio, d.localidad);
+        if (coords) {
+          d.geom = `SRID=4326;POINT(${coords.lng} ${coords.lat})`;
+          d.precision = coords.precision;
+        }
+      }
+    }
+    const realDom = updates.domicilios.find(d => (d.tipo || '').toUpperCase() === 'REAL') || updates.domicilios[0];
+    if (realDom) {
+      updates.domicilio_principal = realDom.direccion;
+      if (realDom.geom) updates.domicilio_principal_geom = realDom.geom;
+    }
+  } else if (updates.domicilio_principal && !updates.domicilio_principal_geom) {
     const coords = await geocodeAddress(updates.domicilio_principal);
     if (coords) {
       updates.domicilio_principal_geom = `SRID=4326;POINT(${coords.lng} ${coords.lat})`;
@@ -257,44 +298,80 @@ export async function getPersonasGeoJSON() {
     bandaColorMap[b.nombre.toLowerCase()] = b.color_hex || '#0EA5E9';
   });
 
-  const features = personas.map(p => {
-    const coords = parseGeom(p.domicilio_principal_geom);
-    if (!coords || isNaN(coords.lng) || isNaN(coords.lat)) return null;
+  const features = [];
 
+  personas.forEach(p => {
     const bColor = p.banda_color || bandaColorMap[p.banda_id] || bandaColorMap[(p.banda_nombre || '').toLowerCase()] || '#0EA5E9';
     const nombreCompleto = `${p.nombre || ''} ${p.apellido || ''}`.trim() || 'Sin nombre';
 
-    return {
-      type: 'Feature',
-      geometry: {
-        type: 'Point',
-        coordinates: [coords.lng, coords.lat]
-      },
-      properties: {
-        id: p.id,
-        nombre: p.nombre || '',
-        apellido: p.apellido || '',
-        nombre_completo: nombreCompleto,
-        alias: Array.isArray(p.alias) ? p.alias : (p.alias ? [p.alias] : []),
-        alias_texto: Array.isArray(p.alias) ? p.alias.join(', ') : (p.alias || ''),
-        dni: p.dni || '',
-        cuit: p.cuit || '',
-        fecha_nacimiento: p.fecha_nacimiento || '',
-        roles: Array.isArray(p.roles) ? p.roles : (p.roles ? [p.roles] : []),
-        score_peligrosidad: parseInt(p.score_peligrosidad) || 5,
-        pedido_captura: Boolean(p.pedido_captura),
-        estado_judicial: p.estado_judicial || 'IDENTIFICADO',
-        banda_id: p.banda_id || '',
-        banda_nombre: p.banda_nombre || 'Individual',
-        banda_color: bColor,
-        domicilio_principal: p.domicilio_principal || '',
-        link_dossier: p.link_dossier || '',
-        cuij_asociados: p.cuij_asociados || [],
-        delitos_asociados: p.delitos_asociados || [],
-        antecedentes_texto: p.antecedentes_texto || ''
-      }
+    const baseProps = {
+      id: p.id,
+      nombre: p.nombre || '',
+      apellido: p.apellido || '',
+      nombre_completo: nombreCompleto,
+      alias: Array.isArray(p.alias) ? p.alias : (p.alias ? [p.alias] : []),
+      alias_texto: Array.isArray(p.alias) ? p.alias.join(', ') : (p.alias || ''),
+      dni: p.dni || '',
+      cuit: p.cuit || '',
+      foto_url: p.foto_url || '',
+      fecha_nacimiento: p.fecha_nacimiento || '',
+      roles: Array.isArray(p.roles) ? p.roles : (p.roles ? [p.roles] : []),
+      score_peligrosidad: parseInt(p.score_peligrosidad) || 5,
+      pedido_captura: Boolean(p.pedido_captura),
+      estado_procesal: p.estado_procesal || p.estado_judicial || 'IDENTIFICADO',
+      banda_id: p.banda_id || '',
+      banda_nombre: p.banda_nombre || 'Individual',
+      banda_color: bColor,
+      domicilio_principal: p.domicilio_principal || '',
+      link_dossier: p.link_dossier || '',
+      cuij_asociados: p.cuij_asociados || [],
+      delitos_asociados: p.delitos_asociados || [],
+      antecedentes_texto: p.antecedentes_texto || '',
+      archivos_count: Array.isArray(p.archivos_adjuntos) ? p.archivos_adjuntos.length : 0,
+      vehiculos_count: Array.isArray(p.vehiculos) ? p.vehiculos.length : 0,
+      causas_count: Array.isArray(p.causas) ? p.causas.length : (p.cuij_asociados?.length || 0)
     };
-  }).filter(Boolean);
+
+    // Si tiene múltiples domicilios registrados
+    if (Array.isArray(p.domicilios) && p.domicilios.length > 0) {
+      p.domicilios.forEach((d, idx) => {
+        const coords = parseGeom(d.geom);
+        if (coords && !isNaN(coords.lng) && !isNaN(coords.lat)) {
+          features.push({
+            type: 'Feature',
+            geometry: {
+              type: 'Point',
+              coordinates: [coords.lng, coords.lat]
+            },
+            properties: {
+              ...baseProps,
+              sub_id: `${p.id}-dom-${idx}`,
+              domicilio_principal: d.direccion || p.domicilio_principal || '',
+              tipo_domicilio: d.tipo || 'REAL',
+              domicilio_barrio: d.barrio || '',
+              domicilio_detalle: d.detalle || ''
+            }
+          });
+        }
+      });
+    } else if (p.domicilio_principal_geom) {
+      // Fallback a domicilio principal individual
+      const coords = parseGeom(p.domicilio_principal_geom);
+      if (coords && !isNaN(coords.lng) && !isNaN(coords.lat)) {
+        features.push({
+          type: 'Feature',
+          geometry: {
+            type: 'Point',
+            coordinates: [coords.lng, coords.lat]
+          },
+          properties: {
+            ...baseProps,
+            tipo_domicilio: 'REAL'
+          }
+        });
+      }
+    }
+  });
 
   return {
     type: 'FeatureCollection',

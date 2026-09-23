@@ -357,6 +357,7 @@ export const INITIAL_PERSONAS = [
     "nombre": "Gabriel Nicolás",
     "apellido": "Celer",
     "alias": [
+      "Pastorcito",
       "Gaby",
       "Celer"
     ],
@@ -367,25 +368,148 @@ export const INITIAL_PERSONAS = [
     "roles": [
       "integrante",
       "distribuidor",
-      "soldadito"
+      "soldadito",
+      "logística territorial"
     ],
     "score_peligrosidad": 7,
     "banda_id": "banda-los-de-siempre",
     "banda_nombre": "Los de Siempre",
     "banda_color": "#0EA5E9",
     "pedido_captura": false,
-    "estado_judicial": "INVESTIGADO - IDENTIFICADO EN TERRITORIO",
-    "cuij_asociados": [
-      "21-09726972-3"
-    ],
+    "estado_procesal": "INVESTIGADO - IMPUTADO CON MEDIDAS CAUTELARES",
     "domicilio_principal": "Vera Mujica 674, Santa Fe",
     "domicilio_principal_geom": "SRID=4326;POINT(-60.72409 -31.66444)",
-    "link_dossier": "https://docs.google.com/document/d/1LpeWNiTKd7OiNT04V-6iHH3seoXrbhd/edit",
+    "domicilios": [
+      {
+        "id": "dom-celer-1",
+        "tipo": "REAL",
+        "direccion": "Vera Mujica 674, Santa Fe",
+        "barrio": "Centenario",
+        "localidad": "Santa Fe",
+        "detalle": "Residencia habitual y punto neurálgico de permanencia",
+        "geom": "SRID=4326;POINT(-60.72409 -31.66444)"
+      },
+      {
+        "id": "dom-celer-2",
+        "tipo": "LEGAL",
+        "direccion": "San José 7100, Santa Fe",
+        "barrio": "Los Hornos",
+        "localidad": "Santa Fe",
+        "detalle": "Domicilio legal declarado en padrón y entidades bancarias",
+        "geom": "SRID=4326;POINT(-60.7081 -31.6212)"
+      },
+      {
+        "id": "dom-celer-3",
+        "tipo": "DISTRIBUCION",
+        "direccion": "Tarragona 600, Santa Fe",
+        "barrio": "Centenario",
+        "localidad": "Santa Fe",
+        "detalle": "Punto de acopio y distribución de dosis fraccionadas",
+        "geom": "SRID=4326;POINT(-60.7225 -31.6661)"
+      }
+    ],
+    "causas": [
+      {
+        "id": "causa-celer-1",
+        "cuij": "21-09726972-3",
+        "caratula": "Comercialización de Estupefacientes Agravada y Asociación Ilícita",
+        "organo": "MPA - Unidad Fiscal Especial de Microtráfico",
+        "estado": "Imputativa celebrada / Prisión Preventiva"
+      },
+      {
+        "id": "causa-celer-2",
+        "cuij": "21-08441209-1",
+        "caratula": "Portación Ilegítima de Arma de Fuego de Uso Civil y de Guerra",
+        "organo": "MPA - Fiscalía Regional 1",
+        "estado": "Elevada a Juicio Oral"
+      }
+    ],
+    "vehiculos": [
+      {
+        "id": "veh-celer-1",
+        "patente": "A123BCD",
+        "tipo": "Motovehículo",
+        "marca": "Honda",
+        "modelo": "Wave 110 S",
+        "color": "Negro",
+        "titular": "Gabriel Nicolás Celer",
+        "rol": "Distribución ágil de dosis y movilidad territorial"
+      },
+      {
+        "id": "veh-celer-2",
+        "patente": "AB456CD",
+        "tipo": "Automóvil",
+        "marca": "Volkswagen",
+        "modelo": "Gol Trend 1.6",
+        "color": "Gris Plata",
+        "titular": "Celer María Elena (Hermana)",
+        "rol": "Logística interbarrial y traslado de bultos"
+      }
+    ],
+    "familiares": [
+      {
+        "id": "fam-celer-1",
+        "nombre": "Celer Roberto",
+        "parentesco": "Padre",
+        "dni": "14892301",
+        "observacion": "Comerciante barrial / Posible canalización de fondos"
+      },
+      {
+        "id": "fam-celer-2",
+        "nombre": "Celer María Elena",
+        "parentesco": "Hermana",
+        "dni": "41220100",
+        "observacion": "Titular registral de vehículos y domicilios alternativos"
+      }
+    ],
+    "situacion_crediticia": {
+      "bcra_situacion": "4",
+      "bcra_descripcion": "Situación 4 - Alto riesgo de insolvencia / Deuda vencida",
+      "entidades": "Banco Macro S.A., Tarjeta Santander",
+      "monto_deuda": "$ 1.840.000",
+      "arca_condicion": "Monotributo Social / Inconsistente con nivel patrimonial",
+      "inconsistencia_patrimonial": "Adquisición de motovehículos sin ingresos formales comprobables. Reportes de operaciones sospechosas en cuentas de familiares directos."
+    },
+    "archivos_adjuntos": [
+      {
+        "id": "file-celer-1",
+        "nombre": "Acta_Procedimiento_Allanamiento_VeraMujica.pdf",
+        "tamano": "2.4 MB",
+        "tipo": "application/pdf",
+        "fecha_subida": "2025-11-14T10:30:00Z"
+      },
+      {
+        "id": "file-celer-2",
+        "nombre": "Informe_Patrimonial_ARCA_BCRA_Celer.docx",
+        "tamano": "845 KB",
+        "tipo": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "fecha_subida": "2025-11-20T14:15:00Z"
+      },
+      {
+        "id": "file-celer-3",
+        "nombre": "Constatacion_Domiciliaria_SanJose_7100.pdf",
+        "tamano": "1.1 MB",
+        "tipo": "application/pdf",
+        "fecha_subida": "2025-12-05T09:00:00Z"
+      },
+      {
+        "id": "file-celer-4",
+        "nombre": "Fotografia_Rostro_Frente_Identificacion.jpg",
+        "tamano": "620 KB",
+        "tipo": "image/jpeg",
+        "fecha_subida": "2025-12-05T09:05:00Z"
+      }
+    ],
+    "cuij_asociados": [
+      "21-09726972-3",
+      "21-08441209-1"
+    ],
     "delitos_asociados": [
       "Microtráfico",
-      "Asociación ilícita"
+      "Asociación ilícita",
+      "Portación de arma de fuego"
     ],
-    "antecedentes_texto": "Integrante identificado de la organización criminal Los de Siempre con base en Centenario. Dossier judicial del Ministerio Público de la Acusación adjunto.",
+    "antecedentes_texto": "Integrante identificado de la organización criminal Los de Siempre con base operativa en Centenario. Posee causas activas por microtráfico de estupefacientes y tenencia ilegítima de armas de fuego. Vínculos territoriales consolidados en sur y oeste.",
     "activo": true
   },
   {

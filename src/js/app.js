@@ -22,6 +22,10 @@ import {
 import { Network } from 'vis-network';
 import { DataSet } from 'vis-data';
 
+// Estado global de dossier y perfilación criminal
+let currentPersonaFiles = [];
+let currentViewingDossierId = null;
+
 // ============================================================
 // APP INIT
 // ============================================================
@@ -243,7 +247,7 @@ function setupFilters() {
       tematica: document.getElementById('filter-tipo')?.value || undefined,
     };
     applyMapFilters(filters);
-    showToast('Filtros aplicados al mapa táctico', 'success');
+    showToast('Filtros aplicados al mapa', 'success');
   });
 
   btnClear?.addEventListener('click', () => {
@@ -368,11 +372,44 @@ function setupModals() {
     const editIdEl = document.getElementById('persona-edit-id');
     if (editIdEl) editIdEl.value = '';
     const titleEl = document.getElementById('modal-persona-title');
-    if (titleEl) titleEl.textContent = 'Registrar Persona de Interés';
+    if (titleEl) titleEl.textContent = 'Registrar Perfil / Dossier Digital';
     const submitBtn = document.getElementById('btn-submit-persona');
-    if (submitBtn) submitBtn.textContent = 'Guardar Persona';
+    if (submitBtn) submitBtn.textContent = 'Guardar Ficha de Perfil';
     const pelVal = document.getElementById('persona-peligrosidad-val');
     if (pelVal) pelVal.textContent = '5';
+
+    // Reset files
+    currentPersonaFiles = [];
+    renderPersonaFilesList();
+
+    // Reset photo
+    const fotoPreview = document.getElementById('persona-foto-preview');
+    if (fotoPreview) { fotoPreview.src = ''; fotoPreview.style.display = 'none'; }
+    const fotoPlh = document.getElementById('persona-foto-placeholder');
+    if (fotoPlh) fotoPlh.style.display = 'block';
+
+    // Reset dynamic lists
+    const domCont = document.getElementById('persona-domicilios-container');
+    if (domCont) {
+      domCont.innerHTML = '';
+      addDomicilioRow({ tipo: 'REAL', direccion: '', barrio: '' });
+    }
+    const causaCont = document.getElementById('persona-causas-container');
+    if (causaCont) causaCont.innerHTML = '';
+    const vehCont = document.getElementById('persona-vehiculos-container');
+    if (vehCont) vehCont.innerHTML = '';
+    const famCont = document.getElementById('persona-familia-container');
+    if (famCont) famCont.innerHTML = '';
+
+    // Hide capture details
+    document.getElementById('persona-captura-fields')?.classList.add('hidden');
+
+    // Reset tabs to first tab
+    document.querySelectorAll('#persona-form-nav .dossier-tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelector('#persona-form-nav [data-form-tab="tab-f-identidad"]')?.classList.add('active');
+    document.querySelectorAll('.persona-tab-pane').forEach(p => p.classList.add('hidden'));
+    document.getElementById('tab-f-identidad')?.classList.remove('hidden');
+
     openModal('modal-persona');
   };
   document.getElementById('btn-nueva-persona')?.addEventListener('click', handleOpenNuevaPersona);
@@ -418,6 +455,7 @@ async function populateVinculoSelects() {
 // FORMS
 // ============================================================
 function setupForms() {
+  initDossierSystem();
   // Form: Nuevo Hecho
   document.getElementById('form-hecho')?.addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -462,16 +500,120 @@ function setupForms() {
     }
   });
 
-  // Form: Persona (Creación y Edición de Integrantes / Domicilios / Dossiers)
+  // Form: Persona (Creación y Edición de Integrantes / Domicilios / Dossiers Digitales)
   document.getElementById('form-persona')?.addEventListener('submit', async (e) => {
     e.preventDefault();
     const editId = document.getElementById('persona-edit-id')?.value;
-    showLoading(editId ? 'Actualizando perfil de integrante...' : 'Registrando persona de interés...');
+    showLoading(editId ? 'Actualizando perfil y dossier institucional...' : 'Registrando perfil de persona de interés...');
 
     try {
       const bandaSelect = document.getElementById('persona-banda');
       const selectedBandaId = bandaSelect?.value || null;
       const selectedBandaNombre = bandaSelect?.options[bandaSelect.selectedIndex]?.text || null;
+
+      // Domicilios dinámicos
+      const domicilios = [];
+      document.querySelectorAll('#persona-domicilios-container .dynamic-item-row').forEach((row, idx) => {
+        const tipo = row.querySelector('.dom-tipo')?.value || 'REAL';
+        const direccion = row.querySelector('.dom-direccion')?.value?.trim();
+        const barrio = row.querySelector('.dom-barrio')?.value?.trim();
+        const detalle = row.querySelector('.dom-detalle')?.value?.trim();
+        const geom = row.dataset.geom || null;
+        if (direccion) {
+          domicilios.push({
+            id: row.dataset.id || `dom-${Date.now()}-${idx}`,
+            tipo,
+            direccion,
+            barrio: barrio || '',
+            localidad: 'Santa Fe',
+            detalle: detalle || '',
+            geom
+          });
+        }
+      });
+
+      // Causas dinámicas
+      const causas = [];
+      document.querySelectorAll('#persona-causas-container .dynamic-item-row').forEach((row, idx) => {
+        const cuij = row.querySelector('.causa-cuij')?.value?.trim();
+        const caratula = row.querySelector('.causa-caratula')?.value?.trim();
+        const organo = row.querySelector('.causa-organo')?.value?.trim();
+        const estado = row.querySelector('.causa-estado')?.value?.trim();
+        if (cuij || caratula) {
+          causas.push({
+            id: row.dataset.id || `causa-${Date.now()}-${idx}`,
+            cuij: cuij || 'S/N',
+            caratula: caratula || 'Sin carátula especificada',
+            organo: organo || 'MPA',
+            estado: estado || 'En trámite'
+          });
+        }
+      });
+
+      // Vehículos dinámicos
+      const vehiculos = [];
+      document.querySelectorAll('#persona-vehiculos-container .dynamic-item-row').forEach((row, idx) => {
+        const patente = row.querySelector('.veh-patente')?.value?.trim();
+        const tipo = row.querySelector('.veh-tipo')?.value || 'Automóvil';
+        const modelo = row.querySelector('.veh-modelo')?.value?.trim();
+        const color = row.querySelector('.veh-color')?.value?.trim();
+        const titular = row.querySelector('.veh-titular')?.value?.trim();
+        const rol = row.querySelector('.veh-rol')?.value?.trim();
+        if (patente || modelo) {
+          vehiculos.push({
+            id: row.dataset.id || `veh-${Date.now()}-${idx}`,
+            patente: patente || 'S/D',
+            tipo,
+            modelo: modelo || '',
+            color: color || '',
+            titular: titular || '',
+            rol: rol || ''
+          });
+        }
+      });
+
+      // Familiares dinámicos
+      const familiares = [];
+      document.querySelectorAll('#persona-familia-container .dynamic-item-row').forEach((row, idx) => {
+        const nombre = row.querySelector('.fam-nombre')?.value?.trim();
+        const parentesco = row.querySelector('.fam-parentesco')?.value || 'Otro';
+        const dni = row.querySelector('.fam-dni')?.value?.trim();
+        const observacion = row.querySelector('.fam-obs')?.value?.trim();
+        if (nombre) {
+          familiares.push({
+            id: row.dataset.id || `fam-${Date.now()}-${idx}`,
+            nombre,
+            parentesco,
+            dni: dni || '',
+            observacion: observacion || ''
+          });
+        }
+      });
+
+      // Situación Crediticia
+      const situacion_crediticia = {
+        bcra_situacion: document.getElementById('persona-credito-situacion')?.value || '0',
+        bcra_descripcion: document.getElementById('persona-credito-situacion')?.options[document.getElementById('persona-credito-situacion').selectedIndex]?.text || '',
+        entidades: document.getElementById('persona-credito-entidad')?.value?.trim() || '',
+        monto_deuda: document.getElementById('persona-credito-monto')?.value?.trim() || '',
+        arca_condicion: document.getElementById('persona-arca-situacion')?.value?.trim() || '',
+        inconsistencia_patrimonial: document.getElementById('persona-patrimonio-inconsistencia')?.value?.trim() || ''
+      };
+
+      const isCaptura = document.getElementById('persona-captura')?.checked === true;
+      const orden_captura_datos = isCaptura ? {
+        oficio: document.getElementById('persona-captura-oficio')?.value?.trim() || '',
+        organo: document.getElementById('persona-captura-organo')?.value?.trim() || '',
+        fecha: document.getElementById('persona-captura-fecha')?.value || ''
+      } : null;
+
+      // Foto
+      const fotoUrlInput = document.getElementById('persona-foto-url')?.value?.trim();
+      const fotoPreview = document.getElementById('persona-foto-preview');
+      const foto_url = fotoUrlInput || (fotoPreview?.src?.startsWith('data:') ? fotoPreview.src : null);
+
+      // Principal address sync
+      const principalDom = domicilios.find(d => d.tipo === 'REAL') || domicilios[0];
 
       const personaPayload = {
         nombre: document.getElementById('persona-nombre')?.value?.trim() || null,
@@ -481,28 +623,39 @@ function setupForms() {
         alias: document.getElementById('persona-alias')?.value || '',
         sexo: document.getElementById('persona-sexo')?.value || 'M',
         fecha_nacimiento: document.getElementById('persona-nacimiento')?.value || null,
+        nacionalidad: document.getElementById('persona-nacionalidad')?.value || 'Argentina',
+        foto_url: foto_url || null,
         banda_id: selectedBandaId,
         banda_nombre: selectedBandaId ? selectedBandaNombre : 'Individual',
         roles: document.getElementById('persona-roles')?.value || '',
         score_peligrosidad: parseInt(document.getElementById('persona-peligrosidad')?.value) || 5,
-        pedido_captura: document.getElementById('persona-captura')?.checked === true,
-        domicilio_principal: document.getElementById('persona-domicilio')?.value?.trim() || null,
+        pedido_captura: isCaptura,
+        orden_captura_datos,
+        domicilio_principal: principalDom ? principalDom.direccion : (document.getElementById('persona-domicilio')?.value?.trim() || null),
+        domicilios,
+        causas,
+        vehiculos,
+        familiares,
+        situacion_crediticia,
+        archivos_adjuntos: [...currentPersonaFiles],
         link_dossier: document.getElementById('persona-dossier')?.value?.trim() || null,
         antecedentes_texto: document.getElementById('persona-antecedentes')?.value || null,
+        cuij_asociados: causas.map(c => c.cuij).filter(c => c && c !== 'S/N')
       };
 
       if (editId) {
         await updatePersona(editId, personaPayload);
         await logAction('UPDATE', 'personas', editId);
-        showToast('Perfil de integrante y domicilio actualizados correctamente', 'success');
+        showToast('Dossier y perfil institucional actualizados correctamente', 'success');
       } else {
         const result = await insertPersona(personaPayload);
         await logAction('INSERT', 'personas', result.id);
-        showToast('Persona de interés registrada correctamente', 'success');
+        showToast('Perfil y dossier digital registrado correctamente', 'success');
       }
 
       closeModal('modal-persona');
       e.target.reset();
+      currentPersonaFiles = [];
       const editIdEl = document.getElementById('persona-edit-id');
       if (editIdEl) editIdEl.value = '';
 
@@ -514,6 +667,7 @@ function setupForms() {
         await renderPersonasView();
       }
     } catch (err) {
+      console.error('Error guardando persona:', err);
       showToast(`Error: ${err.message}`, 'error');
     } finally {
       hideLoading();
@@ -655,7 +809,7 @@ function setupIngestion() {
       // 2. Cache in browser local storage
       saveTacticalToLocal(geoJSON);
 
-      showToast(`Capa táctica cargada: ${totalFeats} elementos (${polygons} zonas, ${points} puntos)`, 'success');
+      showToast(`Capa espacial cargada: ${totalFeats} elementos (${polygons} zonas, ${points} puntos)`, 'success');
 
       statusKml.innerHTML = `
         <div style="background:var(--bg-secondary);padding:14px;border-radius:10px;border:1px solid var(--border-color);margin-top:12px">
@@ -676,7 +830,7 @@ function setupIngestion() {
           </div>
 
           ${folders.length > 0 ? `
-            <div style="font-size:11px;color:var(--text-secondary);margin:8px 0 4px">Capas tácticas detectadas:</div>
+            <div style="font-size:11px;color:var(--text-secondary);margin:8px 0 4px">Capas espaciales detectadas:</div>
             <div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:12px">
               ${folders.slice(0, 10).map(([name, count]) => `
                 <span style="background:var(--bg-tertiary);border:1px solid var(--border-color);padding:2px 8px;border-radius:10px;font-size:10px;color:var(--text-secondary)">
@@ -687,7 +841,7 @@ function setupIngestion() {
           ` : ''}
 
           <div style="display:flex;gap:8px;margin-top:10px">
-            <button class="btn btn-primary btn-sm" id="btn-view-map-now" style="flex:1">🗺️ Ver en Mapa Táctico</button>
+            <button class="btn btn-primary btn-sm" id="btn-view-map-now" style="flex:1">🗺️ Ver en Mapa</button>
             <button class="btn btn-secondary btn-sm" id="btn-confirm-kml-import">☁️ Sincronizar Supabase</button>
           </div>
         </div>
@@ -735,13 +889,13 @@ function setupIngestion() {
     }
   });
 
-  // Local KMZ / Santa Fe Tactical Import Button
+  // Local KMZ / Santa Fe GeoJSON Import Button
   document.getElementById('btn-import-kml-local')?.addEventListener('click', async () => {
-    showLoading('Cargando capas tácticas completas de Santa Fe...');
+    showLoading('Cargando capas espaciales completas de Santa Fe...');
     try {
-      // Fetch the pre-compiled full Santa Fe tactical dataset
+      // Fetch the pre-compiled full Santa Fe dataset
       const response = await fetch('/data/santa_fe_tactical.json');
-      if (!response.ok) throw new Error(`HTTP ${response.status} al cargar dataset táctico`);
+      if (!response.ok) throw new Error(`HTTP ${response.status} al cargar dataset espacial`);
       const data = await response.json();
 
       loadTacticalGeoJSON(data, { fitBounds: true });
@@ -752,7 +906,7 @@ function setupIngestion() {
     } catch (err) {
       console.warn('Fallback a capas básicas:', err);
       // If offline or fetch failed, fallback to direct insertion
-      showToast('Cargando capas tácticas base...', 'info');
+      showToast('Cargando capas espaciales base...', 'info');
       navigateToView('mapa');
     } finally {
       hideLoading();
@@ -990,11 +1144,9 @@ async function renderPersonasView() {
               ${!isCaptura ? `<span class="tag ${pClass}">Peligro: ${p.score_peligrosidad || 5}/10</span>` : ''}
             </div>
             <div style="display:flex;gap:4px;align-items:center;">
-              ${p.link_dossier ? `
-                <a href="${p.link_dossier}" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation();" class="btn btn-primary btn-xs" title="Abrir Dossier Judicial en Google Drive / Docs" style="font-size:10px;padding:3px 7px;font-weight:700;display:inline-flex;align-items:center;gap:3px;text-decoration:none;">
-                  📄 Drive ↗
-                </a>
-              ` : ''}
+              <button class="btn btn-primary btn-xs" onclick="event.stopPropagation(); window.abrirDossierDigital('${p.id}');" title="Abrir Dossier Digital Completo" style="font-size:10px;padding:3px 8px;font-weight:800;display:inline-flex;align-items:center;gap:4px;background:#0284c7;border:1px solid #38bdf8;color:#fff;">
+                📋 Dossier
+              </button>
               <button class="btn btn-outline btn-xs" onclick="event.stopPropagation(); window.abrirEdicionPersona('${p.id}');" title="Editar Perfil" style="font-size:10px;padding:3px 6px;">
                 ✏️
               </button>
@@ -1010,9 +1162,9 @@ async function renderPersonasView() {
       `;
     }).join('');
 
-    // Click handlers for modal
+    // Click en la tarjeta abre directamente el Dossier Digital nativo
     grid.querySelectorAll('.entity-card').forEach(card => {
-      card.addEventListener('click', () => showEntityDetail('persona', card.dataset.id));
+      card.addEventListener('click', () => window.abrirDossierDigital(card.dataset.id));
     });
 
   } catch (err) {
@@ -1050,6 +1202,400 @@ window.enfocarPersonaEnGrafo = async function(personaId) {
   }, 150);
 };
 
+// ============================================================
+// SISTEMA INTEGRAL DE DOSSIER DIGITAL Y PERFILACIÓN CRIMINAL
+// ============================================================
+
+export function initDossierSystem() {
+  // Navegación de pestañas en modal de edición de perfil
+  document.querySelectorAll('#persona-form-nav .dossier-tab-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.preventDefault();
+      document.querySelectorAll('#persona-form-nav .dossier-tab-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      const target = btn.dataset.formTab;
+      document.querySelectorAll('.persona-tab-pane').forEach(p => p.classList.add('hidden'));
+      document.getElementById(target)?.classList.remove('hidden');
+    });
+  });
+
+  // Navegación de pestañas en visor de dossier digital
+  document.querySelectorAll('#dossier-view-tabs .dossier-tab-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.preventDefault();
+      document.querySelectorAll('#dossier-view-tabs .dossier-tab-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      const target = btn.dataset.dossierTab;
+      document.querySelectorAll('.dossier-content-section').forEach(s => s.classList.add('hidden'));
+      document.getElementById(target)?.classList.remove('hidden');
+    });
+  });
+
+  // Botones de agregado dinámico
+  document.getElementById('btn-add-domicilio-row')?.addEventListener('click', () => {
+    addDomicilioRow({ tipo: 'REAL', direccion: '', barrio: '' });
+  });
+
+  document.getElementById('btn-add-causa-row')?.addEventListener('click', () => {
+    addCausaRow();
+  });
+
+  document.getElementById('btn-add-vehiculo-row')?.addEventListener('click', () => {
+    addVehiculoRow();
+  });
+
+  document.getElementById('btn-add-familia-row')?.addEventListener('click', () => {
+    addFamiliaRow();
+  });
+
+  // Requerimiento de detención toggle
+  document.getElementById('persona-captura')?.addEventListener('change', (e) => {
+    const fields = document.getElementById('persona-captura-fields');
+    if (fields) {
+      if (e.target.checked) fields.classList.remove('hidden');
+      else fields.classList.add('hidden');
+    }
+  });
+
+  // Peligrosidad slider
+  document.getElementById('persona-peligrosidad')?.addEventListener('input', (e) => {
+    const valEl = document.getElementById('persona-peligrosidad-val');
+    if (valEl) valEl.textContent = e.target.value;
+  });
+
+  // Carga de foto de perfil
+  const fotoFileBtn = document.getElementById('btn-trigger-foto-file');
+  const fotoFileInput = document.getElementById('persona-foto-file-input');
+  fotoFileBtn?.addEventListener('click', () => fotoFileInput?.click());
+
+  fotoFileInput?.addEventListener('change', (e) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        const preview = document.getElementById('persona-foto-preview');
+        const plh = document.getElementById('persona-foto-placeholder');
+        if (preview) { preview.src = ev.target.result; preview.style.display = 'block'; }
+        if (plh) plh.style.display = 'none';
+      };
+      reader.readAsDataURL(file);
+    }
+  });
+
+  document.getElementById('persona-foto-url')?.addEventListener('input', (e) => {
+    const url = e.target.value.trim();
+    const preview = document.getElementById('persona-foto-preview');
+    const plh = document.getElementById('persona-foto-placeholder');
+    if (url) {
+      if (preview) { preview.src = url; preview.style.display = 'block'; }
+      if (plh) plh.style.display = 'none';
+    } else if (!fotoFileInput?.files?.length) {
+      if (preview) { preview.src = ''; preview.style.display = 'none'; }
+      if (plh) plh.style.display = 'block';
+    }
+  });
+
+  // Dropzone y selección de archivos adjuntos (.pdf, .doc, .docx, imágenes)
+  const dropzone = document.getElementById('persona-dropzone');
+  const fileInput = document.getElementById('persona-file-input');
+  const addMoreBtn = document.getElementById('btn-select-more-files');
+
+  addMoreBtn?.addEventListener('click', () => fileInput?.click());
+  dropzone?.addEventListener('click', (e) => {
+    if (e.target !== fileInput) fileInput?.click();
+  });
+
+  dropzone?.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    dropzone.classList.add('dragover');
+  });
+
+  dropzone?.addEventListener('dragleave', () => {
+    dropzone.classList.remove('dragover');
+  });
+
+  dropzone?.addEventListener('drop', (e) => {
+    e.preventDefault();
+    dropzone.classList.remove('dragover');
+    if (e.dataTransfer?.files?.length) {
+      handleFilesSelected(e.dataTransfer.files);
+    }
+  });
+
+  fileInput?.addEventListener('change', (e) => {
+    if (e.target.files?.length) {
+      handleFilesSelected(e.target.files);
+    }
+  });
+
+  // Botones de acción en visor de dossier
+  document.getElementById('btn-print-dossier-direct')?.addEventListener('click', () => {
+    if (currentViewingDossierId) window.imprimirDossierDigital(currentViewingDossierId);
+  });
+
+  document.getElementById('btn-edit-dossier-direct')?.addEventListener('click', () => {
+    if (currentViewingDossierId) {
+      closeModal('modal-dossier-digital');
+      window.abrirEdicionPersona(currentViewingDossierId);
+    }
+  });
+}
+
+function handleFilesSelected(files) {
+  Array.from(files).forEach(file => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      currentPersonaFiles.push({
+        id: `file-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`,
+        nombre: file.name,
+        tamano: formatFileSize(file.size),
+        tipo: file.type || (file.name.endsWith('.pdf') ? 'application/pdf' : 'application/octet-stream'),
+        data_url: e.target.result,
+        fecha_subida: new Date().toISOString()
+      });
+      renderPersonaFilesList();
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+function formatFileSize(bytes) {
+  if (!bytes || bytes === 0) return '0 B';
+  const k = 1024;
+  const sizes = ['B', 'KB', 'MB', 'GB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+}
+
+function renderPersonaFilesList() {
+  const container = document.getElementById('persona-files-list');
+  const countEl = document.getElementById('persona-adjuntos-count');
+  if (countEl) countEl.textContent = currentPersonaFiles.length;
+  if (!container) return;
+
+  if (currentPersonaFiles.length === 0) {
+    container.innerHTML = '<div style="color:var(--text-muted);font-size:11px;grid-column:1/-1;text-align:center;padding:12px;border:1px dashed rgba(255,255,255,0.1);border-radius:6px">No hay documentos adjuntos en este legajo aún.</div>';
+    return;
+  }
+
+  container.innerHTML = currentPersonaFiles.map((f, i) => {
+    const ext = (f.nombre || '').split('.').pop().toLowerCase();
+    let badgeClass = 'file-icon-doc';
+    let badgeText = 'DOC';
+    if (ext === 'pdf') { badgeClass = 'file-icon-pdf'; badgeText = 'PDF'; }
+    else if (['jpg', 'jpeg', 'png', 'webp', 'gif'].includes(ext)) { badgeClass = 'file-icon-img'; badgeText = 'IMG'; }
+    else if (['doc', 'docx'].includes(ext)) { badgeClass = 'file-icon-doc'; badgeText = 'DOC'; }
+
+    return `
+      <div class="file-attachment-card" data-idx="${i}">
+        <span class="file-icon-badge ${badgeClass}">${badgeText}</span>
+        <div class="file-info-col">
+          <div class="file-name-text" title="${f.nombre}">${f.nombre}</div>
+          <div class="file-meta-text">${f.tamano || 'Archivo'} ${f.fecha_subida ? `• ${f.fecha_subida.split('T')[0]}` : ''}</div>
+        </div>
+        <div style="display:flex;gap:4px;align-items:center">
+          ${f.data_url ? `
+            <button type="button" class="btn btn-ghost btn-xs btn-preview-file" data-idx="${i}" title="Ver o descargar">
+              👁️
+            </button>
+          ` : ''}
+          <button type="button" class="btn btn-ghost btn-xs btn-delete-file" data-idx="${i}" title="Eliminar archivo" style="color:#EF4444">
+            🗑️
+          </button>
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  container.querySelectorAll('.btn-preview-file').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const idx = parseInt(btn.dataset.idx);
+      const file = currentPersonaFiles[idx];
+      if (file?.data_url) {
+        if (file.tipo?.includes('pdf') || file.tipo?.includes('image')) {
+          const w = window.open('');
+          w.document.write(`<iframe src="${file.data_url}" frameborder="0" style="border:0; top:0px; left:0px; bottom:0px; right:0px; width:100%; height:100%;" allowfullscreen></iframe>`);
+        } else {
+          const a = document.createElement('a');
+          a.href = file.data_url;
+          a.download = file.nombre;
+          a.click();
+        }
+      }
+    });
+  });
+
+  container.querySelectorAll('.btn-delete-file').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const idx = parseInt(btn.dataset.idx);
+      currentPersonaFiles.splice(idx, 1);
+      renderPersonaFilesList();
+    });
+  });
+}
+
+function addDomicilioRow(data = {}) {
+  const container = document.getElementById('persona-domicilios-container');
+  if (!container) return;
+  const row = document.createElement('div');
+  row.className = 'dynamic-item-row';
+  row.dataset.rowType = 'domicilio';
+  if (data.id) row.dataset.id = data.id;
+  if (data.geom) row.dataset.geom = data.geom;
+
+  row.innerHTML = `
+    <div style="flex:1;display:flex;flex-direction:column;gap:8px">
+      <div style="display:grid;grid-template-columns:140px 1.5fr 1fr;gap:8px">
+        <div>
+          <label style="font-size:10px;color:var(--text-muted)">Tipo de Domicilio</label>
+          <select class="form-input dom-tipo" style="padding:4px 8px;font-size:11px">
+            <option value="REAL" ${data.tipo === 'REAL' ? 'selected' : ''}>Principal / Real</option>
+            <option value="LEGAL" ${data.tipo === 'LEGAL' ? 'selected' : ''}>Legal / Registrado</option>
+            <option value="AGUANTADERO" ${data.tipo === 'AGUANTADERO' ? 'selected' : ''}>Aguantadero</option>
+            <option value="DISTRIBUCION" ${data.tipo === 'DISTRIBUCION' ? 'selected' : ''}>Punto de Venta / Acopio</option>
+          </select>
+        </div>
+        <div>
+          <label style="font-size:10px;color:var(--text-muted)">Dirección y Altura</label>
+          <input type="text" class="form-input dom-direccion" value="${(data.direccion || '').replace(/"/g, '&quot;')}" placeholder="Ej: Vera Mujica 674" style="padding:4px 8px;font-size:11px">
+        </div>
+        <div>
+          <label style="font-size:10px;color:var(--text-muted)">Barrio</label>
+          <input type="text" class="form-input dom-barrio" value="${(data.barrio || '').replace(/"/g, '&quot;')}" placeholder="Ej: Centenario" style="padding:4px 8px;font-size:11px">
+        </div>
+      </div>
+      <div>
+        <label style="font-size:10px;color:var(--text-muted)">Rol o Detalle del Inmueble</label>
+        <input type="text" class="form-input dom-detalle" value="${(data.detalle || '').replace(/"/g, '&quot;')}" placeholder="Observaciones / Rol en la organización..." style="padding:4px 8px;font-size:11px">
+      </div>
+    </div>
+    <button type="button" class="btn btn-outline btn-xs btn-remove-row" title="Quitar este domicilio" style="color:#EF4444;border-color:rgba(239,68,68,0.3);margin-top:16px">✕</button>
+  `;
+
+  row.querySelector('.btn-remove-row')?.addEventListener('click', () => row.remove());
+  container.appendChild(row);
+}
+
+function addCausaRow(data = {}) {
+  const container = document.getElementById('persona-causas-container');
+  if (!container) return;
+  const row = document.createElement('div');
+  row.className = 'dynamic-item-row';
+  row.dataset.rowType = 'causa';
+  if (data.id) row.dataset.id = data.id;
+
+  row.innerHTML = `
+    <div style="flex:1;display:grid;grid-template-columns:140px 1.5fr 1fr 1fr;gap:8px">
+      <div>
+        <label style="font-size:10px;color:var(--text-muted)">CUIJ / N° Causa</label>
+        <input type="text" class="form-input causa-cuij" value="${(data.cuij || '').replace(/"/g, '&quot;')}" placeholder="21-09726972-3" style="padding:4px 8px;font-size:11px;font-family:var(--font-mono)">
+      </div>
+      <div>
+        <label style="font-size:10px;color:var(--text-muted)">Carátula / Delito</label>
+        <input type="text" class="form-input causa-caratula" value="${(data.caratula || '').replace(/"/g, '&quot;')}" placeholder="Comercialización de Estupefacientes..." style="padding:4px 8px;font-size:11px">
+      </div>
+      <div>
+        <label style="font-size:10px;color:var(--text-muted)">Fiscalía / Órgano</label>
+        <input type="text" class="form-input causa-organo" value="${(data.organo || '').replace(/"/g, '&quot;')}" placeholder="MPA - Unidad Microtráfico" style="padding:4px 8px;font-size:11px">
+      </div>
+      <div>
+        <label style="font-size:10px;color:var(--text-muted)">Estado Procesal</label>
+        <input type="text" class="form-input causa-estado" value="${(data.estado || '').replace(/"/g, '&quot;')}" placeholder="Imputativa / Preventiva" style="padding:4px 8px;font-size:11px">
+      </div>
+    </div>
+    <button type="button" class="btn btn-outline btn-xs btn-remove-row" title="Quitar causa" style="color:#EF4444;border-color:rgba(239,68,68,0.3);margin-top:16px">✕</button>
+  `;
+
+  row.querySelector('.btn-remove-row')?.addEventListener('click', () => row.remove());
+  container.appendChild(row);
+}
+
+function addVehiculoRow(data = {}) {
+  const container = document.getElementById('persona-vehiculos-container');
+  if (!container) return;
+  const row = document.createElement('div');
+  row.className = 'dynamic-item-row';
+  row.dataset.rowType = 'vehiculo';
+  if (data.id) row.dataset.id = data.id;
+
+  row.innerHTML = `
+    <div style="flex:1;display:grid;grid-template-columns:110px 110px 1.2fr 100px 1.2fr;gap:8px">
+      <div>
+        <label style="font-size:10px;color:var(--text-muted)">Dominio / Patente</label>
+        <input type="text" class="form-input veh-patente" value="${(data.patente || '').replace(/"/g, '&quot;')}" placeholder="AB123CD" style="padding:4px 8px;font-size:11px;text-transform:uppercase;font-weight:700">
+      </div>
+      <div>
+        <label style="font-size:10px;color:var(--text-muted)">Tipo</label>
+        <select class="form-input veh-tipo" style="padding:4px 8px;font-size:11px">
+          <option value="Automóvil" ${data.tipo === 'Automóvil' ? 'selected' : ''}>Automóvil</option>
+          <option value="Motovehículo" ${data.tipo === 'Motovehículo' ? 'selected' : ''}>Motovehículo</option>
+          <option value="Camioneta" ${data.tipo === 'Camioneta' ? 'selected' : ''}>Camioneta</option>
+          <option value="Utilitario" ${data.tipo === 'Utilitario' ? 'selected' : ''}>Utilitario</option>
+        </select>
+      </div>
+      <div>
+        <label style="font-size:10px;color:var(--text-muted)">Marca y Modelo</label>
+        <input type="text" class="form-input veh-modelo" value="${(data.modelo || '').replace(/"/g, '&quot;')}" placeholder="VW Gol Trend" style="padding:4px 8px;font-size:11px">
+      </div>
+      <div>
+        <label style="font-size:10px;color:var(--text-muted)">Color</label>
+        <input type="text" class="form-input veh-color" value="${(data.color || '').replace(/"/g, '&quot;')}" placeholder="Negro / Gris" style="padding:4px 8px;font-size:11px">
+      </div>
+      <div>
+        <label style="font-size:10px;color:var(--text-muted)">Titular Registral</label>
+        <input type="text" class="form-input veh-titular" value="${(data.titular || '').replace(/"/g, '&quot;')}" placeholder="Titular o Tercero" style="padding:4px 8px;font-size:11px">
+      </div>
+    </div>
+    <button type="button" class="btn btn-outline btn-xs btn-remove-row" title="Quitar vehículo" style="color:#EF4444;border-color:rgba(239,68,68,0.3);margin-top:16px">✕</button>
+  `;
+
+  row.querySelector('.btn-remove-row')?.addEventListener('click', () => row.remove());
+  container.appendChild(row);
+}
+
+function addFamiliaRow(data = {}) {
+  const container = document.getElementById('persona-familia-container');
+  if (!container) return;
+  const row = document.createElement('div');
+  row.className = 'dynamic-item-row';
+  row.dataset.rowType = 'familia';
+  if (data.id) row.dataset.id = data.id;
+
+  row.innerHTML = `
+    <div style="flex:1;display:grid;grid-template-columns:1.5fr 120px 110px 2fr;gap:8px">
+      <div>
+        <label style="font-size:10px;color:var(--text-muted)">Nombre Completo</label>
+        <input type="text" class="form-input fam-nombre" value="${(data.nombre || '').replace(/"/g, '&quot;')}" placeholder="Nombre y Apellido" style="padding:4px 8px;font-size:11px">
+      </div>
+      <div>
+        <label style="font-size:10px;color:var(--text-muted)">Parentesco</label>
+        <select class="form-input fam-parentesco" style="padding:4px 8px;font-size:11px">
+          <option value="Padre" ${data.parentesco === 'Padre' ? 'selected' : ''}>Padre</option>
+          <option value="Madre" ${data.parentesco === 'Madre' ? 'selected' : ''}>Madre</option>
+          <option value="Hermano/a" ${data.parentesco === 'Hermano/a' ? 'selected' : ''}>Hermano/a</option>
+          <option value="Pareja" ${data.parentesco === 'Pareja' ? 'selected' : ''}>Pareja / Cónyuge</option>
+          <option value="Hijo/a" ${data.parentesco === 'Hijo/a' ? 'selected' : ''}>Hijo/a</option>
+          <option value="Cuñado/a" ${data.parentesco === 'Cuñado/a' ? 'selected' : ''}>Cuñado/a</option>
+          <option value="Primo/a" ${data.parentesco === 'Primo/a' ? 'selected' : ''}>Primo/a</option>
+          <option value="Otro" ${data.parentesco === 'Otro' ? 'selected' : ''}>Otro</option>
+        </select>
+      </div>
+      <div>
+        <label style="font-size:10px;color:var(--text-muted)">DNI</label>
+        <input type="text" class="form-input fam-dni" value="${(data.dni || '').replace(/"/g, '&quot;')}" placeholder="12345678" style="padding:4px 8px;font-size:11px">
+      </div>
+      <div>
+        <label style="font-size:10px;color:var(--text-muted)">Observación / Vínculo Operativo</label>
+        <input type="text" class="form-input fam-obs" value="${(data.observacion || '').replace(/"/g, '&quot;')}" placeholder="Titular de rodados / Coimputado..." style="padding:4px 8px;font-size:11px">
+      </div>
+    </div>
+    <button type="button" class="btn btn-outline btn-xs btn-remove-row" title="Quitar familiar" style="color:#EF4444;border-color:rgba(239,68,68,0.3);margin-top:16px">✕</button>
+  `;
+
+  row.querySelector('.btn-remove-row')?.addEventListener('click', () => row.remove());
+  container.appendChild(row);
+}
+
 // Global exposure for editing persona profile & dossier
 window.abrirEdicionPersona = async function(personaId) {
   try {
@@ -1060,10 +1606,10 @@ window.abrirEdicionPersona = async function(personaId) {
     }
 
     const modalTitle = document.getElementById('modal-persona-title');
-    if (modalTitle) modalTitle.textContent = `Editar Perfil: ${p.nombre || ''} ${p.apellido || ''}`.trim() || 'Editar Persona';
+    if (modalTitle) modalTitle.textContent = `Editar Dossier: ${p.nombre || ''} ${p.apellido || ''}`.trim() || 'Editar Persona';
 
     const submitBtn = document.getElementById('btn-submit-persona');
-    if (submitBtn) submitBtn.textContent = 'Guardar Cambios';
+    if (submitBtn) submitBtn.textContent = 'Guardar Cambios de Legajo';
 
     document.getElementById('persona-edit-id').value = p.id;
     document.getElementById('persona-nombre').value = p.nombre || '';
@@ -1073,7 +1619,25 @@ window.abrirEdicionPersona = async function(personaId) {
     document.getElementById('persona-alias').value = Array.isArray(p.alias) ? p.alias.join(', ') : (p.alias || '');
     document.getElementById('persona-sexo').value = p.sexo || 'M';
     document.getElementById('persona-nacimiento').value = p.fecha_nacimiento || '';
+    if (document.getElementById('persona-nacionalidad')) {
+      document.getElementById('persona-nacionalidad').value = p.nacionalidad || 'Argentina';
+    }
 
+    // Foto
+    const fotoPreview = document.getElementById('persona-foto-preview');
+    const fotoPlh = document.getElementById('persona-foto-placeholder');
+    const fotoUrlInput = document.getElementById('persona-foto-url');
+    if (p.foto_url) {
+      if (fotoUrlInput) fotoUrlInput.value = p.foto_url.startsWith('data:') ? '' : p.foto_url;
+      if (fotoPreview) { fotoPreview.src = p.foto_url; fotoPreview.style.display = 'block'; }
+      if (fotoPlh) fotoPlh.style.display = 'none';
+    } else {
+      if (fotoUrlInput) fotoUrlInput.value = '';
+      if (fotoPreview) { fotoPreview.src = ''; fotoPreview.style.display = 'none'; }
+      if (fotoPlh) fotoPlh.style.display = 'block';
+    }
+
+    // Banda
     const bandaSelect = document.getElementById('persona-banda');
     if (bandaSelect) {
       if (p.banda_id) {
@@ -1096,18 +1660,585 @@ window.abrirEdicionPersona = async function(personaId) {
       if (pelVal) pelVal.textContent = pelEl.value;
     }
 
+    // Captura
     const captEl = document.getElementById('persona-captura');
-    if (captEl) captEl.checked = Boolean(p.pedido_captura);
+    const captFields = document.getElementById('persona-captura-fields');
+    if (captEl) {
+      captEl.checked = Boolean(p.pedido_captura);
+      if (p.pedido_captura) {
+        captFields?.classList.remove('hidden');
+        if (p.orden_captura_datos) {
+          const ofEl = document.getElementById('persona-captura-oficio');
+          const orgEl = document.getElementById('persona-captura-organo');
+          const fecEl = document.getElementById('persona-captura-fecha');
+          if (ofEl) ofEl.value = p.orden_captura_datos.oficio || '';
+          if (orgEl) orgEl.value = p.orden_captura_datos.organo || '';
+          if (fecEl) fecEl.value = p.orden_captura_datos.fecha || '';
+        }
+      } else {
+        captFields?.classList.add('hidden');
+      }
+    }
 
-    document.getElementById('persona-domicilio').value = p.domicilio_principal || '';
-    document.getElementById('persona-dossier').value = p.link_dossier || '';
-    document.getElementById('persona-antecedentes').value = p.antecedentes_texto || '';
+    // Domicilios
+    const domCont = document.getElementById('persona-domicilios-container');
+    if (domCont) {
+      domCont.innerHTML = '';
+      if (Array.isArray(p.domicilios) && p.domicilios.length > 0) {
+        p.domicilios.forEach(d => addDomicilioRow(d));
+      } else if (p.domicilio_principal) {
+        addDomicilioRow({ tipo: 'REAL', direccion: p.domicilio_principal, geom: p.domicilio_principal_geom });
+      } else {
+        addDomicilioRow({ tipo: 'REAL', direccion: '', barrio: '' });
+      }
+    }
+
+    // Causas
+    const causaCont = document.getElementById('persona-causas-container');
+    if (causaCont) {
+      causaCont.innerHTML = '';
+      if (Array.isArray(p.causas) && p.causas.length > 0) {
+        p.causas.forEach(c => addCausaRow(c));
+      } else if (Array.isArray(p.cuij_asociados) && p.cuij_asociados.length > 0) {
+        p.cuij_asociados.forEach(c => addCausaRow({ cuij: c, caratula: p.delitos_asociados?.join(', ') || '' }));
+      }
+    }
+
+    // Vehículos
+    const vehCont = document.getElementById('persona-vehiculos-container');
+    if (vehCont) {
+      vehCont.innerHTML = '';
+      if (Array.isArray(p.vehiculos)) {
+        p.vehiculos.forEach(v => addVehiculoRow(v));
+      }
+    }
+
+    // Familiares
+    const famCont = document.getElementById('persona-familia-container');
+    if (famCont) {
+      famCont.innerHTML = '';
+      if (Array.isArray(p.familiares)) {
+        p.familiares.forEach(f => addFamiliaRow(f));
+      }
+    }
+
+    // Situación Crediticia
+    if (p.situacion_crediticia) {
+      const sc = p.situacion_crediticia;
+      const bcraEl = document.getElementById('persona-credito-situacion');
+      const entEl = document.getElementById('persona-credito-entidad');
+      const monEl = document.getElementById('persona-credito-monto');
+      const arcaEl = document.getElementById('persona-arca-situacion');
+      const patEl = document.getElementById('persona-patrimonio-inconsistencia');
+      if (bcraEl) bcraEl.value = sc.bcra_situacion || '0';
+      if (entEl) entEl.value = sc.entidades || '';
+      if (monEl) monEl.value = sc.monto_deuda || '';
+      if (arcaEl) arcaEl.value = sc.arca_condicion || '';
+      if (patEl) patEl.value = sc.inconsistencia_patrimonial || '';
+    }
+
+    // Archivos adjuntos
+    currentPersonaFiles = Array.isArray(p.archivos_adjuntos) ? [...p.archivos_adjuntos] : [];
+    renderPersonaFilesList();
+
+    const antEl = document.getElementById('persona-antecedentes');
+    if (antEl) antEl.value = p.antecedentes_texto || '';
+    const dosEl = document.getElementById('persona-dossier');
+    if (dosEl) dosEl.value = p.link_dossier || '';
+
+    // Switch to tab 1
+    document.querySelectorAll('#persona-form-nav .dossier-tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelector('#persona-form-nav [data-form-tab="tab-f-identidad"]')?.classList.add('active');
+    document.querySelectorAll('.persona-tab-pane').forEach(pane => pane.classList.add('hidden'));
+    document.getElementById('tab-f-identidad')?.classList.remove('hidden');
 
     openModal('modal-persona');
   } catch (err) {
     console.error('Error abriendo edición de persona:', err);
     showToast('Error al cargar datos de la persona', 'error');
   }
+};
+
+// ============================================================
+// VISUALIZADOR DE DOSSIER DIGITAL CENTRALIZADO
+// ============================================================
+
+window.abrirDossierDigital = async function(personaId) {
+  try {
+    const p = await getPersonaById(personaId);
+    if (!p) {
+      showToast('No se encontró el legajo solicitado', 'error');
+      return;
+    }
+    currentViewingDossierId = p.id;
+
+    // Actualizar contadores en las pestañas del visor
+    const adjCount = Array.isArray(p.archivos_adjuntos) ? p.archivos_adjuntos.length : 0;
+    const domCount = Array.isArray(p.domicilios) ? p.domicilios.length : (p.domicilio_principal ? 1 : 0);
+    const cauCount = Array.isArray(p.causas) ? p.causas.length : (p.cuij_asociados?.length || 0);
+    const vehCount = Array.isArray(p.vehiculos) ? p.vehiculos.length : 0;
+    const famCount = Array.isArray(p.familiares) ? p.familiares.length : 0;
+
+    const elAdjBadge = document.getElementById('dossier-tab-adjuntos-badge');
+    const elDomBadge = document.getElementById('dossier-tab-domicilios-badge');
+    const elCauBadge = document.getElementById('dossier-tab-causas-badge');
+    const elVehBadge = document.getElementById('dossier-tab-vehiculos-badge');
+    const elFamBadge = document.getElementById('dossier-tab-familia-badge');
+
+    if (elAdjBadge) elAdjBadge.textContent = adjCount;
+    if (elDomBadge) elDomBadge.textContent = domCount;
+    if (elCauBadge) elCauBadge.textContent = cauCount;
+    if (elVehBadge) elVehBadge.textContent = vehCount;
+    if (elFamBadge) elFamBadge.textContent = famCount;
+
+    // Renderizar cuerpo del dossier
+    renderDossierDigitalBody(p);
+
+    // Resetear a pestaña principal
+    document.querySelectorAll('#dossier-view-tabs .dossier-tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelector('#dossier-view-tabs [data-dossier-tab="dossier-tab-general"]')?.classList.add('active');
+    document.querySelectorAll('.dossier-content-section').forEach(s => s.classList.add('hidden'));
+    document.getElementById('dossier-tab-general')?.classList.remove('hidden');
+
+    openModal('modal-dossier-digital');
+  } catch (err) {
+    console.error('Error al abrir dossier digital:', err);
+    showToast('Error cargando el dossier digital', 'error');
+  }
+};
+
+function renderDossierDigitalBody(p) {
+  const container = document.getElementById('dossier-digital-content');
+  if (!container) return;
+
+  const isCaptura = Boolean(p.pedido_captura);
+  const bandaColor = p.banda_color || '#0EA5E9';
+  const rolesList = Array.isArray(p.roles) ? p.roles : (p.roles ? [p.roles] : []);
+  const initials = `${(p.nombre || '?')[0]}${(p.apellido || '')[0] || ''}`.toUpperCase();
+
+  const domicilios = Array.isArray(p.domicilios) && p.domicilios.length > 0 ? p.domicilios : (p.domicilio_principal ? [{
+    tipo: 'REAL',
+    direccion: p.domicilio_principal,
+    barrio: '',
+    localidad: 'Santa Fe',
+    detalle: 'Domicilio de residencia principal registrado',
+    geom: p.domicilio_principal_geom
+  }] : []);
+
+  const causas = Array.isArray(p.causas) && p.causas.length > 0 ? p.causas : (Array.isArray(p.cuij_asociados) ? p.cuij_asociados.map(c => ({
+    cuij: c,
+    caratula: p.delitos_asociados?.join(', ') || 'Investigación penal preparatoria',
+    organo: 'MPA',
+    estado: p.estado_procesal || 'En trámite'
+  })) : []);
+
+  const vehiculos = Array.isArray(p.vehiculos) ? p.vehiculos : [];
+  const familiares = Array.isArray(p.familiares) ? p.familiares : [];
+  const archivos = Array.isArray(p.archivos_adjuntos) ? p.archivos_adjuntos : [];
+  const sc = p.situacion_crediticia || {};
+
+  container.innerHTML = `
+    <!-- CABECERA RESUMEN DEL PERFIL (Visible en pantalla e impresión) -->
+    <div class="dossier-header-bar" style="background:rgba(255,255,255,0.02);border:1px solid var(--border-default);border-radius:10px;padding:16px;margin-bottom:18px">
+      ${isCaptura ? `
+        <div style="background:rgba(239,68,68,0.18);border:1px solid #EF4444;border-radius:8px;padding:10px 14px;color:#FCA5A5;margin-bottom:14px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
+          <div style="display:flex;align-items:center;gap:10px">
+            <span style="font-size:24px">🚨</span>
+            <div>
+              <div style="color:#FFF;font-size:13px;font-weight:900;letter-spacing:0.5px">REQUERIMIENTO DE DETENCIÓN / CAPTURA ACTIVA</div>
+              <div style="font-size:11px;opacity:0.9">
+                ${p.orden_captura_datos?.oficio ? `<strong>Oficio:</strong> ${p.orden_captura_datos.oficio} | ` : ''}
+                ${p.orden_captura_datos?.organo ? `<strong>Órgano:</strong> ${p.orden_captura_datos.organo} | ` : ''}
+                ${p.orden_captura_datos?.fecha ? `<strong>Fecha:</strong> ${p.orden_captura_datos.fecha}` : 'Medida vigente en territorio'}
+              </div>
+            </div>
+          </div>
+          <span style="background:#EF4444;color:#fff;font-weight:800;font-size:10px;padding:4px 10px;border-radius:12px;letter-spacing:0.5px">PRIORIDAD OPERATIVA</span>
+        </div>
+      ` : ''}
+
+      <div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap">
+        <div style="width:84px;height:84px;border-radius:12px;background:rgba(255,255,255,0.05);border:2px solid ${isCaptura ? '#EF4444' : 'var(--border-default)'};display:flex;align-items:center;justify-content:center;overflow:hidden;flex-shrink:0">
+          ${p.foto_url ? `
+            <img src="${p.foto_url}" alt="Foto" style="width:100%;height:100%;object-fit:cover">
+          ` : `
+            <span style="font-size:28px;font-weight:900;color:var(--text-secondary)">${initials}</span>
+          `}
+        </div>
+
+        <div style="flex:1;min-width:240px">
+          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+            <h2 style="font-size:18px;font-weight:800;color:#FFFFFF;margin:0">
+              ${p.nombre || '—'} ${p.apellido || ''}
+            </h2>
+            ${Array.isArray(p.alias) && p.alias.length > 0 ? `
+              <span style="background:rgba(245,158,11,0.15);border:1px solid rgba(245,158,11,0.4);color:#FDE68A;font-weight:700;font-size:11px;padding:2px 8px;border-radius:10px">
+                "${p.alias.join('", "')}"
+              </span>
+            ` : ''}
+          </div>
+
+          <div style="display:flex;align-items:center;gap:10px;margin-top:6px;flex-wrap:wrap;font-size:12px;color:var(--text-secondary)">
+            <span><strong>DNI:</strong> ${p.dni || 'Sin registrar'}</span>
+            ${p.cuit ? `<span>• <strong>CUIT:</strong> ${p.cuit}</span>` : ''}
+            ${p.fecha_nacimiento ? `<span>• <strong>Nacimiento:</strong> ${p.fecha_nacimiento}</span>` : ''}
+            <span>• <strong>Nacionalidad:</strong> ${p.nacionalidad || 'Argentina'}</span>
+          </div>
+
+          <div style="display:flex;align-items:center;gap:8px;margin-top:8px;flex-wrap:wrap">
+            <span style="background:${bandaColor}22;border:1px solid ${bandaColor}66;color:${bandaColor};padding:3px 10px;border-radius:12px;font-size:11px;font-weight:800">
+              🏴 ${p.banda_nombre || 'Individual'}
+            </span>
+            <span style="background:${p.score_peligrosidad >= 8 ? '#EF4444' : '#F59E0B'};color:#fff;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:700">
+              Peligrosidad: ${p.score_peligrosidad || 5}/10
+            </span>
+            <span style="background:rgba(255,255,255,0.06);border:1px solid var(--border-subtle);color:var(--text-primary);padding:2px 8px;border-radius:12px;font-size:11px">
+              ${p.estado_procesal || 'IDENTIFICADO'}
+            </span>
+            ${rolesList.map(r => `<span style="background:rgba(14,165,233,0.12);color:var(--accent-secondary);padding:2px 7px;border-radius:4px;font-size:10px;font-weight:600">⚔️ ${r}</span>`).join('')}
+          </div>
+        </div>
+
+        <div style="display:flex;gap:6px;flex-direction:column;flex-shrink:0" class="dossier-actions-bar">
+          <button class="btn btn-outline btn-xs" onclick="window.centrarPersonaEnMapa('${p.id}'); closeModal('modal-dossier-digital');" style="display:flex;align-items:center;gap:6px;padding:6px 10px">
+            📍 Centrar en Mapa
+          </button>
+          <button class="btn btn-outline btn-xs" onclick="window.enfocarPersonaEnGrafo('${p.id}'); closeModal('modal-dossier-digital');" style="display:flex;align-items:center;gap:6px;padding:6px 10px">
+            🕸️ Ver en Red de Vínculos
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- SECCIÓN 1: FICHA E IDENTIDAD GENERAL -->
+    <div class="dossier-content-section" id="dossier-tab-general">
+      <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(320px, 1fr));gap:14px;margin-bottom:16px">
+        <div style="background:var(--bg-tertiary);border:1px solid var(--border-default);border-radius:8px;padding:14px">
+          <div class="dossier-section-title">Datos Personales y Registro</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;font-size:12px">
+            <div><span style="color:var(--text-muted);display:block;font-size:10px">NOMBRES Y APELLIDOS</span><strong>${p.nombre || '—'} ${p.apellido || ''}</strong></div>
+            <div><span style="color:var(--text-muted);display:block;font-size:10px">DOCUMENTO NACIONAL</span><strong>${p.dni || '—'}</strong></div>
+            <div><span style="color:var(--text-muted);display:block;font-size:10px">CLAVE FISCAL (CUIT/CUIL)</span><strong>${p.cuit || '—'}</strong></div>
+            <div><span style="color:var(--text-muted);display:block;font-size:10px">FECHA DE NACIMIENTO</span><strong>${p.fecha_nacimiento || '—'}</strong></div>
+            <div><span style="color:var(--text-muted);display:block;font-size:10px">SEXO REGISTRADO</span><strong>${p.sexo === 'M' ? 'Masculino' : p.sexo === 'F' ? 'Femenino' : 'Otro'}</strong></div>
+            <div><span style="color:var(--text-muted);display:block;font-size:10px">NACIONALIDAD</span><strong>${p.nacionalidad || 'Argentina'}</strong></div>
+          </div>
+        </div>
+
+        <div style="background:var(--bg-tertiary);border:1px solid var(--border-default);border-radius:8px;padding:14px">
+          <div class="dossier-section-title">Síntesis Operativa y Territorial</div>
+          <div style="display:flex;flex-direction:column;gap:8px;font-size:12px">
+            <div>
+              <span style="color:var(--text-muted);display:block;font-size:10px">DOMICILIO PRINCIPAL DE RESIDENCIA</span>
+              <strong>📍 ${p.domicilio_principal || 'Sin domicilio principal registrado'}</strong>
+            </div>
+            <div>
+              <span style="color:var(--text-muted);display:block;font-size:10px">ORGANIZACIÓN DE PERTENENCIA</span>
+              <strong style="color:${bandaColor}">🏴 ${p.banda_nombre || 'Individual'}</strong>
+            </div>
+            <div>
+              <span style="color:var(--text-muted);display:block;font-size:10px">ROLES Y CAPACIDAD OPERATIVA</span>
+              <span>${rolesList.join(', ') || 'No categorizado'}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div style="background:var(--bg-tertiary);border:1px solid var(--border-default);border-radius:8px;padding:14px;margin-bottom:14px">
+        <div class="dossier-section-title">Resumen de Inteligencia Criminal</div>
+        <div style="font-size:12px;color:var(--text-secondary);line-height:1.5;white-space:pre-wrap">
+          ${p.antecedentes_texto || 'No se registraron observaciones de antecedentes para este perfil.'}
+        </div>
+      </div>
+    </div>
+
+    <!-- SECCIÓN 2: DOCUMENTOS Y ADJUNTOS (.pdf, .doc, .docx, imágenes) -->
+    <div class="dossier-content-section hidden" id="dossier-tab-adjuntos">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+        <div style="font-size:13px;font-weight:700;color:#fff">Documentación, Actas y Peritajes Incorporados al Dossier (${archivos.length})</div>
+        <button type="button" class="btn btn-secondary btn-xs" onclick="closeModal('modal-dossier-digital'); window.abrirEdicionPersona('${p.id}'); setTimeout(() => document.querySelector('[data-form-tab=tab-f-adjuntos]')?.click(), 150);">
+          + Adjuntar Archivos
+        </button>
+      </div>
+
+      ${archivos.length === 0 ? `
+        <div style="text-align:center;padding:32px;background:rgba(255,255,255,0.015);border:1px dashed rgba(255,255,255,0.15);border-radius:8px">
+          <div style="font-size:28px;margin-bottom:6px">📎</div>
+          <div style="font-size:13px;font-weight:700;color:#fff">Sin archivos incorporados</div>
+          <div style="font-size:11px;color:var(--text-muted);margin-top:4px">Puede incorporar actas de allanamiento, informes periciales, oficios o fotografías en formato PDF, DOC, DOCX o imágenes.</div>
+        </div>
+      ` : `
+        <div class="file-attachments-list">
+          ${archivos.map((f, i) => {
+            const ext = (f.nombre || '').split('.').pop().toLowerCase();
+            let bClass = 'file-icon-doc';
+            let bText = 'DOC';
+            if (ext === 'pdf') { bClass = 'file-icon-pdf'; bText = 'PDF'; }
+            else if (['jpg', 'jpeg', 'png', 'webp', 'gif'].includes(ext)) { bClass = 'file-icon-img'; bText = 'IMG'; }
+            else if (['doc', 'docx'].includes(ext)) { bClass = 'file-icon-doc'; bText = 'DOC'; }
+
+            return `
+              <div class="file-attachment-card">
+                <span class="file-icon-badge ${bClass}">${bText}</span>
+                <div class="file-info-col">
+                  <div class="file-name-text" title="${f.nombre}">${f.nombre}</div>
+                  <div class="file-meta-text">${f.tamano || 'Archivo'} ${f.fecha_subida ? `• ${f.fecha_subida.split('T')[0]}` : ''}</div>
+                </div>
+                ${f.data_url ? `
+                  <button type="button" class="btn btn-primary btn-xs btn-dossier-file-open" data-idx="${i}" style="font-size:11px;padding:4px 8px">
+                    ${ext === 'pdf' || ['jpg', 'jpeg', 'png', 'webp'].includes(ext) ? 'Abrir ↗' : 'Descargar ⤓'}
+                  </button>
+                ` : `
+                  <span style="font-size:10px;color:var(--text-muted)">Adjunto</span>
+                `}
+              </div>
+            `;
+          }).join('')}
+        </div>
+      `}
+    </div>
+
+    <!-- SECCIÓN 3: DOMICILIOS GEORREFERENCIADOS -->
+    <div class="dossier-content-section hidden" id="dossier-tab-domicilios">
+      <div style="font-size:13px;font-weight:700;color:#fff;margin-bottom:12px">
+        Inmuebles, Asentamientos y Puntos Territoriales Vinculados (${domicilios.length})
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:10px">
+        ${domicilios.map(d => {
+          let badgeColor = '#0EA5E9';
+          let badgeText = 'REAL / PRINCIPAL';
+          const t = (d.tipo || '').toUpperCase();
+          if (t === 'LEGAL') { badgeColor = '#8B5CF6'; badgeText = 'LEGAL / REGISTRADO'; }
+          else if (t === 'AGUANTADERO') { badgeColor = '#EF4444'; badgeText = 'AGUANTADERO / OCULTAMIENTO'; }
+          else if (t === 'DISTRIBUCION') { badgeColor = '#F59E0B'; badgeText = 'PUNTO DE DISTRIBUCIÓN / VENTA'; }
+
+          const coords = parseGeom(d.geom);
+
+          return `
+            <div style="background:var(--bg-tertiary);border:1px solid var(--border-default);border-radius:8px;padding:12px 14px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
+              <div style="display:flex;align-items:flex-start;gap:12px">
+                <span style="font-size:22px">📍</span>
+                <div>
+                  <div style="display:flex;align-items:center;gap:8px;margin-bottom:2px">
+                    <span style="background:${badgeColor}22;border:1px solid ${badgeColor}66;color:${badgeColor};font-size:10px;font-weight:800;padding:1px 6px;border-radius:4px">
+                      ${badgeText}
+                    </span>
+                    <strong style="color:#fff;font-size:13px">${d.direccion || 'Sin dirección especificada'}</strong>
+                  </div>
+                  <div style="font-size:11px;color:var(--text-secondary)">
+                    ${d.barrio ? `Barrio: ${d.barrio} | ` : ''} Santa Fe ${d.detalle ? `• ${d.detalle}` : ''}
+                  </div>
+                </div>
+              </div>
+
+              ${coords ? `
+                <button type="button" class="btn btn-secondary btn-xs" onclick="window.centrarCoordenadasMapa(${coords.lng}, ${coords.lat}, '${(d.direccion || '').replace(/'/g, "\\'")}'); closeModal('modal-dossier-digital');" style="font-size:10px;padding:4px 8px;white-space:nowrap">
+                  🗺️ Ver en Mapa
+                </button>
+              ` : `
+                <span style="font-size:10px;color:var(--text-muted)">Pendiente geocodificación</span>
+              `}
+            </div>
+          `;
+        }).join('')}
+      </div>
+    </div>
+
+    <!-- SECCIÓN 4: CAUSAS Y PROCESOS CUIJ -->
+    <div class="dossier-content-section hidden" id="dossier-tab-causas">
+      <div style="font-size:13px;font-weight:700;color:#fff;margin-bottom:12px">
+        Investigaciones Penales Preparatorias y Causas CUIJ (${causas.length})
+      </div>
+
+      ${causas.length === 0 ? `
+        <div style="text-align:center;padding:24px;background:rgba(255,255,255,0.015);border:1px dashed rgba(255,255,255,0.15);border-radius:8px;color:var(--text-muted);font-size:12px">
+          No registra causas CUIJ vinculadas en el sistema.
+        </div>
+      ` : `
+        <div style="display:flex;flex-direction:column;gap:10px">
+          ${causas.map(c => `
+            <div style="background:var(--bg-tertiary);border:1px solid var(--border-default);border-radius:8px;padding:12px 14px">
+              <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px">
+                <span style="font-family:var(--font-mono);color:var(--accent-primary);font-weight:800;font-size:12px">
+                  ⚖️ CUIJ: ${c.cuij}
+                </span>
+                <span style="background:rgba(255,255,255,0.06);border:1px solid var(--border-subtle);color:#fff;font-size:10px;font-weight:700;padding:2px 8px;border-radius:4px">
+                  ${c.estado || 'En trámite'}
+                </span>
+              </div>
+              <div style="font-size:13px;font-weight:700;color:#fff;margin-bottom:4px">
+                ${c.caratula}
+              </div>
+              <div style="font-size:11px;color:var(--text-secondary)">
+                <strong>Fiscalía / Órgano:</strong> ${c.organo || 'Ministerio Público de la Acusación'}
+              </div>
+            </div>
+          `).join('')}
+        </div>
+      `}
+    </div>
+
+    <!-- SECCIÓN 5: PARQUE AUTOMOTOR / VEHÍCULOS -->
+    <div class="dossier-content-section hidden" id="dossier-tab-vehiculos">
+      <div style="font-size:13px;font-weight:700;color:#fff;margin-bottom:12px">
+        Parque Automotor y Rodados Detectados (${vehiculos.length})
+      </div>
+
+      ${vehiculos.length === 0 ? `
+        <div style="text-align:center;padding:24px;background:rgba(255,255,255,0.015);border:1px dashed rgba(255,255,255,0.15);border-radius:8px;color:var(--text-muted);font-size:12px">
+          No registra vehículos asociados en este legajo.
+        </div>
+      ` : `
+        <div style="display:grid;grid-template-columns:repeat(auto-fill, minmax(280px, 1fr));gap:12px">
+          ${vehiculos.map(v => `
+            <div style="background:var(--bg-tertiary);border:1px solid var(--border-default);border-radius:8px;padding:12px">
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+                <span style="font-family:var(--font-mono);font-size:13px;font-weight:900;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.2);padding:2px 8px;border-radius:4px;color:#fff">
+                  ${v.patente}
+                </span>
+                <span style="font-size:11px;color:var(--text-muted)">${v.tipo || 'Rodado'}</span>
+              </div>
+              <div style="font-size:13px;font-weight:700;color:#fff;margin-bottom:2px">
+                ${v.modelo}
+              </div>
+              <div style="font-size:11px;color:var(--text-secondary);margin-bottom:4px">
+                Color: ${v.color || 'No especificado'} • Titular: <strong>${v.titular || 'Sin titular registrado'}</strong>
+              </div>
+              ${v.rol ? `
+                <div style="font-size:10px;color:var(--accent-secondary);background:rgba(14,165,233,0.08);padding:3px 6px;border-radius:4px;margin-top:4px">
+                  Uso operativo: ${v.rol}
+                </div>
+              ` : ''}
+            </div>
+          `).join('')}
+        </div>
+      `}
+    </div>
+
+    <!-- SECCIÓN 6: RED FAMILIAR Y VÍNCULOS DIRECTOS -->
+    <div class="dossier-content-section hidden" id="dossier-tab-familia">
+      <div style="font-size:13px;font-weight:700;color:#fff;margin-bottom:12px">
+        Red de Parentesco y Convivencia (${familiares.length})
+      </div>
+
+      ${familiares.length === 0 ? `
+        <div style="text-align:center;padding:24px;background:rgba(255,255,255,0.015);border:1px dashed rgba(255,255,255,0.15);border-radius:8px;color:var(--text-muted);font-size:12px">
+          No se registraron vínculos familiares directos en este perfil.
+        </div>
+      ` : `
+        <div style="display:grid;grid-template-columns:repeat(auto-fill, minmax(280px, 1fr));gap:12px">
+          ${familiares.map(fam => `
+            <div style="background:var(--bg-tertiary);border:1px solid var(--border-default);border-radius:8px;padding:12px">
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+                <strong style="color:#fff;font-size:13px">${fam.nombre}</strong>
+                <span style="background:rgba(245,158,11,0.15);border:1px solid rgba(245,158,11,0.3);color:#FDE68A;font-size:10px;font-weight:700;padding:1px 6px;border-radius:4px">
+                  ${fam.parentesco}
+                </span>
+              </div>
+              ${fam.dni ? `<div style="font-size:11px;color:var(--text-secondary);margin-bottom:4px">DNI: ${fam.dni}</div>` : ''}
+              ${fam.observacion ? `
+                <div style="font-size:11px;color:var(--text-muted);line-height:1.3;margin-top:6px;border-top:1px solid var(--border-subtle);padding-top:4px">
+                  ${fam.observacion}
+                </div>
+              ` : ''}
+            </div>
+          `).join('')}
+        </div>
+      `}
+    </div>
+
+    <!-- SECCIÓN 7: PERFIL FINANCIERO Y SITUACIÓN CREDITICIA -->
+    <div class="dossier-content-section hidden" id="dossier-tab-financiero">
+      <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(320px, 1fr));gap:14px;margin-bottom:14px">
+        <div style="background:var(--bg-tertiary);border:1px solid var(--border-default);border-radius:8px;padding:14px">
+          <div class="dossier-section-title">Central de Deudores BCRA</div>
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+            <span style="font-size:24px;font-weight:900;color:${sc.bcra_situacion >= 4 ? '#EF4444' : sc.bcra_situacion >= 2 ? '#F59E0B' : '#22C55E'}">
+              ${sc.bcra_situacion ? `Situación ${sc.bcra_situacion}` : 'Sin datos'}
+            </span>
+          </div>
+          <div style="font-size:11px;color:var(--text-secondary);margin-bottom:6px">
+            <strong>Entidades Informantes:</strong> ${sc.entidades || 'No informadas'}
+          </div>
+          <div style="font-size:11px;color:var(--text-secondary)">
+            <strong>Deuda Registrada Estimada:</strong> ${sc.monto_deuda || 'Sin registros de deuda formal'}
+          </div>
+        </div>
+
+        <div style="background:var(--bg-tertiary);border:1px solid var(--border-default);border-radius:8px;padding:14px">
+          <div class="dossier-section-title">Condición Fiscal AFIP / ARCA</div>
+          <div style="font-size:13px;font-weight:700;color:#fff;margin-bottom:6px">
+            ${sc.arca_condicion || 'Sin categorización fiscal registrada'}
+          </div>
+          <div style="font-size:11px;color:var(--text-muted)">
+            Cruce de bases tributarias y aportes patronales en jurisdicción provincial y nacional.
+          </div>
+        </div>
+      </div>
+
+      <div style="background:var(--bg-tertiary);border:1px solid var(--border-default);border-radius:8px;padding:14px">
+        <div class="dossier-section-title">Evaluación de Inconsistencias Patrimoniales</div>
+        <div style="font-size:12px;color:var(--text-secondary);line-height:1.5;white-space:pre-wrap">
+          ${sc.inconsistencia_patrimonial || 'No se registraron alertas de inconsistencia patrimonial.'}
+        </div>
+      </div>
+    </div>
+
+    <!-- SECCIÓN 8: INTELIGENCIA CRIMINAL -->
+    <div class="dossier-content-section hidden" id="dossier-tab-inteligencia">
+      <div style="background:var(--bg-tertiary);border:1px solid var(--border-default);border-radius:8px;padding:14px;margin-bottom:14px">
+        <div class="dossier-section-title">Perfilación Territorial e Inteligencia Criminal</div>
+        <div style="font-size:12px;color:var(--text-secondary);line-height:1.6;white-space:pre-wrap">
+          ${p.antecedentes_texto || 'Sin notas de inteligencia operativa adicionales.'}
+        </div>
+      </div>
+    </div>
+  `;
+
+  // Apertura de archivos adjuntos desde el visor
+  container.querySelectorAll('.btn-dossier-file-open').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const idx = parseInt(btn.dataset.idx);
+      const file = archivos[idx];
+      if (file?.data_url) {
+        if (file.tipo?.includes('pdf') || file.tipo?.includes('image')) {
+          const w = window.open('');
+          w.document.write(`<iframe src="${file.data_url}" frameborder="0" style="border:0; top:0px; left:0px; bottom:0px; right:0px; width:100%; height:100%;" allowfullscreen></iframe>`);
+        } else {
+          const a = document.createElement('a');
+          a.href = file.data_url;
+          a.download = file.nombre;
+          a.click();
+        }
+      }
+    });
+  });
+}
+
+// Global exposure for printing / PDF export of dossier
+window.imprimirDossierDigital = async function(personaId) {
+  if (!personaId && currentViewingDossierId) personaId = currentViewingDossierId;
+  if (!personaId) return;
+
+  await window.abrirDossierDigital(personaId);
+  // Mostrar todas las secciones simultáneamente para impresión
+  document.querySelectorAll('.dossier-content-section').forEach(s => s.classList.remove('hidden'));
+  window.print();
+  // Restaurar pestaña activa tras imprimir
+  const activeTabBtn = document.querySelector('#dossier-view-tabs .dossier-tab-btn.active');
+  const targetId = activeTabBtn ? activeTabBtn.dataset.dossierTab : 'dossier-tab-general';
+  document.querySelectorAll('.dossier-content-section').forEach(s => s.classList.add('hidden'));
+  document.getElementById(targetId)?.classList.remove('hidden');
+};
+
+// Global exposure for centering arbitrary coordinates on map
+window.centrarCoordenadasMapa = function(lng, lat, label) {
+  const navMap = document.querySelector('[data-view=mapa]');
+  if (navMap) navMap.click();
+  setTimeout(() => {
+    flyTo(lng, lat, 17, 45);
+  }, 150);
 };
 
 // Global exposure for centering persona on Mapbox with 3D perspective
@@ -2022,6 +3153,11 @@ async function generarInformeCriminalCuantitativo() {
 // ENTITY DETAIL (Modal)
 // ============================================================
 async function showEntityDetail(type, id) {
+  if (type === 'persona') {
+    window.abrirDossierDigital(id);
+    return;
+  }
+
   const titulo = document.getElementById('detalle-titulo');
   const contenido = document.getElementById('detalle-contenido');
   if (!titulo || !contenido) return;
@@ -2030,86 +3166,7 @@ async function showEntityDetail(type, id) {
   contenido.innerHTML = '<div style="text-align:center;padding:32px"><div class="spinner"></div></div>';
 
   try {
-    if (type === 'persona') {
-      const p = await getPersonaById(id);
-      if (!p) throw new Error('No se encontró el registro de la persona.');
-
-      const isCaptura = p.pedido_captura;
-      titulo.innerHTML = `
-        <div style="display:flex;align-items:center;gap:8px;">
-          <span>${p.nombre || ''} ${p.apellido || ''}</span>
-          ${isCaptura ? '<span class="tag" style="background:#DC2626;color:#fff;font-size:10px;font-weight:800;">🚨 PEDIDO DE CAPTURA</span>' : ''}
-        </div>
-      `;
-
-      contenido.innerHTML = `
-        <div style="display:grid;gap:16px">
-          ${isCaptura ? `
-            <div style="background:rgba(239,68,68,0.15);border:1px solid #EF4444;border-radius:8px;padding:12px 16px;color:#FCA5A5;font-weight:700;display:flex;align-items:center;gap:10px;">
-              <span style="font-size:20px;">🚨</span>
-              <div>
-                <div style="color:#FFF;font-size:13px;font-weight:800;">ORDEN JUDICIAL DE CAPTURA ACTIVA</div>
-                <div style="font-size:11px;opacity:0.9;font-weight:400;">Requerido en causa judicial. Notificar de inmediato al Ministerio Público de la Acusación / Brigada de Capturas.</div>
-              </div>
-            </div>
-          ` : ''}
-
-          <div class="form-section-title">Identidad y Estructura</div>
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;font-size:13px">
-            <div><span style="color:var(--text-muted);display:block;font-size:11px;margin-bottom:2px">NOMBRE COMPLETO</span><strong>${p.nombre || '—'} ${p.apellido || ''}</strong></div>
-            <div><span style="color:var(--text-muted);display:block;font-size:11px;margin-bottom:2px">DNI / CUIT</span>${p.dni || '—'} ${p.cuit ? `| CUIT: ${p.cuit}` : ''}</div>
-            <div><span style="color:var(--text-muted);display:block;font-size:11px;margin-bottom:2px">ALIAS CONOCIDO</span>${p.alias?.join(', ') || '—'}</div>
-            <div><span style="color:var(--text-muted);display:block;font-size:11px;margin-bottom:2px">FECHA DE NACIMIENTO</span>${p.fecha_nacimiento || '—'}</div>
-            <div><span style="color:var(--text-muted);display:block;font-size:11px;margin-bottom:2px">ORGANIZACIÓN / BANDA</span><strong style="color:${p.banda_color || '#0EA5E9'}">🏴 ${p.banda_nombre || 'Individual'}</strong></div>
-            <div><span style="color:var(--text-muted);display:block;font-size:11px;margin-bottom:2px">ESTADO PROCESAL</span><span class="tag ${isCaptura ? 'peligrosidad-alta' : 'peligrosidad-baja'}">${p.estado_judicial || (isCaptura ? 'CAPTURA ACTIVA' : 'IDENTIFICADO')}</span></div>
-          </div>
-
-          <!-- SECCIÓN EXPEDIENTE / DOSSIER JUDICIAL DIGITAL -->
-          <div class="form-section-title" style="display:flex;align-items:center;justify-content:space-between">
-            <span>Dossier Judicial Digital (Google Drive / Docs)</span>
-            ${p.link_dossier ? '<span style="color:#22C55E;font-size:11px;font-weight:700">● Vinculado</span>' : '<span style="color:#EAB308;font-size:11px">Pendiente</span>'}
-          </div>
-          ${p.link_dossier ? `
-            <div style="background:rgba(37,99,235,0.1);border:1px solid rgba(59,130,246,0.4);border-radius:8px;padding:12px 14px;display:flex;align-items:center;justify-content:space-between;gap:12px">
-              <div>
-                <div style="color:#FFF;font-weight:700;font-size:13px;display:flex;align-items:center;gap:6px">
-                  <span>📄 Expediente & Dossier Oficial en la Nube</span>
-                </div>
-                <div style="color:#94A3B8;font-size:11px;margin-top:2px;word-break:break-all">
-                  ${p.link_dossier}
-                </div>
-              </div>
-              <a href="${p.link_dossier}" target="_blank" rel="noopener noreferrer" class="btn btn-primary btn-sm" style="white-space:nowrap;padding:7px 14px;font-weight:800;box-shadow:0 2px 10px rgba(37,99,235,0.4);text-decoration:none">
-                Abrir en Drive ↗
-              </a>
-            </div>
-          ` : `
-            <div style="background:rgba(255,255,255,0.02);border:1px dashed rgba(255,255,255,0.15);border-radius:8px;padding:10px 14px;display:flex;align-items:center;justify-content:space-between">
-              <span style="color:var(--text-muted);font-size:12px">No posee enlace de Google Drive / Docs asociado aún.</span>
-              <button class="btn btn-outline btn-xs" onclick="document.getElementById('modal-detalle').classList.add('hidden'); window.abrirEdicionPersona('${p.id}');">
-                + Asociar Dossier
-              </button>
-            </div>
-          `}
-
-          <div class="form-section-title">Análisis de Inteligencia Criminal</div>
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;font-size:13px">
-            <div><span style="color:var(--text-muted);display:block;font-size:11px;margin-bottom:2px">NIVEL DE PELIGROSIDAD</span><span style="font-size:20px;font-weight:800;font-family:var(--font-mono);color:${(p.score_peligrosidad || 0) >= 7 ? 'var(--accent-danger)' : 'var(--accent-primary)'}">${p.score_peligrosidad || 5}/10</span></div>
-            <div><span style="color:var(--text-muted);display:block;font-size:11px;margin-bottom:2px">ROLES EN LA RED</span>${p.roles?.join(', ') || '—'}</div>
-          </div>
-          <div><span style="color:var(--text-muted);display:block;font-size:11px;margin-bottom:2px">DOMICILIO CONOCIDO / BASE</span><span style="font-size:13px">${p.domicilio_principal || '—'}</span></div>
-          ${p.cuij_asociados?.length ? `<div><span style="color:var(--text-muted);display:block;font-size:11px;margin-bottom:2px">CAUSAS CUIJ EN TRÁMITE</span><div style="font-family:var(--font-mono);color:var(--accent-primary);font-size:12px;">${p.cuij_asociados.join(' | ')}</div></div>` : ''}
-          ${p.antecedentes_texto ? `<div><span style="color:var(--text-muted);display:block;font-size:11px;margin-bottom:2px">ANTECEDENTES E HISTORIAL</span><div style="font-size:13px;color:var(--text-secondary);max-height:200px;overflow-y:auto;padding:8px;background:var(--bg-primary);border-radius:8px">${p.antecedentes_texto}</div></div>` : ''}
-
-          <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
-            <button class="btn btn-outline btn-sm" onclick="document.getElementById('modal-detalle').classList.add('hidden'); window.abrirEdicionPersona('${p.id}');">✏️ Editar Perfil</button>
-            <button class="btn btn-primary btn-sm" onclick="document.getElementById('modal-detalle').classList.add('hidden'); window.enfocarPersonaEnGrafo('${p.id}');">🕸️ Ver en Red de Vínculos</button>
-            <button class="btn btn-secondary btn-sm" onclick="document.getElementById('modal-detalle').classList.add('hidden'); window.analizarEntornoDePersona('${p.id}');">📍 Analizar Entorno de Domicilio</button>
-            ${p.domicilio_principal_geom ? `<button class="btn btn-outline btn-sm" onclick="document.getElementById('modal-detalle').classList.add('hidden'); window.centrarPersonaEnMapa('${p.id}');">🗺️ Centrar Mapa</button>` : ''}
-          </div>
-        </div>
-      `;
-    } else if (type === 'banda') {
+    if (type === 'banda') {
       const b = await getBandaById(id);
       if (!b) throw new Error('No se encontró el registro de la banda.');
 
@@ -2121,7 +3178,7 @@ async function showEntityDetail(type, id) {
             <div><span style="color:var(--text-muted);display:block;font-size:11px">ESTADO</span><span class="tag ${b.activa ? 'peligrosidad-alta' : 'peligrosidad-baja'}">${b.activa ? 'ACTIVA' : 'INACTIVA'}</span></div>
           </div>
           <div><span style="color:var(--text-muted);display:block;font-size:11px">MODUS OPERANDI / ACTIVIDADES</span><div style="font-size:13px;margin-top:4px">${b.actividad_principal || '—'}</div></div>
-          <div><span style="color:var(--text-muted);display:block;font-size:11px">INTELIGENCIA TÁCTICA</span><div style="font-size:13px;margin-top:4px;color:var(--text-secondary)">${b.descripcion || 'Sin observaciones registradas.'}</div></div>
+          <div><span style="color:var(--text-muted);display:block;font-size:11px">INFORMACIÓN OPERATIVA</span><div style="font-size:13px;margin-top:4px;color:var(--text-secondary)">${b.descripcion || 'Sin observaciones registradas.'}</div></div>
           <div style="display:flex;gap:8px;margin-top:8px">
             <button class="btn btn-accent btn-sm" onclick="document.getElementById('modal-detalle').classList.add('hidden');document.querySelector('[data-view=grafo]').click();">Ver Red de Vínculos</button>
           </div>
