@@ -140,7 +140,86 @@ function setupSources() {
   });
 }
 
+/**
+ * Genera el icono de silueta de integrante con contraste y badge de captura opcional.
+ * Diseñado en alta resolución (64x64 @2x) para nitidez Retina en Mapbox.
+ */
+function createPersonaIconImage(isCaptura = false) {
+  const size = 64;
+  const canvas = document.createElement('canvas');
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext('2d');
+
+  ctx.clearRect(0, 0, size, size);
+
+  // Sombra de contraste para destacar sobre cualquier color de banda o mapa base
+  ctx.shadowColor = 'rgba(0, 0, 0, 0.85)';
+  ctx.shadowBlur = 4;
+  ctx.shadowOffsetX = 0;
+  ctx.shadowOffsetY = 1;
+
+  ctx.fillStyle = '#FFFFFF';
+
+  // Cabeza / Rostro
+  ctx.beginPath();
+  ctx.arc(32, 21, 9.5, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Torso / Hombros estilizados
+  ctx.beginPath();
+  ctx.moveTo(13, 53);
+  ctx.quadraticCurveTo(14, 37, 24, 34);
+  ctx.quadraticCurveTo(32, 38, 40, 34);
+  ctx.quadraticCurveTo(50, 37, 51, 53);
+  ctx.closePath();
+  ctx.fill();
+
+  // Si tiene Pedido de Captura Activo: insignia de alerta roja en esquina superior derecha
+  if (isCaptura) {
+    ctx.shadowBlur = 4;
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.8)';
+
+    // Círculo rojo de alerta
+    ctx.fillStyle = '#EF4444';
+    ctx.beginPath();
+    ctx.arc(49, 15, 10, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Borde blanco del badge
+    ctx.strokeStyle = '#FFFFFF';
+    ctx.lineWidth = 1.8;
+    ctx.stroke();
+
+    // Signo de exclamación blanco
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = '#FFFFFF';
+    ctx.font = '900 13px system-ui, -apple-system, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('!', 49, 15);
+  }
+
+  return ctx.getImageData(0, 0, size, size);
+}
+
+function registerPersonaIcons(mapInstance) {
+  if (!mapInstance) return;
+  try {
+    if (!mapInstance.hasImage('icon-persona-default')) {
+      mapInstance.addImage('icon-persona-default', createPersonaIconImage(false), { pixelRatio: 2 });
+    }
+    if (!mapInstance.hasImage('icon-persona-captura')) {
+      mapInstance.addImage('icon-persona-captura', createPersonaIconImage(true), { pixelRatio: 2 });
+    }
+  } catch (e) {
+    console.warn('Error registrando iconos en Mapbox:', e);
+  }
+}
+
 function setupLayers() {
+  registerPersonaIcons(map);
+
   // --- Heatmap Layer ---
   map.addLayer({
     id: 'hechos-heatmap',
@@ -394,9 +473,9 @@ function setupLayers() {
     filter: ['has', 'point_count'],
     layout: {
       visibility: 'visible',
-      'text-field': '👤 {point_count}',
+      'text-field': '{point_count}',
       'text-font': ['DIN Pro Bold', 'Arial Unicode MS Bold'],
-      'text-size': 11,
+      'text-size': 12,
     },
     paint: { 'text-color': '#FFFFFF' },
   });
@@ -412,8 +491,8 @@ function setupLayers() {
       'circle-radius': [
         'interpolate', ['linear'], ['zoom'],
         10, 14,
-        14, 18,
-        17, 26
+        14, 19,
+        17, 28
       ],
       'circle-color': 'rgba(239, 68, 68, 0.28)',
       'circle-stroke-color': '#EF4444',
@@ -431,23 +510,46 @@ function setupLayers() {
     paint: {
       'circle-color': ['coalesce', ['get', 'banda_color'], '#0EA5E9'],
       'circle-radius': [
-        'interpolate', ['linear'], ['coalesce', ['get', 'score_peligrosidad'], 5],
-        1, 6.5,
-        5, 8.5,
-        8, 11,
-        10, 13
+        'interpolate', ['linear'], ['zoom'],
+        10, ['interpolate', ['linear'], ['coalesce', ['get', 'score_peligrosidad'], 5], 1, 9, 5, 11, 10, 14],
+        15, ['interpolate', ['linear'], ['coalesce', ['get', 'score_peligrosidad'], 5], 1, 12, 5, 15, 10, 19]
       ],
       'circle-stroke-width': [
         'case',
-        ['get', 'pedido_captura'], 3.5,
-        2
+        ['get', 'pedido_captura'], 3.2,
+        2.2
       ],
       'circle-stroke-color': [
         'case',
         ['get', 'pedido_captura'], '#EF4444',
         '#FFFFFF'
       ],
-      'circle-opacity': 0.95,
+      'circle-opacity': 0.98,
+    },
+  });
+
+  // Capa con icono de silueta para identificar integrantes de bandas a primera vista
+  map.addLayer({
+    id: 'personas-bandas-icon',
+    type: 'symbol',
+    source: 'personas-bandas',
+    filter: ['!', ['has', 'point_count']],
+    layout: {
+      visibility: 'visible',
+      'icon-image': [
+        'case',
+        ['==', ['get', 'pedido_captura'], true], 'icon-persona-captura',
+        'icon-persona-default'
+      ],
+      'icon-size': [
+        'interpolate', ['linear'], ['zoom'],
+        10, 0.65,
+        14, 0.85,
+        17, 1.15
+      ],
+      'icon-allow-overlap': true,
+      'icon-ignore-placement': true,
+      'icon-anchor': 'center',
     },
   });
 
@@ -467,7 +569,7 @@ function setupLayers() {
       ],
       'text-font': ['DIN Pro Medium', 'Arial Unicode MS Regular'],
       'text-size': 11,
-      'text-offset': [0, 1.3],
+      'text-offset': [0, 1.5],
       'text-anchor': 'top',
       'text-allow-overlap': false,
     },
@@ -608,8 +710,8 @@ function setupInteractions() {
     popup.setLngLat(coords).setHTML(html).addTo(map);
   });
 
-  // Click on integrante de banda (domicilio)
-  map.on('click', 'personas-bandas-points', (e) => {
+  // Click on integrante de banda (domicilio o icono)
+  const handlePersonaPointClick = (e) => {
     const props = e.features[0].properties;
     const coords = e.features[0].geometry.coordinates.slice();
     const isCaptura = props.pedido_captura === true || props.pedido_captura === 'true';
@@ -690,7 +792,10 @@ function setupInteractions() {
         if (id && window.abrirEdicionPersona) window.abrirEdicionPersona(id);
       });
     }, 50);
-  });
+  };
+
+  map.on('click', 'personas-bandas-points', handlePersonaPointClick);
+  map.on('click', 'personas-bandas-icon', handlePersonaPointClick);
 
   // Click on persona banda cluster → zoom in
   map.on('click', 'personas-bandas-clusters', (e) => {
@@ -729,7 +834,7 @@ function setupInteractions() {
   });
 
   // Cursor styles
-  ['unclustered-point', 'clusters', 'allanamientos-points', 'zonas-fill', 'personas-bandas-points', 'personas-bandas-clusters'].forEach(layer => {
+  ['unclustered-point', 'clusters', 'allanamientos-points', 'zonas-fill', 'personas-bandas-points', 'personas-bandas-icon', 'personas-bandas-clusters'].forEach(layer => {
     map.on('mouseenter', layer, () => { map.getCanvas().style.cursor = 'pointer'; });
     map.on('mouseleave', layer, () => { map.getCanvas().style.cursor = ''; });
   });
@@ -1021,6 +1126,7 @@ export function toggleLayer(layerId, visible) {
     case 'personas-bandas':
       map.setLayoutProperty('personas-bandas-captura-halo', 'visibility', vis);
       map.setLayoutProperty('personas-bandas-points', 'visibility', vis);
+      map.setLayoutProperty('personas-bandas-icon', 'visibility', vis);
       map.setLayoutProperty('personas-bandas-clusters', 'visibility', vis);
       map.setLayoutProperty('personas-bandas-cluster-count', 'visibility', vis);
       map.setLayoutProperty('personas-bandas-label', 'visibility', vis);
