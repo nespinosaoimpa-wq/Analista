@@ -20,6 +20,39 @@ try {
   console.warn('Supabase client init fallback:', e);
 }
 
+// Hydrate from localStorage for offline/client-side persistence of new investigations
+function hydrateCustomStore(key, targetList) {
+  try {
+    const raw = typeof localStorage !== 'undefined' ? localStorage.getItem(`crimint_custom_${key}`) : null;
+    if (raw) {
+      const items = JSON.parse(raw);
+      if (Array.isArray(items)) {
+        items.forEach(it => {
+          if (!targetList.some(x => x.id === it.id)) {
+            targetList.unshift(it);
+          }
+        });
+      }
+    }
+  } catch (e) { }
+}
+
+function persistCustomItem(key, item) {
+  try {
+    if (typeof localStorage === 'undefined') return;
+    const raw = localStorage.getItem(`crimint_custom_${key}`);
+    const list = raw ? JSON.parse(raw) : [];
+    list.unshift(item);
+    localStorage.setItem(`crimint_custom_${key}`, JSON.stringify(list));
+  } catch (e) { }
+}
+
+hydrateCustomStore('personas', INITIAL_PERSONAS);
+hydrateCustomStore('bandas', INITIAL_BANDAS);
+hydrateCustomStore('vinculos', INITIAL_VINCULOS);
+hydrateCustomStore('allanamientos', INITIAL_ALLANAMIENTOS);
+hydrateCustomStore('hechos', INITIAL_HECHOS);
+
 export default supabase;
 
 // ============================================================
@@ -72,6 +105,7 @@ export async function insertHecho(hecho) {
   // Local fallback insert
   const item = { ...hecho, id: `local-hecho-${Date.now()}` };
   INITIAL_HECHOS.unshift(item);
+  persistCustomItem('hechos', item);
   return item;
 }
 
@@ -167,6 +201,7 @@ export async function insertPersona(persona) {
 
   const p = { ...persona, id: `local-persona-${Date.now()}` };
   INITIAL_PERSONAS.unshift(p);
+  persistCustomItem('personas', p);
   return p;
 }
 
@@ -219,6 +254,7 @@ export async function insertBanda(banda) {
 
   const b = { ...banda, id: `local-banda-${Date.now()}` };
   INITIAL_BANDAS.unshift(b);
+  persistCustomItem('bandas', b);
   return b;
 }
 
@@ -264,7 +300,12 @@ export async function insertVinculo(vinculo) {
 
   const v = { ...vinculo, id: `local-vinculo-${Date.now()}` };
   INITIAL_VINCULOS.unshift(v);
+  persistCustomItem('vinculos', v);
   return v;
+}
+
+export async function getAllVinculos() {
+  return [...INITIAL_VINCULOS];
 }
 
 // ============================================================
@@ -306,6 +347,7 @@ export async function insertAllanamiento(all) {
 
   const item = { ...all, id: `local-allanamiento-${Date.now()}` };
   INITIAL_ALLANAMIENTOS.unshift(item);
+  persistCustomItem('allanamientos', item);
   return item;
 }
 

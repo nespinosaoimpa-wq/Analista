@@ -42,17 +42,22 @@
     </div>
     <div class="header-right">
       <div class="header-stats" id="header-stats">
-        <div class="stat-chip" id="stat-hechos">
+        <div class="stat-chip" id="stat-hechos" title="Hechos delictivos registrados y analizados">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/></svg>
           <span>0</span>
         </div>
-        <div class="stat-chip" id="stat-personas">
+        <div class="stat-chip" id="stat-personas" title="Personas de interés e imputados judiciales">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
           <span>0</span>
         </div>
-        <div class="stat-chip" id="stat-bandas">
+        <div class="stat-chip" id="stat-bandas" title="Organizaciones criminales activas">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
           <span>0</span>
+        </div>
+        <div class="stat-chip" id="stat-capturas" title="Personas con pedido de captura activo" style="border-color:rgba(239,68,68,0.4);background:rgba(239,68,68,0.12);color:#EF4444;cursor:pointer;" onclick="document.querySelector('[data-view=personas]').click(); setTimeout(() => document.querySelector('[data-filter=captura]')?.click(), 100);">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+          <span style="font-weight:700;">0</span>
+          <span style="font-size:10px;margin-left:3px;opacity:0.9;">Buscados</span>
         </div>
       </div>
       <div class="header-actions">
@@ -131,9 +136,16 @@
             <span id="filter-lesividad-val">1</span>
           </div>
           <div class="filter-group">
-            <label>Tipo</label>
+            <label>Temática</label>
             <select id="filter-tipo" class="filter-select">
-              <option value="">Todos</option>
+              <option value="">Todas las temáticas</option>
+              <option value="microtrafico">💊 Microtráfico y Estupefacientes</option>
+              <option value="armas">💥 Armas y Balaceras</option>
+              <option value="homicidios">🩸 Homicidios y Tentativas</option>
+              <option value="usurpacion">🏚️ Usurpación de Inmuebles</option>
+              <option value="robos">🚨 Robos y Asaltos</option>
+              <option value="violencia">⚠️ Violencia y Conflictos</option>
+              <option value="otros">📋 Otras Incidencias</option>
             </select>
           </div>
           <button class="btn btn-primary btn-sm" id="btn-apply-filters">Aplicar</button>
@@ -161,6 +173,117 @@
         </div>
       </div>
 
+      <!-- Tactical Analytics HUD Button -->
+      <button class="btn-tactical-hud-toggle" id="btn-hud-toggle" title="Abrir Panel de Inteligencia Táctica">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.21 15.89A10 10 0 1 1 8 2.83"/><path d="M22 12A10 10 0 0 0 12 2v10z"/></svg>
+        <span>Análisis Táctico</span>
+        <span class="hud-badge" id="hud-total-count">8.206</span>
+      </button>
+
+      <!-- Tactical Analytics HUD Panel (Drawer) -->
+      <div class="tactical-hud-panel" id="tactical-hud-panel">
+        <div class="hud-header">
+          <div class="hud-title">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>
+            <span>Inteligencia & Coincidencias</span>
+          </div>
+          <button class="hud-close-btn" id="btn-hud-close" title="Cerrar panel">&times;</button>
+        </div>
+
+        <div class="hud-filter-status hidden" id="hud-filter-status">
+          <span id="hud-active-filter-text">Filtro activo</span>
+          <button id="btn-hud-clear-filter" class="hud-clear-btn" title="Limpiar filtro">✕ Quitar</button>
+        </div>
+
+        <!-- HUD Tabs Navigation -->
+        <div class="hud-tabs">
+          <button class="hud-tab-btn active" data-tab="thematic">🎯 Temática</button>
+          <button class="hud-tab-btn" data-tab="territory">🗺️ Territorio</button>
+          <button class="hud-tab-btn" data-tab="denunciados">👥 Denunciados</button>
+          <button class="hud-tab-btn" data-tab="evolution">📈 Evolución</button>
+        </div>
+
+        <!-- HUD Tab Contents -->
+        <div class="hud-content">
+          <!-- Tab 1: Temática Delictiva -->
+          <div class="hud-tab-content active" id="hud-tab-thematic">
+            <div class="hud-section-desc">Distribución por temática delictiva:</div>
+            <div class="hud-thematics-list" id="hud-thematics-list"></div>
+          </div>
+
+          <!-- Tab 2: Coincidencias de Territorio (Hotspots) -->
+          <div class="hud-tab-content" id="hud-tab-territory">
+            <div class="hud-section-desc">Puntos calientes y esquinas con mayor concentración delictiva:</div>
+            <div class="hud-hotspots-list" id="hud-hotspots-list"></div>
+          </div>
+
+          <!-- Tab 3: Coincidencias de Denunciados -->
+          <div class="hud-tab-content" id="hud-tab-denunciados">
+            <div class="hud-section-desc">Denunciados, apodos e imputados recurrentes (≥2 hechos):</div>
+            <div class="hud-search-box">
+              <input type="text" id="hud-denunciado-search" placeholder="Filtrar por nombre, alias o CUIJ..." class="filter-input">
+            </div>
+            <div class="hud-denunciados-list" id="hud-denunciados-list"></div>
+          </div>
+
+          <!-- Tab 4: Evolución Temporal -->
+          <div class="hud-tab-content" id="hud-tab-evolution">
+            <div class="hud-section-desc">Evolución mes a mes y comparativa interanual:</div>
+            <div class="hud-evolution-metrics" id="hud-evolution-metrics"></div>
+            <div style="height: 180px; margin-top: 10px; position: relative;">
+              <canvas id="hud-chart-evolution"></canvas>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tactical Timeline Player (Bottom bar on Map) -->
+      <div class="tactical-timeline-bar" id="tactical-timeline-bar">
+        <div class="timeline-left">
+          <div class="timeline-year-selector">
+            <label class="timeline-label">AÑO</label>
+            <div class="btn-group-segmented" id="timeline-year-group">
+              <button class="btn-segment active" data-year="todos">Todos</button>
+              <button class="btn-segment" data-year="2024">2024</button>
+              <button class="btn-segment" data-year="2025">2025</button>
+              <button class="btn-segment" data-year="2026">2026</button>
+            </div>
+          </div>
+          <div class="timeline-player-controls">
+            <button class="timeline-player-btn" id="btn-timeline-play" title="Reproducir evolución temporal mes a mes">
+              <span id="timeline-play-icon">▶</span>
+              <span id="timeline-play-label">Evolución Mes a Mes</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="timeline-center">
+          <div class="timeline-month-selector" id="timeline-month-group">
+            <button class="btn-month-pill active" data-month="todos">Año Completo</button>
+            <button class="btn-month-pill" data-month="1">Ene</button>
+            <button class="btn-month-pill" data-month="2">Feb</button>
+            <button class="btn-month-pill" data-month="3">Mar</button>
+            <button class="btn-month-pill" data-month="4">Abr</button>
+            <button class="btn-month-pill" data-month="5">May</button>
+            <button class="btn-month-pill" data-month="6">Jun</button>
+            <button class="btn-month-pill" data-month="7">Jul</button>
+            <button class="btn-month-pill" data-month="8">Ago</button>
+            <button class="btn-month-pill" data-month="9">Sep</button>
+            <button class="btn-month-pill" data-month="10">Oct</button>
+            <button class="btn-month-pill" data-month="11">Nov</button>
+            <button class="btn-month-pill" data-month="12">Dic</button>
+          </div>
+        </div>
+
+        <div class="timeline-right">
+          <div class="timeline-count-chip" id="timeline-count-chip">
+            <span class="count-pulse"></span>
+            <span id="timeline-count-text">8.206 incidencias</span>
+          </div>
+          <button class="btn btn-ghost btn-sm" id="btn-timeline-reset" title="Restablecer filtros temporales">↺</button>
+        </div>
+      </div>
+
       <!-- Map Info Panel (appears on click) -->
       <div class="map-info-panel hidden" id="map-info-panel">
         <button class="panel-close" id="map-info-close">&times;</button>
@@ -172,8 +295,15 @@
     <div class="view" id="view-dashboard">
       <div class="dashboard-container">
         <div class="dashboard-header">
-          <h1>Dashboard Analítico</h1>
+          <div>
+            <h1 style="margin:0;">Análisis Cuantitativo e Inteligencia Criminal</h1>
+            <span style="font-size:12px;color:var(--text-secondary);">Procesamiento cuantitativo, delitos de alta lesividad en territorio y dinámicas de bandas</span>
+          </div>
           <div class="dashboard-date-range">
+            <button class="btn btn-accent btn-sm" id="btn-informe-criminal" style="margin-right:8px;display:flex;align-items:center;gap:6px;">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+              Generar Informe Criminal
+            </button>
             <select id="dash-filter-anio" class="filter-select" style="background:var(--bg-secondary);color:var(--text-primary);border:1px solid rgba(255,255,255,0.1);padding:6px 10px;border-radius:6px;font-size:13px">
               <option value="todos">Todos los Años</option>
               <option value="2026">Año 2026</option>
@@ -274,14 +404,33 @@
     <!-- PERSONAS VIEW -->
     <div class="view" id="view-personas">
       <div class="list-view-container">
-        <div class="list-header">
-          <h1>Personas de Interés</h1>
-          <div class="list-actions">
-            <div class="search-inline">
-              <input type="text" id="personas-search" placeholder="Buscar por nombre, alias, DNI..." class="filter-input">
+        <div class="list-header" style="flex-wrap:wrap;gap:12px;">
+          <div>
+            <h1 style="margin:0;">Personas de Interés y Más Buscados</h1>
+            <p class="section-desc" style="color:var(--text-secondary);font-size:12px;margin-top:2px;">
+              Seguimiento nominal, niveles de peligrosidad y personas con pedido de captura activo en causas judiciales.
+            </p>
+          </div>
+          <div class="list-actions" style="flex-wrap:wrap;gap:8px;">
+            <div class="personas-filters-bar" style="display:flex;gap:6px;align-items:center;">
+              <button class="btn btn-sm btn-outline active persona-filter-btn" data-filter="todos">Todos</button>
+              <button class="btn btn-sm btn-outline persona-filter-btn" data-filter="captura" style="border-color:rgba(239,68,68,0.5);color:#EF4444;background:rgba(239,68,68,0.08);">🚨 Pedidos de Captura</button>
+              <button class="btn btn-sm btn-outline persona-filter-btn" data-filter="peligrosidad" style="border-color:rgba(245,158,11,0.5);color:#F59E0B;background:rgba(245,158,11,0.08);">⚔️ Peligrosidad ≥ 8</button>
+              <select id="personas-banda-filter" class="filter-select" style="max-width:180px;height:32px;font-size:12px;">
+                <option value="">Todas las bandas</option>
+                <option value="La Negrada">La Negrada</option>
+                <option value="Los de Siempre">Los de Siempre</option>
+                <option value="Banda del Polaco Maidana">Polaco Maidana</option>
+                <option value="Los Puchingas">Los Puchingas</option>
+                <option value="Banda del Correntino (Beban)">Banda Correntino</option>
+                <option value="Los Espinillos">Los Espinillos</option>
+              </select>
             </div>
-            <button class="btn btn-primary" id="btn-nueva-persona">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            <div class="search-inline">
+              <input type="text" id="personas-search" placeholder="Buscar por nombre, alias, DNI, CUIJ..." class="filter-input">
+            </div>
+            <button class="btn btn-primary btn-sm" id="btn-nueva-persona">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
               Nueva Persona
             </button>
           </div>
@@ -293,12 +442,17 @@
     <!-- BANDAS VIEW -->
     <div class="view" id="view-bandas">
       <div class="list-view-container">
-        <div class="list-header">
-          <h1>Estructuras Criminales</h1>
+        <div class="list-header" style="flex-wrap:wrap;gap:12px;">
+          <div>
+            <h1 style="margin:0;">Estructuras y Organizaciones Criminales</h1>
+            <p class="section-desc" style="color:var(--text-secondary);font-size:12px;margin-top:2px;">
+              Mapeo de facciones, arraigo barrial, dinámicas de conflicto territorial y delitos de alta lesividad asociados.
+            </p>
+          </div>
           <div class="list-actions">
-            <input type="text" id="bandas-search" placeholder="Buscar banda..." class="filter-input">
-            <button class="btn btn-primary" id="btn-nueva-banda">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            <input type="text" id="bandas-search" placeholder="Buscar banda o barrio base..." class="filter-input">
+            <button class="btn btn-primary btn-sm" id="btn-nueva-banda">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
               Nueva Banda
             </button>
           </div>
@@ -309,23 +463,40 @@
 
     <!-- GRAFO VIEW -->
     <div class="view" id="view-grafo">
-      <div class="grafo-container">
-        <div class="grafo-toolbar">
-          <h1>Red de Vínculos</h1>
-          <div class="grafo-controls">
-            <select id="grafo-persona-select" class="filter-select">
-              <option value="">Seleccionar persona...</option>
+      <div class="grafo-container" style="position:relative;">
+        <div class="grafo-toolbar" style="flex-wrap:wrap;gap:10px;">
+          <div>
+            <h1 style="margin:0;">Red de Vínculos Criminales</h1>
+            <span style="font-size:12px;color:var(--text-secondary);">Análisis relacional, jerarquías de mando, relaciones familiares y disputas armadas</span>
+          </div>
+          <div class="grafo-controls" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+            <button class="btn btn-outline btn-sm active" id="btn-grafo-general">🌐 Red General</button>
+            <button class="btn btn-outline btn-sm" id="btn-grafo-profugos" style="color:#EF4444;border-color:rgba(239,68,68,0.5);">🚨 Prófugos</button>
+            <button class="btn btn-outline btn-sm" id="btn-grafo-conflicto" style="color:#F59E0B;border-color:rgba(245,158,11,0.5);">⚔️ La Negrada vs Los de Siempre</button>
+            <select id="grafo-persona-select" class="filter-select" style="max-width:280px;">
+              <option value="">Seleccionar persona focal...</option>
             </select>
-            <button class="btn btn-primary btn-sm" id="btn-grafo-load">Cargar Grafo</button>
+            <button class="btn btn-primary btn-sm" id="btn-grafo-load">Enfocar</button>
           </div>
         </div>
-        <div id="grafo-canvas" class="grafo-canvas"></div>
-        <div class="grafo-legend">
-          <span class="legend-item"><span class="legend-dot" style="background:#ef4444"></span>Penal</span>
-          <span class="legend-item"><span class="legend-dot" style="background:#f59e0b"></span>Familiar</span>
-          <span class="legend-item"><span class="legend-dot" style="background:#0ea5e9"></span>Comercial</span>
-          <span class="legend-item"><span class="legend-dot" style="background:#8b5cf6"></span>Subordinado</span>
-          <span class="legend-item"><span class="legend-dot" style="background:#ec4899"></span>Sentimental</span>
+        <div class="grafo-wrapper" style="position:relative;width:100%;flex:1;min-height:500px;display:flex;">
+          <div id="grafo-canvas" class="grafo-canvas" style="flex:1;width:100%;height:100%;"></div>
+          <!-- Floating dossier on node click -->
+          <div id="grafo-node-dossier" class="grafo-node-dossier hidden" style="position:absolute;top:16px;right:16px;width:320px;max-height:calc(100% - 32px);background:rgba(15,23,42,0.95);border:1px solid var(--border-color);border-radius:10px;padding:16px;box-shadow:0 12px 32px rgba(0,0,0,0.6);z-index:20;overflow-y:auto;backdrop-filter:blur(10px);">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+              <span id="dossier-badge" class="tag" style="font-size:10px;background:var(--accent-primary);color:#fff;">DETALLE</span>
+              <button id="btn-close-dossier" style="background:none;border:none;color:var(--text-secondary);cursor:pointer;font-size:16px;">✕</button>
+            </div>
+            <div id="dossier-content"></div>
+          </div>
+        </div>
+        <div class="grafo-legend" style="flex-wrap:wrap;gap:12px;">
+          <span class="legend-item"><span class="legend-dot" style="background:#ef4444"></span>Disputa Armada / Tiroteo</span>
+          <span class="legend-item"><span class="legend-dot" style="background:#f59e0b"></span>Vínculo Familiar</span>
+          <span class="legend-item"><span class="legend-dot" style="background:#8b5cf6"></span>Subordinación / Mando</span>
+          <span class="legend-item"><span class="legend-dot" style="background:#a855f7"></span>Sicario / Tirador</span>
+          <span class="legend-item"><span class="legend-dot" style="background:#0ea5e9"></span>Logística / Comercial</span>
+          <span class="legend-item"><span class="legend-dot" style="background:#ec4899"></span>Sentimental / Cónyuge</span>
         </div>
       </div>
     </div>
@@ -584,6 +755,14 @@
             <label for="persona-antecedentes">Antecedentes / Notas</label>
             <textarea id="persona-antecedentes" class="form-input" rows="3"></textarea>
           </div>
+          <div class="form-actions">
+            <button type="button" class="btn btn-ghost" data-close="modal-persona">Cancelar</button>
+            <button type="submit" class="btn btn-primary">Guardar Persona</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
 
   <!-- Modal: Nueva Banda -->
   <div class="modal-overlay hidden" id="modal-banda">
@@ -784,6 +963,25 @@
       </div>
       <div class="modal-body" id="briefing-content">
         <!-- Generated dynamically -->
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Informe Cuantitativo Criminal -->
+  <div class="modal-overlay hidden" id="modal-informe-criminal">
+    <div class="modal modal-lg" style="max-width:960px;max-height:90vh;display:flex;flex-direction:column;">
+      <div class="modal-header" style="flex-shrink:0;">
+        <h2>Informe Cuantitativo de Inteligencia Criminal</h2>
+        <div style="display:flex;gap:8px;align-items:center">
+          <button class="btn btn-primary btn-sm" id="btn-print-informe-criminal" onclick="window.print()">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+            Imprimir / Guardar PDF
+          </button>
+          <button class="modal-close" data-close="modal-informe-criminal">&times;</button>
+        </div>
+      </div>
+      <div class="modal-body" id="informe-criminal-content" style="flex:1;overflow-y:auto;padding:24px;">
+        <!-- Generated dynamically with full quantitative analysis, high lesividad zones, gang dynamics, and wanted fugitives -->
       </div>
     </div>
   </div>

@@ -1,6 +1,7 @@
 import JSZip from 'jszip';
 import * as XLSX from 'xlsx';
 import supabase, { insertHecho, insertAllanamiento, insertZona } from './supabase-client.js';
+import { enrichTacticalFeature } from './analytics-engine.js';
 
 // ============================================================
 // FOLDER TAXONOMY & OPERATIONAL MAPPINGS
@@ -76,16 +77,18 @@ export function parseKML(kmlText) {
     parsePlacemarksFromBlock(sanitized, 'General', features, folderCounts);
   }
 
+  const enriched = features.map((f, i) => enrichTacticalFeature(f, i));
+
   return {
     type: 'FeatureCollection',
     metadata: {
-      totalFeatures: features.length,
-      polygons: features.filter(f => f.geometry.type === 'Polygon').length,
-      points: features.filter(f => f.geometry.type === 'Point').length,
+      totalFeatures: enriched.length,
+      polygons: enriched.filter(f => f.geometry.type === 'Polygon').length,
+      points: enriched.filter(f => f.geometry.type === 'Point').length,
       folderBreakdown: folderCounts,
       parsedAt: new Date().toISOString()
     },
-    features
+    features: enriched
   };
 }
 
