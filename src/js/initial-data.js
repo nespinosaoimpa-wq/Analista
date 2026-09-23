@@ -353,6 +353,42 @@ export const INITIAL_BANDAS = [
 
 export const INITIAL_PERSONAS = [
   {
+    "id": "p-celer-gabriel",
+    "nombre": "Gabriel Nicolás",
+    "apellido": "Celer",
+    "alias": [
+      "Gaby",
+      "Celer"
+    ],
+    "dni": "37337271",
+    "cuit": "20-37337271-5",
+    "fecha_nacimiento": "1993-06-21",
+    "sexo": "M",
+    "roles": [
+      "integrante",
+      "distribuidor",
+      "soldadito"
+    ],
+    "score_peligrosidad": 7,
+    "banda_id": "banda-los-de-siempre",
+    "banda_nombre": "Los de Siempre",
+    "banda_color": "#0EA5E9",
+    "pedido_captura": false,
+    "estado_judicial": "INVESTIGADO - IDENTIFICADO EN TERRITORIO",
+    "cuij_asociados": [
+      "21-09726972-3"
+    ],
+    "domicilio_principal": "Vera Mujica 674, Santa Fe",
+    "domicilio_principal_geom": "SRID=4326;POINT(-60.72409 -31.66444)",
+    "link_dossier": "https://docs.google.com/document/d/1LpeWNiTKd7OiNT04V-6iHH3seoXrbhd/edit",
+    "delitos_asociados": [
+      "Microtráfico",
+      "Asociación ilícita"
+    ],
+    "antecedentes_texto": "Integrante identificado de la organización criminal Los de Siempre con base en Centenario. Dossier judicial del Ministerio Público de la Acusación adjunto.",
+    "activo": true
+  },
+  {
     "id": "p-zabala-jon",
     "nombre": "Jon Nelson",
     "apellido": "Zabala",

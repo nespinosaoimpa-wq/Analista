@@ -205,6 +205,103 @@ export async function insertPersona(persona) {
   return p;
 }
 
+export async function updatePersona(id, updates = {}) {
+  if (typeof updates.alias === 'string') {
+    updates.alias = updates.alias.split(',').map(s => s.trim()).filter(Boolean);
+  }
+  if (typeof updates.roles === 'string') {
+    updates.roles = updates.roles.split(',').map(s => s.trim()).filter(Boolean);
+  }
+  if (updates.domicilio_principal && !updates.domicilio_principal_geom) {
+    const coords = await geocodeAddress(updates.domicilio_principal);
+    if (coords) {
+      updates.domicilio_principal_geom = `SRID=4326;POINT(${coords.lng} ${coords.lat})`;
+    }
+  }
+
+  // Si tiene banda, asignar el color distintivo
+  if (updates.banda_id || updates.banda_nombre) {
+    const b = INITIAL_BANDAS.find(x => x.id === updates.banda_id || x.nombre.toLowerCase() === (updates.banda_nombre || '').toLowerCase());
+    if (b && b.color_hex) updates.banda_color = b.color_hex;
+  }
+
+  try {
+    if (supabase) {
+      const { data, error } = await supabase.from('personas').update(updates).eq('id', id).select();
+      if (!error && data?.[0]) {
+        const idx = INITIAL_PERSONAS.findIndex(p => p.id === id);
+        if (idx !== -1) INITIAL_PERSONAS[idx] = { ...INITIAL_PERSONAS[idx], ...data[0] };
+        return data[0];
+      }
+    }
+  } catch (e) {
+    console.warn('Update persona fallback local:', e);
+  }
+
+  // Actualización local
+  const idx = INITIAL_PERSONAS.findIndex(p => p.id === id);
+  if (idx !== -1) {
+    INITIAL_PERSONAS[idx] = { ...INITIAL_PERSONAS[idx], ...updates };
+    persistCustomItem('personas', INITIAL_PERSONAS[idx]);
+    return INITIAL_PERSONAS[idx];
+  }
+  return null;
+}
+
+export async function getPersonasGeoJSON() {
+  const personas = await getPersonas({ limit: 1000 });
+  const bandas = await getBandas();
+  const bandaColorMap = {};
+  bandas.forEach(b => {
+    bandaColorMap[b.id] = b.color_hex || '#0EA5E9';
+    bandaColorMap[b.nombre.toLowerCase()] = b.color_hex || '#0EA5E9';
+  });
+
+  const features = personas.map(p => {
+    const coords = parseGeom(p.domicilio_principal_geom);
+    if (!coords || isNaN(coords.lng) || isNaN(coords.lat)) return null;
+
+    const bColor = p.banda_color || bandaColorMap[p.banda_id] || bandaColorMap[(p.banda_nombre || '').toLowerCase()] || '#0EA5E9';
+    const nombreCompleto = `${p.nombre || ''} ${p.apellido || ''}`.trim() || 'Sin nombre';
+
+    return {
+      type: 'Feature',
+      geometry: {
+        type: 'Point',
+        coordinates: [coords.lng, coords.lat]
+      },
+      properties: {
+        id: p.id,
+        nombre: p.nombre || '',
+        apellido: p.apellido || '',
+        nombre_completo: nombreCompleto,
+        alias: Array.isArray(p.alias) ? p.alias : (p.alias ? [p.alias] : []),
+        alias_texto: Array.isArray(p.alias) ? p.alias.join(', ') : (p.alias || ''),
+        dni: p.dni || '',
+        cuit: p.cuit || '',
+        fecha_nacimiento: p.fecha_nacimiento || '',
+        roles: Array.isArray(p.roles) ? p.roles : (p.roles ? [p.roles] : []),
+        score_peligrosidad: parseInt(p.score_peligrosidad) || 5,
+        pedido_captura: Boolean(p.pedido_captura),
+        estado_judicial: p.estado_judicial || 'IDENTIFICADO',
+        banda_id: p.banda_id || '',
+        banda_nombre: p.banda_nombre || 'Individual',
+        banda_color: bColor,
+        domicilio_principal: p.domicilio_principal || '',
+        link_dossier: p.link_dossier || '',
+        cuij_asociados: p.cuij_asociados || [],
+        delitos_asociados: p.delitos_asociados || [],
+        antecedentes_texto: p.antecedentes_texto || ''
+      }
+    };
+  }).filter(Boolean);
+
+  return {
+    type: 'FeatureCollection',
+    features
+  };
+}
+
 export async function getPersonaById(id) {
   try {
     if (supabase) {

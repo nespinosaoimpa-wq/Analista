@@ -3,12 +3,13 @@
 // ============================================================
 import {
   initMap, loadMapData, toggleLayer, flyTo, loadTacticalGeoJSON, applyMapFilters, resetMapFilters,
-  inspectLocation, updateInspectionRadius, clearInspection, getActiveInspection, getAllMasterFeatures
+  inspectLocation, updateInspectionRadius, clearInspection, getActiveInspection, getAllMasterFeatures,
+  loadPersonasMapData, toggle3DMode, toggleSatelliteMode, exportMapSnapshot
 } from './map.js';
 import { initDashboard, refreshDashboard } from './dashboard.js';
 import { initTacticalHUD, initTacticalTimeline } from './tactical-hud.js';
 import {
-  globalSearch, insertHecho, insertPersona, insertBanda,
+  globalSearch, insertHecho, insertPersona, updatePersona, insertBanda,
   getHechos, getPersonas, getBandas, getAllanamientos, insertAllanamiento, insertVinculo,
   getGrafoPersona, getAllVinculos, geocodeAddress, logAction, parseGeom,
   getPersonaById, getBandaById, getAllanamientoById, getHechoById, getZonas
@@ -33,6 +34,7 @@ document.addEventListener('DOMContentLoaded', () => {
   setupSearch();
   setupFilters();
   setupLayerToggles();
+  setupMapToolbarControls();
   setupModals();
   setupForms();
   setupIngestion();
@@ -274,12 +276,67 @@ function setupLayerToggles() {
     'layer-clusters': 'clusters',
     'layer-zonas': 'zonas',
     'layer-allanamientos': 'allanamientos',
+    'layer-personas-bandas': 'personas-bandas',
   };
 
   Object.entries(toggles).forEach(([checkboxId, layerId]) => {
     document.getElementById(checkboxId)?.addEventListener('change', (e) => {
       toggleLayer(layerId, e.target.checked);
     });
+  });
+}
+
+function setupMapToolbarControls() {
+  // Perspectiva 3D
+  const btn3D = document.getElementById('btn-toggle-3d');
+  btn3D?.addEventListener('click', () => {
+    const is3D = toggle3DMode();
+    if (is3D) {
+      btn3D.style.background = 'rgba(14, 165, 233, 0.25)';
+      btn3D.style.borderColor = '#0EA5E9';
+      btn3D.style.color = '#38BDF8';
+      showToast('Perspectiva 3D activada (Inclinación 50°)', 'info');
+    } else {
+      btn3D.style.background = '';
+      btn3D.style.borderColor = '';
+      btn3D.style.color = '';
+      showToast('Vista 2D ortogonal restablecida', 'info');
+    }
+  });
+
+  // Alternar Satélite HD / Modo Oscuro
+  const btnBasemap = document.getElementById('btn-toggle-basemap');
+  const basemapLabel = document.getElementById('btn-basemap-label');
+  btnBasemap?.addEventListener('click', async () => {
+    showLoading('Cambiando capa base Mapbox...');
+    try {
+      const mode = await toggleSatelliteMode();
+      if (mode === 'satellite') {
+        btnBasemap.style.background = 'rgba(34, 197, 94, 0.25)';
+        btnBasemap.style.borderColor = '#22C55E';
+        btnBasemap.style.color = '#4ADE80';
+        if (basemapLabel) basemapLabel.textContent = '🌙 Base';
+        showToast('Vista Satelital Mapbox activada', 'info');
+      } else {
+        btnBasemap.style.background = '';
+        btnBasemap.style.borderColor = '';
+        btnBasemap.style.color = '';
+        if (basemapLabel) basemapLabel.textContent = '🛰️ Satélite';
+        showToast('Mapa base oscuro CRIMINT activado', 'info');
+      }
+    } finally {
+      hideLoading();
+    }
+  });
+
+  // Exportar captura WebGL en alta resolución
+  document.getElementById('btn-export-map-snapshot')?.addEventListener('click', () => {
+    const ok = exportMapSnapshot();
+    if (ok) {
+      showToast('Captura cartográfica de alta resolución generada y descargada', 'success');
+    } else {
+      showToast('No se pudo generar la captura del mapa', 'error');
+    }
   });
 }
 
@@ -304,8 +361,22 @@ function setupModals() {
 
   // Open buttons
   document.getElementById('btn-form-hecho')?.addEventListener('click', () => openModal('modal-hecho'));
-  document.getElementById('btn-nueva-persona')?.addEventListener('click', () => openModal('modal-persona'));
-  document.getElementById('btn-form-persona')?.addEventListener('click', () => openModal('modal-persona'));
+  
+  const handleOpenNuevaPersona = () => {
+    const f = document.getElementById('form-persona');
+    if (f) f.reset();
+    const editIdEl = document.getElementById('persona-edit-id');
+    if (editIdEl) editIdEl.value = '';
+    const titleEl = document.getElementById('modal-persona-title');
+    if (titleEl) titleEl.textContent = 'Registrar Persona de Interés';
+    const submitBtn = document.getElementById('btn-submit-persona');
+    if (submitBtn) submitBtn.textContent = 'Guardar Persona';
+    const pelVal = document.getElementById('persona-peligrosidad-val');
+    if (pelVal) pelVal.textContent = '5';
+    openModal('modal-persona');
+  };
+  document.getElementById('btn-nueva-persona')?.addEventListener('click', handleOpenNuevaPersona);
+  document.getElementById('btn-form-persona')?.addEventListener('click', handleOpenNuevaPersona);
   document.getElementById('btn-nueva-banda')?.addEventListener('click', () => openModal('modal-banda'));
   document.getElementById('btn-nuevo-allanamiento')?.addEventListener('click', () => openModal('modal-allanamiento'));
   document.getElementById('btn-briefing')?.addEventListener('click', openBriefingModal);
@@ -391,35 +462,53 @@ function setupForms() {
     }
   });
 
-  // Form: Nueva Persona
+  // Form: Persona (Creación y Edición de Integrantes / Domicilios / Dossiers)
   document.getElementById('form-persona')?.addEventListener('submit', async (e) => {
     e.preventDefault();
-    showLoading('Guardando persona...');
+    const editId = document.getElementById('persona-edit-id')?.value;
+    showLoading(editId ? 'Actualizando perfil de integrante...' : 'Registrando persona de interés...');
 
     try {
-      const persona = {
-        nombre: document.getElementById('persona-nombre')?.value || null,
-        apellido: document.getElementById('persona-apellido')?.value || null,
-        dni: document.getElementById('persona-dni')?.value || null,
+      const bandaSelect = document.getElementById('persona-banda');
+      const selectedBandaId = bandaSelect?.value || null;
+      const selectedBandaNombre = bandaSelect?.options[bandaSelect.selectedIndex]?.text || null;
+
+      const personaPayload = {
+        nombre: document.getElementById('persona-nombre')?.value?.trim() || null,
+        apellido: document.getElementById('persona-apellido')?.value?.trim() || null,
+        dni: document.getElementById('persona-dni')?.value?.trim() || null,
+        cuit: document.getElementById('persona-cuit')?.value?.trim() || null,
         alias: document.getElementById('persona-alias')?.value || '',
         sexo: document.getElementById('persona-sexo')?.value || 'M',
         fecha_nacimiento: document.getElementById('persona-nacimiento')?.value || null,
-        tez: document.getElementById('persona-tez')?.value || null,
-        cabello: document.getElementById('persona-cabello')?.value || null,
-        contextura: document.getElementById('persona-contextura')?.value || null,
-        senas_particulares: document.getElementById('persona-senas')?.value || null,
-        score_peligrosidad: parseInt(document.getElementById('persona-peligrosidad')?.value) || 0,
+        banda_id: selectedBandaId,
+        banda_nombre: selectedBandaId ? selectedBandaNombre : 'Individual',
         roles: document.getElementById('persona-roles')?.value || '',
-        domicilio_principal: document.getElementById('persona-domicilio')?.value || null,
+        score_peligrosidad: parseInt(document.getElementById('persona-peligrosidad')?.value) || 5,
+        pedido_captura: document.getElementById('persona-captura')?.checked === true,
+        domicilio_principal: document.getElementById('persona-domicilio')?.value?.trim() || null,
+        link_dossier: document.getElementById('persona-dossier')?.value?.trim() || null,
         antecedentes_texto: document.getElementById('persona-antecedentes')?.value || null,
       };
 
-      const result = await insertPersona(persona);
-      await logAction('INSERT', 'personas', result.id);
+      if (editId) {
+        await updatePersona(editId, personaPayload);
+        await logAction('UPDATE', 'personas', editId);
+        showToast('Perfil de integrante y domicilio actualizados correctamente', 'success');
+      } else {
+        const result = await insertPersona(personaPayload);
+        await logAction('INSERT', 'personas', result.id);
+        showToast('Persona de interés registrada correctamente', 'success');
+      }
 
       closeModal('modal-persona');
       e.target.reset();
-      showToast('Persona registrada correctamente', 'success');
+      const editIdEl = document.getElementById('persona-edit-id');
+      if (editIdEl) editIdEl.value = '';
+
+      // Refresco inmediato en Mapbox y métricas sin recargar la página
+      await loadPersonasMapData();
+      updateHeaderStats();
 
       if (document.getElementById('view-personas')?.classList.contains('active')) {
         await renderPersonasView();
@@ -894,15 +983,28 @@ async function renderPersonasView() {
             ${p.delitos_asociados?.length ? `<div class="entity-field"><span class="entity-field-label">Delitos</span><span class="entity-field-value" style="color:var(--text-secondary);font-size:12px;">${p.delitos_asociados.join(', ')}</span></div>` : ''}
             ${p.cuij_asociados?.length ? `<div class="entity-field"><span class="entity-field-label">CUIJ</span><span class="entity-field-value" style="font-family:var(--font-mono);color:var(--accent-primary);font-size:11px;">${p.cuij_asociados.join(' | ')}</span></div>` : ''}
           </div>
-          <div class="entity-tags" style="margin-top:12px;display:flex;justify-content:space-between;align-items:center;">
+          <div class="entity-tags" style="margin-top:12px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;">
             <div style="display:flex;gap:4px;flex-wrap:wrap;">
               ${p.alias?.slice(0, 2).map(a => `<span class="tag alias">${a}</span>`).join('') || ''}
               ${p.roles?.slice(0, 2).map(r => `<span class="tag rol">${r}</span>`).join('') || ''}
               ${!isCaptura ? `<span class="tag ${pClass}">Peligro: ${p.score_peligrosidad || 5}/10</span>` : ''}
             </div>
-            <button class="btn btn-outline btn-xs" onclick="event.stopPropagation(); window.enfocarPersonaEnGrafo('${p.id}');" title="Ver en Red de Vínculos" style="font-size:11px;padding:3px 8px;border-radius:6px;display:flex;align-items:center;gap:4px;background:rgba(255,255,255,0.04);">
-              🕸️ Vínculos
-            </button>
+            <div style="display:flex;gap:4px;align-items:center;">
+              ${p.link_dossier ? `
+                <a href="${p.link_dossier}" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation();" class="btn btn-primary btn-xs" title="Abrir Dossier Judicial en Google Drive / Docs" style="font-size:10px;padding:3px 7px;font-weight:700;display:inline-flex;align-items:center;gap:3px;text-decoration:none;">
+                  📄 Drive ↗
+                </a>
+              ` : ''}
+              <button class="btn btn-outline btn-xs" onclick="event.stopPropagation(); window.abrirEdicionPersona('${p.id}');" title="Editar Perfil" style="font-size:10px;padding:3px 6px;">
+                ✏️
+              </button>
+              <button class="btn btn-outline btn-xs" onclick="event.stopPropagation(); window.centrarPersonaEnMapa('${p.id}');" title="Ver Domicilio en Mapa" style="font-size:10px;padding:3px 6px;">
+                📍
+              </button>
+              <button class="btn btn-outline btn-xs" onclick="event.stopPropagation(); window.enfocarPersonaEnGrafo('${p.id}');" title="Ver en Red de Vínculos" style="font-size:10px;padding:3px 7px;display:flex;align-items:center;gap:3px;">
+                🕸️
+              </button>
+            </div>
           </div>
         </div>
       `;
@@ -946,6 +1048,108 @@ window.enfocarPersonaEnGrafo = async function(personaId) {
     await renderGrafo(personaId);
     mostrarDossierNodo(personaId);
   }, 150);
+};
+
+// Global exposure for editing persona profile & dossier
+window.abrirEdicionPersona = async function(personaId) {
+  try {
+    const p = await getPersonaById(personaId);
+    if (!p) {
+      showToast('No se encontró el registro para editar', 'error');
+      return;
+    }
+
+    const modalTitle = document.getElementById('modal-persona-title');
+    if (modalTitle) modalTitle.textContent = `Editar Perfil: ${p.nombre || ''} ${p.apellido || ''}`.trim() || 'Editar Persona';
+
+    const submitBtn = document.getElementById('btn-submit-persona');
+    if (submitBtn) submitBtn.textContent = 'Guardar Cambios';
+
+    document.getElementById('persona-edit-id').value = p.id;
+    document.getElementById('persona-nombre').value = p.nombre || '';
+    document.getElementById('persona-apellido').value = p.apellido || '';
+    document.getElementById('persona-dni').value = p.dni || '';
+    document.getElementById('persona-cuit').value = p.cuit || '';
+    document.getElementById('persona-alias').value = Array.isArray(p.alias) ? p.alias.join(', ') : (p.alias || '');
+    document.getElementById('persona-sexo').value = p.sexo || 'M';
+    document.getElementById('persona-nacimiento').value = p.fecha_nacimiento || '';
+
+    const bandaSelect = document.getElementById('persona-banda');
+    if (bandaSelect) {
+      if (p.banda_id) {
+        bandaSelect.value = p.banda_id;
+      } else if (p.banda_nombre) {
+        const opt = Array.from(bandaSelect.options).find(o => o.text.toLowerCase() === p.banda_nombre.toLowerCase());
+        if (opt) bandaSelect.value = opt.value;
+        else bandaSelect.value = '';
+      } else {
+        bandaSelect.value = '';
+      }
+    }
+
+    document.getElementById('persona-roles').value = Array.isArray(p.roles) ? p.roles.join(', ') : (p.roles || '');
+
+    const pelEl = document.getElementById('persona-peligrosidad');
+    if (pelEl) {
+      pelEl.value = p.score_peligrosidad ?? 5;
+      const pelVal = document.getElementById('persona-peligrosidad-val');
+      if (pelVal) pelVal.textContent = pelEl.value;
+    }
+
+    const captEl = document.getElementById('persona-captura');
+    if (captEl) captEl.checked = Boolean(p.pedido_captura);
+
+    document.getElementById('persona-domicilio').value = p.domicilio_principal || '';
+    document.getElementById('persona-dossier').value = p.link_dossier || '';
+    document.getElementById('persona-antecedentes').value = p.antecedentes_texto || '';
+
+    openModal('modal-persona');
+  } catch (err) {
+    console.error('Error abriendo edición de persona:', err);
+    showToast('Error al cargar datos de la persona', 'error');
+  }
+};
+
+// Global exposure for centering persona on Mapbox with 3D perspective
+window.centrarPersonaEnMapa = async function(personaId) {
+  try {
+    const p = await getPersonaById(personaId);
+    if (!p) return;
+    const coords = parseGeom(p.domicilio_principal_geom);
+    if (!coords || isNaN(coords.lng) || isNaN(coords.lat)) {
+      showToast('La persona no posee domicilio georreferenciado', 'warning');
+      return;
+    }
+    const navMap = document.querySelector('[data-view=mapa]');
+    if (navMap) navMap.click();
+    setTimeout(() => {
+      flyTo(coords.lng, coords.lat, 16.5, 45);
+    }, 150);
+  } catch (e) {
+    console.warn('Error centrando persona en mapa:', e);
+  }
+};
+
+// Global exposure for analyzing environment / spatial cross-check around persona's residence
+window.analizarEntornoDePersona = async function(personaId) {
+  try {
+    const p = await getPersonaById(personaId);
+    if (!p) return;
+    const coords = parseGeom(p.domicilio_principal_geom);
+    if (!coords || isNaN(coords.lng) || isNaN(coords.lat)) {
+      showToast('La persona no posee domicilio georreferenciado para análisis', 'warning');
+      return;
+    }
+    const navMap = document.querySelector('[data-view=mapa]');
+    if (navMap) navMap.click();
+    setTimeout(() => {
+      flyTo(coords.lng, coords.lat, 16, 35);
+      inspectLocation([coords.lng, coords.lat], `Domicilio de ${p.nombre || ''} ${p.apellido || ''} (${p.domicilio_principal || 'S/D'})`, 500);
+      document.getElementById('address-inspector-drawer')?.classList.remove('hidden');
+    }, 200);
+  } catch (e) {
+    console.warn('Error analizando entorno de persona:', e);
+  }
 };
 
 window.enfocarBandaEnGrafo = async function(bandaId) {
@@ -1852,11 +2056,41 @@ async function showEntityDetail(type, id) {
 
           <div class="form-section-title">Identidad y Estructura</div>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;font-size:13px">
-            <div><span style="color:var(--text-muted);display:block;font-size:11px;margin-bottom:2px">NOMBRE COMPLETO</span>${p.nombre || '—'} ${p.apellido || ''}</div>
-            <div><span style="color:var(--text-muted);display:block;font-size:11px;margin-bottom:2px">DNI</span>${p.dni || '—'}</div>
+            <div><span style="color:var(--text-muted);display:block;font-size:11px;margin-bottom:2px">NOMBRE COMPLETO</span><strong>${p.nombre || '—'} ${p.apellido || ''}</strong></div>
+            <div><span style="color:var(--text-muted);display:block;font-size:11px;margin-bottom:2px">DNI / CUIT</span>${p.dni || '—'} ${p.cuit ? `| CUIT: ${p.cuit}` : ''}</div>
             <div><span style="color:var(--text-muted);display:block;font-size:11px;margin-bottom:2px">ALIAS CONOCIDO</span>${p.alias?.join(', ') || '—'}</div>
-            <div><span style="color:var(--text-muted);display:block;font-size:11px;margin-bottom:2px">ORGANIZACIÓN / BANDA</span><strong style="color:#0EA5E9">${p.banda_nombre || 'Individual'}</strong></div>
+            <div><span style="color:var(--text-muted);display:block;font-size:11px;margin-bottom:2px">FECHA DE NACIMIENTO</span>${p.fecha_nacimiento || '—'}</div>
+            <div><span style="color:var(--text-muted);display:block;font-size:11px;margin-bottom:2px">ORGANIZACIÓN / BANDA</span><strong style="color:${p.banda_color || '#0EA5E9'}">🏴 ${p.banda_nombre || 'Individual'}</strong></div>
+            <div><span style="color:var(--text-muted);display:block;font-size:11px;margin-bottom:2px">ESTADO PROCESAL</span><span class="tag ${isCaptura ? 'peligrosidad-alta' : 'peligrosidad-baja'}">${p.estado_judicial || (isCaptura ? 'CAPTURA ACTIVA' : 'IDENTIFICADO')}</span></div>
           </div>
+
+          <!-- SECCIÓN EXPEDIENTE / DOSSIER JUDICIAL DIGITAL -->
+          <div class="form-section-title" style="display:flex;align-items:center;justify-content:space-between">
+            <span>Dossier Judicial Digital (Google Drive / Docs)</span>
+            ${p.link_dossier ? '<span style="color:#22C55E;font-size:11px;font-weight:700">● Vinculado</span>' : '<span style="color:#EAB308;font-size:11px">Pendiente</span>'}
+          </div>
+          ${p.link_dossier ? `
+            <div style="background:rgba(37,99,235,0.1);border:1px solid rgba(59,130,246,0.4);border-radius:8px;padding:12px 14px;display:flex;align-items:center;justify-content:space-between;gap:12px">
+              <div>
+                <div style="color:#FFF;font-weight:700;font-size:13px;display:flex;align-items:center;gap:6px">
+                  <span>📄 Expediente & Dossier Oficial en la Nube</span>
+                </div>
+                <div style="color:#94A3B8;font-size:11px;margin-top:2px;word-break:break-all">
+                  ${p.link_dossier}
+                </div>
+              </div>
+              <a href="${p.link_dossier}" target="_blank" rel="noopener noreferrer" class="btn btn-primary btn-sm" style="white-space:nowrap;padding:7px 14px;font-weight:800;box-shadow:0 2px 10px rgba(37,99,235,0.4);text-decoration:none">
+                Abrir en Drive ↗
+              </a>
+            </div>
+          ` : `
+            <div style="background:rgba(255,255,255,0.02);border:1px dashed rgba(255,255,255,0.15);border-radius:8px;padding:10px 14px;display:flex;align-items:center;justify-content:space-between">
+              <span style="color:var(--text-muted);font-size:12px">No posee enlace de Google Drive / Docs asociado aún.</span>
+              <button class="btn btn-outline btn-xs" onclick="document.getElementById('modal-detalle').classList.add('hidden'); window.abrirEdicionPersona('${p.id}');">
+                + Asociar Dossier
+              </button>
+            </div>
+          `}
 
           <div class="form-section-title">Análisis de Inteligencia Criminal</div>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;font-size:13px">
@@ -1868,9 +2102,10 @@ async function showEntityDetail(type, id) {
           ${p.antecedentes_texto ? `<div><span style="color:var(--text-muted);display:block;font-size:11px;margin-bottom:2px">ANTECEDENTES E HISTORIAL</span><div style="font-size:13px;color:var(--text-secondary);max-height:200px;overflow-y:auto;padding:8px;background:var(--bg-primary);border-radius:8px">${p.antecedentes_texto}</div></div>` : ''}
 
           <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
+            <button class="btn btn-outline btn-sm" onclick="document.getElementById('modal-detalle').classList.add('hidden'); window.abrirEdicionPersona('${p.id}');">✏️ Editar Perfil</button>
             <button class="btn btn-primary btn-sm" onclick="document.getElementById('modal-detalle').classList.add('hidden'); window.enfocarPersonaEnGrafo('${p.id}');">🕸️ Ver en Red de Vínculos</button>
             <button class="btn btn-secondary btn-sm" onclick="document.getElementById('modal-detalle').classList.add('hidden'); window.analizarEntornoDePersona('${p.id}');">📍 Analizar Entorno de Domicilio</button>
-            ${p.domicilio_principal_geom ? '<button class="btn btn-outline btn-sm" id="btn-ver-en-mapa">Centrar Mapa</button>' : ''}
+            ${p.domicilio_principal_geom ? `<button class="btn btn-outline btn-sm" onclick="document.getElementById('modal-detalle').classList.add('hidden'); window.centrarPersonaEnMapa('${p.id}');">🗺️ Centrar Mapa</button>` : ''}
           </div>
         </div>
       `;

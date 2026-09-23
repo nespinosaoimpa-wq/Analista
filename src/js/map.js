@@ -1,6 +1,6 @@
 import mapboxgl from 'mapbox-gl';
 import { CONFIG, getLesividadColor, formatDateTime, formatDate } from './config.js';
-import { getHechosGeoJSON, getZonas, getAllanamientos, parseGeom, parsePolygonGeom } from './supabase-client.js';
+import { getHechosGeoJSON, getZonas, getAllanamientos, parseGeom, parsePolygonGeom, getPersonasGeoJSON } from './supabase-client.js';
 import { enrichTacticalFeature, filterFeatures, CRIME_THEMATICS, createGeoJSONCircle } from './analytics-engine.js';
 
 let map = null;
@@ -42,6 +42,7 @@ export function initMap() {
       attributionControl: false,
       pitch: 0,
       bearing: 0,
+      preserveDrawingBuffer: true,
     });
 
     map.on('error', (e) => {
@@ -62,6 +63,7 @@ export function initMap() {
       if (allMasterFeatures.length === 0) {
         await loadMapData();
       }
+      await loadPersonasMapData();
     });
 
     return map;
@@ -122,6 +124,19 @@ function setupSources() {
   map.addSource('inspection-endpoints', {
     type: 'geojson',
     data: { type: 'FeatureCollection', features: [] },
+  });
+
+  // Integrantes de Bandas / Domicilios de Imputados
+  map.addSource('personas-bandas', {
+    type: 'geojson',
+    data: { type: 'FeatureCollection', features: [] },
+    cluster: true,
+    clusterMaxZoom: 14,
+    clusterRadius: 35,
+    clusterProperties: {
+      max_peligrosidad: ['max', ['get', 'score_peligrosidad']],
+      has_captura: ['any', ['get', 'pedido_captura']]
+    }
   });
 }
 
@@ -351,6 +366,117 @@ function setupLayers() {
       'circle-opacity': 0.95,
     },
   });
+
+  // --- Capas de Integrantes de Bandas (Domicilios) ---
+  map.addLayer({
+    id: 'personas-bandas-clusters',
+    type: 'circle',
+    source: 'personas-bandas',
+    filter: ['has', 'point_count'],
+    layout: { visibility: 'visible' },
+    paint: {
+      'circle-color': [
+        'case',
+        ['get', 'has_captura'], '#EF4444',
+        ['step', ['get', 'max_peligrosidad'], '#0EA5E9', 7, '#F59E0B', 9, '#EF4444']
+      ],
+      'circle-radius': ['step', ['get', 'point_count'], 16, 5, 22, 15, 28],
+      'circle-stroke-width': 2.5,
+      'circle-stroke-color': '#FFFFFF',
+      'circle-opacity': 0.9,
+    },
+  });
+
+  map.addLayer({
+    id: 'personas-bandas-cluster-count',
+    type: 'symbol',
+    source: 'personas-bandas',
+    filter: ['has', 'point_count'],
+    layout: {
+      visibility: 'visible',
+      'text-field': '👤 {point_count}',
+      'text-font': ['DIN Pro Bold', 'Arial Unicode MS Bold'],
+      'text-size': 11,
+    },
+    paint: { 'text-color': '#FFFFFF' },
+  });
+
+  // Halo visual de alerta pulsante para integrantes con Pedido de Captura Activo
+  map.addLayer({
+    id: 'personas-bandas-captura-halo',
+    type: 'circle',
+    source: 'personas-bandas',
+    filter: ['all', ['!', ['has', 'point_count']], ['==', ['get', 'pedido_captura'], true]],
+    layout: { visibility: 'visible' },
+    paint: {
+      'circle-radius': [
+        'interpolate', ['linear'], ['zoom'],
+        10, 14,
+        14, 18,
+        17, 26
+      ],
+      'circle-color': 'rgba(239, 68, 68, 0.28)',
+      'circle-stroke-color': '#EF4444',
+      'circle-stroke-width': 2,
+      'circle-stroke-opacity': 0.85,
+    },
+  });
+
+  map.addLayer({
+    id: 'personas-bandas-points',
+    type: 'circle',
+    source: 'personas-bandas',
+    filter: ['!', ['has', 'point_count']],
+    layout: { visibility: 'visible' },
+    paint: {
+      'circle-color': ['coalesce', ['get', 'banda_color'], '#0EA5E9'],
+      'circle-radius': [
+        'interpolate', ['linear'], ['coalesce', ['get', 'score_peligrosidad'], 5],
+        1, 6.5,
+        5, 8.5,
+        8, 11,
+        10, 13
+      ],
+      'circle-stroke-width': [
+        'case',
+        ['get', 'pedido_captura'], 3.5,
+        2
+      ],
+      'circle-stroke-color': [
+        'case',
+        ['get', 'pedido_captura'], '#EF4444',
+        '#FFFFFF'
+      ],
+      'circle-opacity': 0.95,
+    },
+  });
+
+  map.addLayer({
+    id: 'personas-bandas-label',
+    type: 'symbol',
+    source: 'personas-bandas',
+    filter: ['!', ['has', 'point_count']],
+    minzoom: 14,
+    layout: {
+      visibility: 'visible',
+      'text-field': [
+        'case',
+        ['!=', ['get', 'alias_texto'], ''],
+        ['concat', ['get', 'nombre_completo'], ' (', ['get', 'alias_texto'], ')'],
+        ['get', 'nombre_completo']
+      ],
+      'text-font': ['DIN Pro Medium', 'Arial Unicode MS Regular'],
+      'text-size': 11,
+      'text-offset': [0, 1.3],
+      'text-anchor': 'top',
+      'text-allow-overlap': false,
+    },
+    paint: {
+      'text-color': '#FFFFFF',
+      'text-halo-color': 'rgba(0,0,0,0.9)',
+      'text-halo-width': 1.5,
+    },
+  });
 }
 
 function setupInteractions() {
@@ -482,6 +608,100 @@ function setupInteractions() {
     popup.setLngLat(coords).setHTML(html).addTo(map);
   });
 
+  // Click on integrante de banda (domicilio)
+  map.on('click', 'personas-bandas-points', (e) => {
+    const props = e.features[0].properties;
+    const coords = e.features[0].geometry.coordinates.slice();
+    const isCaptura = props.pedido_captura === true || props.pedido_captura === 'true';
+    const bandaColor = props.banda_color || '#0EA5E9';
+    const hasDossier = Boolean(props.link_dossier);
+
+    const html = `
+      <div style="min-width: 260px; max-width: 330px; font-family: var(--font-sans, sans-serif);">
+        <!-- Header con Banda y Peligrosidad -->
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px">
+          <span style="display:inline-flex;align-items:center;gap:4px;background:${bandaColor}22;border:1px solid ${bandaColor}66;color:${bandaColor};padding:3px 8px;border-radius:12px;font-size:11px;font-weight:800">
+            🏴 ${props.banda_nombre || 'Individual'}
+          </span>
+          <span style="background:${props.score_peligrosidad >= 8 ? '#EF4444' : '#F59E0B'};color:#fff;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:700">P${props.score_peligrosidad || 5}/10</span>
+        </div>
+
+        ${isCaptura ? `
+          <div style="background:rgba(239,68,68,0.2);border:1px solid #EF4444;border-radius:6px;padding:4px 8px;color:#FCA5A5;font-size:10px;font-weight:800;margin-bottom:6px;display:flex;align-items:center;gap:4px">
+            🚨 ORDEN JUDICIAL DE CAPTURA ACTIVA
+          </div>
+        ` : ''}
+
+        <strong style="font-size:14px;color:#fff;display:block;margin-bottom:2px">
+          ${props.nombre_completo || 'Integrante'}
+        </strong>
+        ${props.alias_texto ? `<div style="font-size:11px;color:#FDE68A;font-weight:600;margin-bottom:6px">Alias: "${props.alias_texto}"</div>` : ''}
+
+        <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:6px;padding:6px 8px;margin-bottom:8px;font-size:11px">
+          ${props.dni ? `<div style="color:#cbd5e1;margin-bottom:2px"><strong>DNI:</strong> ${props.dni} ${props.cuit ? `| <strong>CUIT:</strong> ${props.cuit}` : ''}</div>` : ''}
+          ${props.fecha_nacimiento ? `<div style="color:#8896AB;margin-bottom:2px">🎂 <strong>Nacimiento:</strong> ${props.fecha_nacimiento}</div>` : ''}
+          ${props.domicilio_principal ? `<div style="color:#cbd5e1;margin-bottom:2px">📍 <strong>Domicilio:</strong> ${props.domicilio_principal}</div>` : ''}
+          ${props.roles ? `<div style="color:#8896AB">⚔️ <strong>Rol:</strong> ${Array.isArray(props.roles) ? props.roles.join(', ') : props.roles}</div>` : ''}
+        </div>
+
+        <!-- Botón Destacado: Dossier Judicial de Google Drive / Docs -->
+        ${hasDossier ? `
+          <a href="${props.link_dossier}" target="_blank" rel="noopener noreferrer" style="background:#2563EB;border:1px solid #3B82F6;color:#ffffff;font-size:11px;font-weight:800;display:flex;align-items:center;justify-content:center;gap:6px;padding:7px 10px;margin-bottom:6px;text-decoration:none;border-radius:6px;box-shadow:0 2px 8px rgba(37,99,235,0.4)">
+            📄 ABRIR DOSSIER JUDICIAL (Drive / Docs) ↗
+          </a>
+        ` : `
+          <button class="btn btn-outline btn-xs btn-add-dossier" data-id="${props.id}" style="width:100%;font-size:10px;margin-bottom:6px;padding:4px 6px">
+            + Asociar Link de Dossier (Drive)
+          </button>
+        `}
+
+        <!-- Acciones Rápidas -->
+        <div style="display:flex;gap:4px">
+          <button class="btn btn-secondary btn-xs btn-inspect-this-point" data-lng="${coords[0]}" data-lat="${coords[1]}" data-label="${(props.domicilio_principal || props.nombre_completo).replace(/"/g, '&quot;')}" style="flex:1;font-size:10px;padding:4px">
+            📍 Analizar Entorno
+          </button>
+          <button class="btn btn-outline btn-xs btn-edit-persona-direct" data-id="${props.id}" style="flex:1;font-size:10px;padding:4px">
+            ✏️ Editar Perfil
+          </button>
+        </div>
+      </div>
+    `;
+
+    popup.setLngLat(coords).setHTML(html).addTo(map);
+
+    setTimeout(() => {
+      document.querySelector('.btn-inspect-this-point')?.addEventListener('click', (ev) => {
+        const btn = ev.currentTarget;
+        const lng = parseFloat(btn.dataset.lng);
+        const lat = parseFloat(btn.dataset.lat);
+        const label = btn.dataset.label;
+        if (!isNaN(lng) && !isNaN(lat)) {
+          window.dispatchEvent(new CustomEvent('crimint:request-inspection', { detail: { coords: [lng, lat], label } }));
+        }
+      });
+
+      document.querySelector('.btn-edit-persona-direct')?.addEventListener('click', (ev) => {
+        const id = ev.currentTarget.dataset.id;
+        if (id && window.abrirEdicionPersona) window.abrirEdicionPersona(id);
+      });
+
+      document.querySelector('.btn-add-dossier')?.addEventListener('click', (ev) => {
+        const id = ev.currentTarget.dataset.id;
+        if (id && window.abrirEdicionPersona) window.abrirEdicionPersona(id);
+      });
+    }, 50);
+  });
+
+  // Click on persona banda cluster → zoom in
+  map.on('click', 'personas-bandas-clusters', (e) => {
+    const features = map.queryRenderedFeatures(e.point, { layers: ['personas-bandas-clusters'] });
+    const clusterId = features[0].properties.cluster_id;
+    map.getSource('personas-bandas').getClusterExpansionZoom(clusterId, (err, zoom) => {
+      if (err) return;
+      map.easeTo({ center: features[0].geometry.coordinates, zoom: zoom + 1 });
+    });
+  });
+
   // Click on polygon zone
   map.on('click', 'zonas-fill', (e) => {
     const props = e.features[0].properties;
@@ -509,7 +729,7 @@ function setupInteractions() {
   });
 
   // Cursor styles
-  ['unclustered-point', 'clusters', 'allanamientos-points', 'zonas-fill'].forEach(layer => {
+  ['unclustered-point', 'clusters', 'allanamientos-points', 'zonas-fill', 'personas-bandas-points', 'personas-bandas-clusters'].forEach(layer => {
     map.on('mouseenter', layer, () => { map.getCanvas().style.cursor = 'pointer'; });
     map.on('mouseleave', layer, () => { map.getCanvas().style.cursor = ''; });
   });
@@ -798,12 +1018,19 @@ export function toggleLayer(layerId, visible) {
       map.setLayoutProperty('allanamientos-points', 'visibility', vis);
       map.setLayoutProperty('allanamientos-label', 'visibility', vis);
       break;
+    case 'personas-bandas':
+      map.setLayoutProperty('personas-bandas-captura-halo', 'visibility', vis);
+      map.setLayoutProperty('personas-bandas-points', 'visibility', vis);
+      map.setLayoutProperty('personas-bandas-clusters', 'visibility', vis);
+      map.setLayoutProperty('personas-bandas-cluster-count', 'visibility', vis);
+      map.setLayoutProperty('personas-bandas-label', 'visibility', vis);
+      break;
   }
 }
 
-export function flyTo(lng, lat, zoom = 16) {
+export function flyTo(lng, lat, zoom = 16, pitch = 0) {
   if (map) {
-    map.flyTo({ center: [lng, lat], zoom, essential: true, duration: 1500 });
+    map.flyTo({ center: [lng, lat], zoom, pitch, essential: true, duration: 1500 });
   }
 }
 
@@ -962,3 +1189,116 @@ export function clearInspection() {
 export function getActiveInspection() {
   return activeInspection;
 }
+
+/**
+ * Carga o refresca la capa de integrantes de bandas y sus domicilios en el mapa.
+ */
+export async function loadPersonasMapData() {
+  if (!map) return;
+  try {
+    const geojson = await getPersonasGeoJSON();
+    map.getSource('personas-bandas')?.setData(geojson);
+  } catch (e) {
+    console.warn('Error cargando integrantes de bandas en el mapa:', e);
+  }
+}
+
+// ============================================================
+// MAPBOX ADVANCED CAPABILITIES (3D, SATELLITE, HIGH-RES EXPORT)
+// ============================================================
+
+let is3DActive = false;
+let currentBaseStyle = 'dark'; // 'dark' | 'satellite'
+
+/**
+ * Alterna entre perspectiva 2D ortogonal y vista 3D inclinada a 50° para relieve y contexto urbano.
+ */
+export function toggle3DMode() {
+  if (!map) return false;
+  is3DActive = !is3DActive;
+  map.easeTo({
+    pitch: is3DActive ? 52 : 0,
+    bearing: is3DActive ? -18 : 0,
+    duration: 1200
+  });
+  window.dispatchEvent(new CustomEvent('crimint:3d-toggled', { detail: { is3D: is3DActive } }));
+  return is3DActive;
+}
+
+export function is3DEnabled() {
+  return is3DActive;
+}
+
+/**
+ * Alterna entre el mapa base oscuro institucional y la fotografía satelital de alta resolución Mapbox.
+ */
+export async function toggleSatelliteMode() {
+  if (!map) return 'dark';
+  const token = CONFIG.mapbox.token;
+  if (!token) {
+    console.warn('Mapbox token no configurado para satélite.');
+    return currentBaseStyle;
+  }
+
+  currentBaseStyle = currentBaseStyle === 'dark' ? 'satellite' : 'dark';
+  const newStyle = currentBaseStyle === 'satellite'
+    ? 'mapbox://styles/mapbox/satellite-streets-v12'
+    : CONFIG.mapbox.style;
+
+  map.setStyle(newStyle);
+
+  map.once('style.load', async () => {
+    setupSources();
+    setupLayers();
+    setupInteractions();
+
+    if (activeMapFeatures && activeMapFeatures.length > 0) {
+      const fc = { type: 'FeatureCollection', features: activeMapFeatures };
+      map.getSource('hechos')?.setData(fc);
+      map.getSource('hechos-heat')?.setData(fc);
+    }
+    if (masterPolygons && masterPolygons.length > 0) {
+      map.getSource('zonas')?.setData({ type: 'FeatureCollection', features: masterPolygons });
+    }
+    await loadPersonasMapData();
+
+    // Reaplicar capas activas
+    ['heatmap', 'clusters', 'zonas', 'allanamientos', 'personas-bandas'].forEach(id => {
+      const el = document.getElementById(`layer-${id}`);
+      if (el) toggleLayer(id, el.checked);
+    });
+
+    window.dispatchEvent(new CustomEvent('crimint:basemap-changed', { detail: { style: currentBaseStyle } }));
+  });
+
+  return currentBaseStyle;
+}
+
+export function isSatelliteMode() {
+  return currentBaseStyle === 'satellite';
+}
+
+/**
+ * Exporta el lienzo WebGL de Mapbox en formato PNG de alta resolución para adjuntar en informes periciales o expedientes.
+ */
+export function exportMapSnapshot(customFilename = null) {
+  if (!map) return false;
+  try {
+    const canvas = map.getCanvas();
+    const dataUrl = canvas.toDataURL('image/png');
+    const today = new Date().toISOString().slice(0, 10);
+    const filename = customFilename || `CRIMINT_Anexo_Cartografico_${today}.png`;
+
+    const link = document.createElement('a');
+    link.download = filename;
+    link.href = dataUrl;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    return true;
+  } catch (err) {
+    console.error('Error exportando mapa para informe:', err);
+    return false;
+  }
+}
+

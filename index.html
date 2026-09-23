@@ -155,6 +155,16 @@
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
             <span>Inspeccionar Dirección</span>
           </button>
+          <div style="width: 1px; height: 22px; background: rgba(255,255,255,0.12); margin: 0 4px;"></div>
+          <button class="btn btn-ghost btn-sm" id="btn-toggle-3d" title="Alternar perspectiva 3D (Inclinación a 50°)">
+            <span>🏢 3D</span>
+          </button>
+          <button class="btn btn-ghost btn-sm" id="btn-toggle-basemap" title="Alternar Vista Satelital de Alta Definición / Modo Oscuro">
+            <span id="btn-basemap-label">🛰️ Satélite</span>
+          </button>
+          <button class="btn btn-ghost btn-sm" id="btn-export-map-snapshot" title="Capturar imagen cartográfica de alta resolución para informe pericial">
+            <span>📷 Capturar</span>
+          </button>
         </div>
 
         <div class="map-layer-panel" id="map-layer-panel">
@@ -174,6 +184,10 @@
           <label class="layer-toggle">
             <input type="checkbox" id="layer-allanamientos"> 
             <span class="layer-dot" style="background:#22c55e"></span>Allanamientos
+          </label>
+          <label class="layer-toggle">
+            <input type="checkbox" id="layer-personas-bandas" checked> 
+            <span class="layer-dot" style="background:#0ea5e9;border:1px solid #fff;"></span>Integrantes de Bandas
           </label>
         </div>
       </div>
@@ -762,11 +776,12 @@
   <div class="modal-overlay hidden" id="modal-persona">
     <div class="modal modal-lg">
       <div class="modal-header">
-        <h2>Registrar Persona</h2>
+        <h2 id="modal-persona-title">Registrar Persona de Interés</h2>
         <button class="modal-close" data-close="modal-persona">&times;</button>
       </div>
       <div class="modal-body">
         <form id="form-persona">
+          <input type="hidden" id="persona-edit-id" value="">
           <div class="form-section-title">Datos de Identidad</div>
           <div class="form-row">
             <div class="form-group">
@@ -780,6 +795,10 @@
             <div class="form-group">
               <label for="persona-dni">DNI</label>
               <input type="text" id="persona-dni" class="form-input">
+            </div>
+            <div class="form-group">
+              <label for="persona-cuit">CUIT</label>
+              <input type="text" id="persona-cuit" class="form-input" placeholder="20-37337271-5">
             </div>
           </div>
           <div class="form-row">
@@ -801,49 +820,61 @@
             </div>
           </div>
 
-          <div class="form-section-title">Descripción Física</div>
+          <div class="form-section-title">Organización y Análisis Criminal</div>
           <div class="form-row">
             <div class="form-group">
-              <label for="persona-tez">Tez</label>
-              <input type="text" id="persona-tez" class="form-input" placeholder="Clara, trigueña, morena...">
-            </div>
-            <div class="form-group">
-              <label for="persona-cabello">Cabello</label>
-              <input type="text" id="persona-cabello" class="form-input" placeholder="Negro corto, rubio largo...">
-            </div>
-            <div class="form-group">
-              <label for="persona-contextura">Contextura</label>
-              <input type="text" id="persona-contextura" class="form-input" placeholder="Delgada, robusta, atlética...">
-            </div>
-          </div>
-          <div class="form-group">
-            <label for="persona-senas">Señas Particulares (tatuajes, cicatrices)</label>
-            <textarea id="persona-senas" class="form-input" rows="2"></textarea>
-          </div>
-
-          <div class="form-section-title">Análisis Criminal</div>
-          <div class="form-row">
-            <div class="form-group">
-              <label for="persona-peligrosidad">Peligrosidad (0-10)</label>
-              <input type="range" id="persona-peligrosidad" min="0" max="10" value="0" class="filter-range">
-              <span id="persona-peligrosidad-val">0</span>
+              <label for="persona-banda">Banda u Organización</label>
+              <select id="persona-banda" class="form-input">
+                <option value="">Individual / Sin banda asignada</option>
+                <option value="banda-los-de-siempre">Los de Siempre</option>
+                <option value="banda-la-negrada">La Negrada</option>
+                <option value="banda-polaco-maidana">Banda del Polaco Maidana</option>
+                <option value="banda-puchingas">Los Puchingas</option>
+                <option value="banda-correntino">Banda del Correntino (Beban)</option>
+                <option value="banda-espinillos">Los Espinillos</option>
+              </select>
             </div>
             <div class="form-group">
               <label for="persona-roles">Roles (separados por coma)</label>
-              <input type="text" id="persona-roles" class="form-input" placeholder="dealer, tirador, campana...">
+              <input type="text" id="persona-roles" class="form-input" placeholder="cabecilla, tirador, soldadito, distribuidor...">
+            </div>
+            <div class="form-group">
+              <label for="persona-peligrosidad">Peligrosidad (0-10)</label>
+              <input type="range" id="persona-peligrosidad" min="0" max="10" value="5" class="filter-range">
+              <span id="persona-peligrosidad-val">5</span>
             </div>
           </div>
-          <div class="form-group">
-            <label for="persona-domicilio">Domicilio Principal</label>
-            <input type="text" id="persona-domicilio" class="form-input" placeholder="Dirección completa">
+
+          <div class="form-row">
+            <div class="form-group" style="flex:1">
+              <label for="persona-captura" style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-top:24px">
+                <input type="checkbox" id="persona-captura" style="width:16px;height:16px">
+                <span style="color:#EF4444;font-weight:700;font-size:12px">🚨 Orden Judicial de Captura Activa</span>
+              </label>
+            </div>
           </div>
+
+          <div class="form-section-title">Localización y Dossier Digital</div>
           <div class="form-group">
-            <label for="persona-antecedentes">Antecedentes / Notas</label>
-            <textarea id="persona-antecedentes" class="form-input" rows="3"></textarea>
+            <label for="persona-domicilio">Domicilio Principal / Residencia Real</label>
+            <input type="text" id="persona-domicilio" class="form-input" placeholder="Ej: Vera Mujica 674, Santa Fe">
+          </div>
+
+          <div class="form-group">
+            <label for="persona-dossier" style="color:var(--accent-secondary);font-weight:700;display:flex;align-items:center;gap:6px">
+              📄 Enlace al Dossier Judicial (Google Drive / Docs URL)
+            </label>
+            <input type="url" id="persona-dossier" class="form-input" placeholder="https://docs.google.com/document/d/... o link de Google Drive" style="border-color:rgba(14,165,233,0.4)">
+            <span style="font-size:10px;color:var(--text-muted);display:block;margin-top:2px">Al cargar este enlace, aparecerá un botón directo en el mapa y en la ficha judicial para abrir el documento completo.</span>
+          </div>
+
+          <div class="form-group">
+            <label for="persona-antecedentes">Antecedentes e Inteligencia Táctica</label>
+            <textarea id="persona-antecedentes" class="form-input" rows="3" placeholder="Información de causas, vínculos territoriales o modus operandi..."></textarea>
           </div>
           <div class="form-actions">
             <button type="button" class="btn btn-ghost" data-close="modal-persona">Cancelar</button>
-            <button type="submit" class="btn btn-primary">Guardar Persona</button>
+            <button type="submit" class="btn btn-primary" id="btn-submit-persona">Guardar Persona</button>
           </div>
         </form>
       </div>
