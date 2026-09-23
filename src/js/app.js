@@ -2987,9 +2987,13 @@ async function mostrarDossierNodo(nodeId) {
       </div>
       ${p.domicilio_principal ? `<div style="font-size:11px;margin-bottom:6px;"><span style="color:var(--text-muted);">Domicilio:</span> ${p.domicilio_principal}</div>` : ''}
       ${p.cuij_asociados?.length ? `<div style="font-size:11px;margin-bottom:6px;"><span style="color:var(--text-muted);">CUIJ:</span> <span style="font-family:var(--font-mono);color:var(--accent-primary);">${p.cuij_asociados.join(', ')}</span></div>` : ''}
-      <div style="margin-top:14px;display:flex;gap:6px;">
-        <button class="btn btn-secondary btn-xs" onclick="window.abrirDossierDigital('${p.id}')">📋 Dossier Digital</button>
-        <button class="btn btn-primary btn-xs" onclick="renderGrafo('${p.id}')">Enfocar Vínculos</button>
+      <div style="margin-top:14px;display:flex;gap:8px;">
+        <button class="btn btn-secondary btn-sm" onclick="window.abrirDossierDigital('${p.id}')" style="background:#1E293B;color:#FFFFFF;border:1px solid #475569;flex:1;font-size:11px;font-weight:700;padding:7px 10px;justify-content:center;display:flex;align-items:center;gap:4px;" title="Abrir legajo y expediente completo">
+          📋 Ver Dossier
+        </button>
+        <button class="btn btn-primary btn-sm" onclick="renderGrafo('${p.id}')" style="background:linear-gradient(135deg, #F59E0B, #D97706);color:#060A13;font-weight:800;border:1px solid #F59E0B;flex:1;font-size:11px;padding:7px 10px;justify-content:center;display:flex;align-items:center;gap:4px;" title="Enfocar vínculos directos de esta persona">
+          🕸️ Enfocar Red
+        </button>
       </div>
     `;
   }

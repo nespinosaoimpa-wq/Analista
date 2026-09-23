@@ -512,9 +512,9 @@
           </div>
           <div class="list-actions" style="flex-wrap:wrap;gap:8px;">
             <div class="personas-filters-bar" style="display:flex;gap:6px;align-items:center;">
-              <button class="btn btn-sm btn-outline active persona-filter-btn" data-filter="todos">Todos</button>
-              <button class="btn btn-sm btn-outline persona-filter-btn" data-filter="captura" style="border-color:rgba(239,68,68,0.5);color:#EF4444;background:rgba(239,68,68,0.08);">🚨 Pedidos de Captura</button>
-              <button class="btn btn-sm btn-outline persona-filter-btn" data-filter="peligrosidad" style="border-color:rgba(245,158,11,0.5);color:#F59E0B;background:rgba(245,158,11,0.08);">⚔️ Peligrosidad ≥ 8</button>
+              <button class="btn btn-sm btn-outline active persona-filter-btn" data-filter="todos" style="background:rgba(255,255,255,0.08);border:1px solid var(--border-default);color:#fff;">Todos</button>
+              <button class="btn btn-sm btn-outline persona-filter-btn" data-filter="captura" style="border:1px solid #EF4444;color:#FCA5A5;background:rgba(239,68,68,0.18);">🚨 Pedidos de Captura</button>
+              <button class="btn btn-sm btn-outline persona-filter-btn" data-filter="peligrosidad" style="border:1px solid #F59E0B;color:#FCD34D;background:rgba(245,158,11,0.18);">⚔️ Peligrosidad ≥ 8</button>
               <select id="personas-banda-filter" class="filter-select" style="max-width:180px;height:32px;font-size:12px;">
                 <option value="">Todas las bandas</option>
                 <option value="La Negrada">La Negrada</option>
@@ -569,9 +569,15 @@
             <span style="font-size:12px;color:var(--text-secondary);">Análisis relacional, jerarquías de mando, relaciones familiares y disputas armadas</span>
           </div>
           <div class="grafo-controls" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-            <button class="btn btn-outline btn-sm active" id="btn-grafo-general">🌐 Red General</button>
-            <button class="btn btn-outline btn-sm" id="btn-grafo-profugos" style="color:#EF4444;border-color:rgba(239,68,68,0.5);">🚨 Prófugos</button>
-            <button class="btn btn-outline btn-sm" id="btn-grafo-conflicto" style="color:#F59E0B;border-color:rgba(245,158,11,0.5);">⚔️ La Negrada vs Los de Siempre</button>
+            <button class="btn btn-outline btn-sm active" id="btn-grafo-general" style="background:rgba(14,165,233,0.18);border:1px solid #0EA5E9;color:#38BDF8;font-weight:700;" title="Ver todos los vínculos de la red criminal">
+              🌐 Red General
+            </button>
+            <button class="btn btn-outline btn-sm" id="btn-grafo-profugos" style="background:rgba(239,68,68,0.18);border:1px solid #EF4444;color:#FCA5A5;font-weight:700;" title="Filtrar integrantes con pedido de captura activo">
+              🚨 Prófugos
+            </button>
+            <button class="btn btn-outline btn-sm" id="btn-grafo-conflicto" style="background:rgba(245,158,11,0.18);border:1px solid #F59E0B;color:#FCD34D;font-weight:700;" title="Filtrar disputas y tiroteos entre facciones">
+              ⚔️ Disputas Territoriales
+            </button>
             <select id="grafo-persona-select" class="filter-select" style="max-width:280px;">
               <option value="">Seleccionar persona focal...</option>
             </select>

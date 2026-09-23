@@ -111,10 +111,26 @@ body {
   width: 100vw;
 }
 
-input, select, textarea, button {
+input, select, textarea {
   font-family: inherit;
   font-size: inherit;
   color: inherit;
+}
+
+button {
+  font-family: inherit;
+  font-size: inherit;
+  color: var(--text-primary);
+  background-color: var(--bg-tertiary);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+button:focus-visible {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: 1px;
 }
 
 a { color: var(--accent-secondary); text-decoration: none; }
@@ -1136,19 +1152,20 @@ a:hover { text-decoration: underline; }
 .btn-secondary:hover { border-color: var(--border-active); background: var(--bg-hover); }
 
 .btn-outline {
-  background: rgba(255, 255, 255, 0.04);
-  border-color: var(--border-default);
-  color: var(--text-primary);
+  background: rgba(15, 23, 42, 0.8) !important;
+  border: 1px solid var(--border-default) !important;
+  color: var(--text-primary) !important;
 }
 .btn-outline:hover {
-  background: rgba(255, 255, 255, 0.09);
-  border-color: var(--border-active);
-  color: #FFFFFF;
+  background: rgba(30, 41, 59, 0.95) !important;
+  border-color: var(--border-active) !important;
+  color: #FFFFFF !important;
 }
 .btn-outline.active {
-  background: rgba(14, 165, 233, 0.15);
-  border-color: var(--accent-secondary);
-  color: var(--accent-secondary);
+  background: rgba(14, 165, 233, 0.25) !important;
+  border-color: var(--accent-secondary) !important;
+  color: #38BDF8 !important;
+  box-shadow: 0 0 10px rgba(14, 165, 233, 0.3) !important;
 }
 
 .btn-accent {
