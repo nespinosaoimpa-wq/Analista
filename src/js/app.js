@@ -21,6 +21,8 @@ import {
 } from './analytics-engine.js';
 import { Network } from 'vis-network';
 import { DataSet } from 'vis-data';
+import { initMapPicker, openMapPicker } from './map-picker.js';
+import { renderPrecisionBadge, parseCoordsOrUrl, reverseGeocode } from './geocoder.js';
 
 // Estado global de dossier y perfilación criminal
 let currentPersonaFiles = [];
@@ -31,6 +33,7 @@ let currentViewingDossierId = null;
 // ============================================================
 document.addEventListener('DOMContentLoaded', () => {
   initMap();
+  initMapPicker();
   initTacticalHUD();
   initTacticalTimeline();
   setupNavigation();
@@ -183,10 +186,35 @@ function setupSearch() {
       }
 
       const results = await globalSearch(term);
-      if (results.length === 0) {
+      const direct = parseCoordsOrUrl(term);
+
+      let geoOption = '';
+      if (direct) {
+        geoOption = `
+          <div class="search-result-item search-geo-item" data-type="coord-direct" data-lng="${direct.lng}" data-lat="${direct.lat}">
+            <span class="search-result-type" style="background:#2563EB;color:#FFF">📍 GPS</span>
+            <div>
+              <div style="font-weight:600;font-size:13px;color:#60A5FA">Ir a Coordenadas GPS en Mapa</div>
+              <div style="font-size:11px;color:var(--text-muted)">Lat: ${direct.lat.toFixed(6)}, Lng: ${direct.lng.toFixed(6)}</div>
+            </div>
+          </div>
+        `;
+      } else if (term.length >= 4) {
+        geoOption = `
+          <div class="search-result-item search-geo-locate" data-type="geo-search" data-term="${term.replace(/"/g, '&quot;')}">
+            <span class="search-result-type" style="background:#059669;color:#FFF">🗺️ MAPA</span>
+            <div>
+              <div style="font-weight:600;font-size:13px;color:#34D399">Ubicar dirección "${term}" en el mapa</div>
+              <div style="font-size:11px;color:var(--text-muted)">Geocodificar quirúrgicamente y centrar visor</div>
+            </div>
+          </div>
+        `;
+      }
+
+      if (results.length === 0 && !geoOption) {
         dropdown.innerHTML = '<div class="search-result-item" style="color:var(--text-muted)">Sin resultados</div>';
       } else {
-        dropdown.innerHTML = results.map(r => {
+        const resultsHtml = results.map(r => {
           const typeLabel = r.type === 'persona' ? 'PER' : r.type === 'hecho' ? 'HEC' : r.type === 'allanamiento' ? 'ALL' : 'BAN';
           const coordsAttr = r.coords ? `data-lng="${r.coords.lng}" data-lat="${r.coords.lat}"` : '';
           return `
@@ -199,14 +227,45 @@ function setupSearch() {
             </div>
           `;
         }).join('');
+        dropdown.innerHTML = geoOption + resultsHtml;
       }
       dropdown.classList.add('visible');
     }, 300);
   });
 
-  dropdown?.addEventListener('click', (e) => {
+  dropdown?.addEventListener('click', async (e) => {
     const item = e.target.closest('.search-result-item');
-    if (!item || !item.dataset.id) return;
+    if (!item) return;
+
+    if (item.dataset.type === 'coord-direct') {
+      dropdown.classList.remove('visible');
+      input.value = '';
+      document.querySelector('[data-view="mapa"]')?.click();
+      const lng = parseFloat(item.dataset.lng);
+      const lat = parseFloat(item.dataset.lat);
+      flyTo(lng, lat, 17);
+      showToast(`Centrado en coordenadas GPS: ${lat.toFixed(5)}, ${lng.toFixed(5)}`, 'info');
+      return;
+    }
+
+    if (item.dataset.type === 'geo-search') {
+      dropdown.classList.remove('visible');
+      const t = item.dataset.term;
+      input.value = '';
+      showLoading(`Localizando "${t}"...`);
+      const geo = await geocodeAddress(t);
+      hideLoading();
+      if (geo && geo.lat && geo.lng) {
+        document.querySelector('[data-view="mapa"]')?.click();
+        flyTo(geo.lng, geo.lat, 17);
+        showToast(`Ubicado: ${geo.display_name}`, 'success');
+      } else {
+        showToast(`No se pudo ubicar "${t}" en Santa Fe`, 'warning');
+      }
+      return;
+    }
+
+    if (!item.dataset.id) return;
 
     dropdown.classList.remove('visible');
     input.value = '';
@@ -473,6 +532,8 @@ function setupForms() {
         direccion: document.getElementById('hecho-direccion')?.value,
         barrio: document.getElementById('hecho-barrio')?.value,
         localidad: document.getElementById('hecho-localidad')?.value || 'Santa Fe',
+        geom: document.getElementById('hecho-geom')?.value || null,
+        precision_geo: document.getElementById('hecho-precision')?.value || null,
         indice_lesividad: parseInt(document.getElementById('hecho-lesividad')?.value) || 3,
         cuij: document.getElementById('hecho-cuij')?.value || null,
         requerimiento: document.getElementById('hecho-requerimiento')?.value || null,
@@ -494,12 +555,78 @@ function setupForms() {
 
       closeModal('modal-hecho');
       e.target.reset();
+      if (document.getElementById('hecho-geom')) document.getElementById('hecho-geom').value = '';
+      if (document.getElementById('hecho-precision')) document.getElementById('hecho-precision').value = '';
+      if (document.getElementById('hecho-geo-badge')) document.getElementById('hecho-geo-badge').innerHTML = '';
       loadMapData();
-      showToast('Hecho registrado correctamente', 'success');
+      showToast('Hecho registrado correctamente con precisión cartográfica', 'success');
     } catch (err) {
       showToast(`Error: ${err.message}`, 'error');
     } finally {
       hideLoading();
+    }
+  });
+
+  // Botón Ajustar en Mapa para Hecho
+  document.getElementById('btn-pick-hecho-map')?.addEventListener('click', () => {
+    const curCoords = document.getElementById('hecho-geom')?.value ? parseGeom(document.getElementById('hecho-geom').value) : null;
+    const dirVal = document.getElementById('hecho-direccion')?.value?.trim() || '';
+    const barVal = document.getElementById('hecho-barrio')?.value?.trim() || '';
+    openMapPicker({
+      currentCoords: curCoords,
+      address: dirVal,
+      barrio: barVal,
+      title: 'Fijar Lugar del Hecho Delictivo',
+      onConfirm: ({ lat, lng, geom, direccion, barrio, precision }) => {
+        const geomInput = document.getElementById('hecho-geom');
+        const precInput = document.getElementById('hecho-precision');
+        const dirInput = document.getElementById('hecho-direccion');
+        const barInput = document.getElementById('hecho-barrio');
+        const badge = document.getElementById('hecho-geo-badge');
+
+        if (geomInput) geomInput.value = geom;
+        if (precInput) precInput.value = precision;
+        if (dirInput && direccion) dirInput.value = direccion;
+        if (barInput && barrio && !barInput.value) barInput.value = barrio;
+        if (badge) badge.innerHTML = renderPrecisionBadge(precision, { lat, lng });
+      }
+    });
+  });
+
+  // Auto-geocodificación y detección de coordenadas / Google Maps en Hecho
+  document.getElementById('hecho-direccion')?.addEventListener('change', async (e) => {
+    const val = e.target.value.trim();
+    const geomInput = document.getElementById('hecho-geom');
+    const precInput = document.getElementById('hecho-precision');
+    const badge = document.getElementById('hecho-geo-badge');
+    const barInput = document.getElementById('hecho-barrio');
+
+    if (!val) {
+      if (geomInput) geomInput.value = '';
+      if (precInput) precInput.value = '';
+      if (badge) badge.innerHTML = '';
+      return;
+    }
+
+    const direct = parseCoordsOrUrl(val);
+    if (direct) {
+      if (geomInput) geomInput.value = `SRID=4326;POINT(${direct.lng} ${direct.lat})`;
+      if (precInput) precInput.value = 'GPS_COORDENADAS';
+      if (badge) badge.innerHTML = renderPrecisionBadge('GPS_COORDENADAS', direct);
+      showToast('Coordenadas detectadas y asignadas al hecho', 'info');
+      return;
+    }
+
+    if (badge) badge.innerHTML = `<span style="font-size:10px;color:var(--text-muted)">⏳ Verificando ubicación...</span>`;
+    const barVal = barInput?.value?.trim() || '';
+    const geo = await geocodeAddress(val, barVal, 'Santa Fe');
+    if (geo && geo.lat && geo.lng) {
+      if (geomInput) geomInput.value = `SRID=4326;POINT(${geo.lng} ${geo.lat})`;
+      if (precInput) precInput.value = geo.precision;
+      if (badge) badge.innerHTML = renderPrecisionBadge(geo.precision, { lat: geo.lat, lng: geo.lng });
+      if (barInput && geo.barrio && !barInput.value) barInput.value = geo.barrio;
+    } else {
+      if (badge) badge.innerHTML = `<span class="badge badge-warning" style="font-size:10px;">⚠️ Calle aproximada - Ajustar en mapa</span>`;
     }
   });
 
@@ -738,6 +865,8 @@ function setupForms() {
         direccion: document.getElementById('allanamiento-direccion')?.value,
         barrio: document.getElementById('allanamiento-barrio')?.value || null,
         localidad: document.getElementById('allanamiento-localidad')?.value || 'Santa Fe',
+        geom: document.getElementById('allanamiento-geom')?.value || null,
+        precision_geo: document.getElementById('allanamiento-precision')?.value || null,
         fuerza_interviniente: document.getElementById('allanamiento-fuerza')?.value || 'PDI',
         resultado: document.getElementById('allanamiento-resultado')?.value || 'Positivo',
         juzgado_interviniente: document.getElementById('allanamiento-juzgado')?.value || null,
@@ -748,7 +877,10 @@ function setupForms() {
       await logAction('INSERT', 'allanamientos', res.id);
       closeModal('modal-allanamiento');
       e.target.reset();
-      showToast('Allanamiento registrado correctamente', 'success');
+      if (document.getElementById('allanamiento-geom')) document.getElementById('allanamiento-geom').value = '';
+      if (document.getElementById('allanamiento-precision')) document.getElementById('allanamiento-precision').value = '';
+      if (document.getElementById('allanamiento-geo-badge')) document.getElementById('allanamiento-geo-badge').innerHTML = '';
+      showToast('Allanamiento registrado correctamente con precisión cartográfica', 'success');
       if (document.getElementById('view-allanamientos')?.classList.contains('active')) {
         await renderAllanamientosView();
       }
@@ -757,6 +889,69 @@ function setupForms() {
       showToast(`Error: ${err.message}`, 'error');
     } finally {
       hideLoading();
+    }
+  });
+
+  // Botón Ajustar en Mapa para Allanamiento
+  document.getElementById('btn-pick-allanamiento-map')?.addEventListener('click', () => {
+    const curCoords = document.getElementById('allanamiento-geom')?.value ? parseGeom(document.getElementById('allanamiento-geom').value) : null;
+    const dirVal = document.getElementById('allanamiento-direccion')?.value?.trim() || '';
+    const barVal = document.getElementById('allanamiento-barrio')?.value?.trim() || '';
+    openMapPicker({
+      currentCoords: curCoords,
+      address: dirVal,
+      barrio: barVal,
+      title: 'Fijar Ubicación de Allanamiento',
+      onConfirm: ({ lat, lng, geom, direccion, barrio, precision }) => {
+        const geomInput = document.getElementById('allanamiento-geom');
+        const precInput = document.getElementById('allanamiento-precision');
+        const dirInput = document.getElementById('allanamiento-direccion');
+        const barInput = document.getElementById('allanamiento-barrio');
+        const badge = document.getElementById('allanamiento-geo-badge');
+
+        if (geomInput) geomInput.value = geom;
+        if (precInput) precInput.value = precision;
+        if (dirInput && direccion) dirInput.value = direccion;
+        if (barInput && barrio && !barInput.value) barInput.value = barrio;
+        if (badge) badge.innerHTML = renderPrecisionBadge(precision, { lat, lng });
+      }
+    });
+  });
+
+  // Auto-geocodificación o detección de coordenadas / Google Maps en Allanamiento
+  document.getElementById('allanamiento-direccion')?.addEventListener('change', async (e) => {
+    const val = e.target.value.trim();
+    const geomInput = document.getElementById('allanamiento-geom');
+    const precInput = document.getElementById('allanamiento-precision');
+    const badge = document.getElementById('allanamiento-geo-badge');
+    const barInput = document.getElementById('allanamiento-barrio');
+
+    if (!val) {
+      if (geomInput) geomInput.value = '';
+      if (precInput) precInput.value = '';
+      if (badge) badge.innerHTML = '';
+      return;
+    }
+
+    const direct = parseCoordsOrUrl(val);
+    if (direct) {
+      if (geomInput) geomInput.value = `SRID=4326;POINT(${direct.lng} ${direct.lat})`;
+      if (precInput) precInput.value = 'GPS_COORDENADAS';
+      if (badge) badge.innerHTML = renderPrecisionBadge('GPS_COORDENADAS', direct);
+      showToast('Coordenadas detectadas y asignadas al allanamiento', 'info');
+      return;
+    }
+
+    if (badge) badge.innerHTML = `<span style="font-size:10px;color:var(--text-muted)">⏳ Verificando ubicación...</span>`;
+    const barVal = barInput?.value?.trim() || '';
+    const geo = await geocodeAddress(val, barVal, 'Santa Fe');
+    if (geo && geo.lat && geo.lng) {
+      if (geomInput) geomInput.value = `SRID=4326;POINT(${geo.lng} ${geo.lat})`;
+      if (precInput) precInput.value = geo.precision;
+      if (badge) badge.innerHTML = renderPrecisionBadge(geo.precision, { lat: geo.lat, lng: geo.lng });
+      if (barInput && geo.barrio && !barInput.value) barInput.value = geo.barrio;
+    } else {
+      if (badge) badge.innerHTML = `<span class="badge badge-warning" style="font-size:10px;">⚠️ Calle aproximada - Ajustar en mapa</span>`;
     }
   });
 
@@ -1788,10 +1983,11 @@ function addDomicilioRow(data = {}) {
   row.dataset.rowType = 'domicilio';
   if (data.id) row.dataset.id = data.id;
   if (data.geom) row.dataset.geom = data.geom;
+  if (data.precision) row.dataset.precision = data.precision;
 
   row.innerHTML = `
     <div style="flex:1;display:flex;flex-direction:column;gap:8px">
-      <div style="display:grid;grid-template-columns:140px 1.5fr 1fr;gap:8px">
+      <div style="display:grid;grid-template-columns:130px 1.6fr 1fr;gap:8px">
         <div>
           <label style="font-size:10px;color:var(--text-muted)">Tipo de Domicilio</label>
           <select class="form-input dom-tipo" style="padding:4px 8px;font-size:11px">
@@ -1802,8 +1998,12 @@ function addDomicilioRow(data = {}) {
           </select>
         </div>
         <div>
-          <label style="font-size:10px;color:var(--text-muted)">Dirección y Altura</label>
-          <input type="text" class="form-input dom-direccion" value="${(data.direccion || '').replace(/"/g, '&quot;')}" placeholder="Ej: Vera Mujica 674" style="padding:4px 8px;font-size:11px">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px">
+            <label style="font-size:10px;color:var(--text-muted)">Dirección y Altura</label>
+            <button type="button" class="btn btn-outline btn-xs btn-pick-dom-map" title="Ajustar punto exacto en el mapa interactivo" style="font-size:10px;padding:1px 6px;color:#60A5FA;border-color:rgba(96,165,250,0.4)">📍 En Mapa</button>
+          </div>
+          <input type="text" class="form-input dom-direccion" value="${(data.direccion || '').replace(/"/g, '&quot;')}" placeholder="Ej: Vera Mujica 674 o link Google Maps" style="padding:4px 8px;font-size:11px">
+          <div class="dom-geo-badge-container" style="margin-top:4px;"></div>
         </div>
         <div>
           <label style="font-size:10px;color:var(--text-muted)">Barrio</label>
@@ -1817,6 +2017,69 @@ function addDomicilioRow(data = {}) {
     </div>
     <button type="button" class="btn btn-outline btn-xs btn-remove-row" title="Quitar este domicilio" style="color:#EF4444;border-color:rgba(239,68,68,0.3);margin-top:16px">✕</button>
   `;
+
+  const dirInput = row.querySelector('.dom-direccion');
+  const barInput = row.querySelector('.dom-barrio');
+  const badgeContainer = row.querySelector('.dom-geo-badge-container');
+  const btnPickMap = row.querySelector('.btn-pick-dom-map');
+
+  // Renderizar badge inicial si ya tiene coordenadas
+  if (data.geom) {
+    const coords = parseGeom(data.geom);
+    if (coords && badgeContainer) {
+      badgeContainer.innerHTML = renderPrecisionBadge(data.precision || 'MANUAL_EXACTA', coords);
+    }
+  }
+
+  // Evento: Clic en botón "📍 En Mapa"
+  btnPickMap?.addEventListener('click', () => {
+    const curCoords = row.dataset.geom ? parseGeom(row.dataset.geom) : null;
+    const dirVal = dirInput.value.trim();
+    const barVal = barInput?.value?.trim() || '';
+    openMapPicker({
+      currentCoords: curCoords,
+      address: dirVal,
+      barrio: barVal,
+      title: 'Fijar Ubicación de Domicilio',
+      onConfirm: ({ lat, lng, geom, direccion, barrio, precision }) => {
+        row.dataset.geom = geom;
+        row.dataset.precision = precision;
+        if (direccion) dirInput.value = direccion;
+        if (barrio && barInput && !barInput.value) barInput.value = barrio;
+        if (badgeContainer) badgeContainer.innerHTML = renderPrecisionBadge(precision, { lat, lng });
+      }
+    });
+  });
+
+  // Evento: Al cambiar la dirección, auto geocodificar o detectar URL Google Maps
+  dirInput?.addEventListener('change', async () => {
+    const val = dirInput.value.trim();
+    if (!val) {
+      row.dataset.geom = '';
+      row.dataset.precision = '';
+      if (badgeContainer) badgeContainer.innerHTML = '';
+      return;
+    }
+    const direct = parseCoordsOrUrl(val);
+    if (direct) {
+      row.dataset.geom = `SRID=4326;POINT(${direct.lng} ${direct.lat})`;
+      row.dataset.precision = 'GPS_COORDENADAS';
+      if (badgeContainer) badgeContainer.innerHTML = renderPrecisionBadge('GPS_COORDENADAS', direct);
+      showToast('Coordenadas detectadas y asignadas al domicilio', 'info');
+      return;
+    }
+    if (badgeContainer) badgeContainer.innerHTML = `<span style="font-size:10px;color:var(--text-muted)">⏳ Verificando ubicación...</span>`;
+    const barVal = barInput?.value?.trim() || '';
+    const geo = await geocodeAddress(val, barVal, 'Santa Fe');
+    if (geo && geo.lat && geo.lng) {
+      row.dataset.geom = `SRID=4326;POINT(${geo.lng} ${geo.lat})`;
+      row.dataset.precision = geo.precision;
+      if (badgeContainer) badgeContainer.innerHTML = renderPrecisionBadge(geo.precision, { lat: geo.lat, lng: geo.lng });
+      if (geo.barrio && barInput && !barInput.value) barInput.value = geo.barrio;
+    } else {
+      if (badgeContainer) badgeContainer.innerHTML = `<span class="badge badge-warning" style="font-size:10px;cursor:pointer;" title="Haga clic en 'En Mapa' para fijar manualmente">⚠️ Altura dudosa - Fijar en Mapa</span>`;
+    }
+  });
 
   row.querySelector('.btn-remove-row')?.addEventListener('click', () => row.remove());
   container.appendChild(row);

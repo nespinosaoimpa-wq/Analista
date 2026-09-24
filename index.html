@@ -731,9 +731,17 @@
           </div>
           <div class="form-row">
             <div class="form-group">
-              <label for="hecho-direccion">Dirección</label>
-              <input type="text" id="hecho-direccion" class="form-input" placeholder="Ej: Esmeralda y Riobamba">
-              <button type="button" class="btn btn-outline btn-xs" id="btn-pre-inspect-hecho" style="margin-top:4px;font-size:11px;">🔍 Analizar Entorno de esta Dirección</button>
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+                <label for="hecho-direccion" style="margin:0;">Dirección / Intersección</label>
+                <button type="button" class="btn btn-primary btn-xs" id="btn-pick-hecho-map" style="font-size:11px;padding:2px 8px;display:inline-flex;align-items:center;gap:4px;">📍 Ajustar en Mapa</button>
+              </div>
+              <input type="text" id="hecho-direccion" class="form-input" placeholder="Ej: Esmeralda y Riobamba, o Urquiza 4250">
+              <input type="hidden" id="hecho-geom" value="">
+              <input type="hidden" id="hecho-precision" value="">
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-top:4px;">
+                <div id="hecho-geo-badge"></div>
+                <button type="button" class="btn btn-outline btn-xs" id="btn-pre-inspect-hecho" style="font-size:10px;padding:2px 6px;">🔍 Analizar Entorno</button>
+              </div>
             </div>
             <div class="form-group">
               <label for="hecho-barrio">Barrio</label>
@@ -1240,8 +1248,14 @@
           </div>
           <div class="form-row">
             <div class="form-group">
-              <label for="allanamiento-direccion">Dirección Objetivo</label>
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+                <label for="allanamiento-direccion" style="margin:0;">Dirección Objetivo</label>
+                <button type="button" class="btn btn-primary btn-xs" id="btn-pick-allanamiento-map" style="font-size:11px;padding:2px 8px;display:inline-flex;align-items:center;gap:4px;">📍 Ajustar en Mapa</button>
+              </div>
               <input type="text" id="allanamiento-direccion" class="form-input" placeholder="Calle y altura o intersección" required>
+              <input type="hidden" id="allanamiento-geom" value="">
+              <input type="hidden" id="allanamiento-precision" value="">
+              <div id="allanamiento-geo-badge" style="margin-top:4px;"></div>
             </div>
             <div class="form-group">
               <label for="allanamiento-barrio">Barrio</label>
@@ -1437,6 +1451,62 @@
             <button type="submit" class="btn btn-primary" id="btn-submit-inspect-address">Ejecutar Inspección</button>
           </div>
         </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Ajuste Quirúrgico de Ubicación Cartográfica -->
+  <div class="modal-overlay hidden" id="modal-map-picker" style="z-index: 2500;">
+    <div class="modal modal-picker" style="max-width: 920px; width: 95%; height: 86vh; display: flex; flex-direction: column;">
+      <div class="modal-header" style="padding: 12px 18px; border-bottom: 1px solid var(--border-subtle); display: flex; align-items: center; justify-content: space-between;">
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <div style="width: 32px; height: 32px; border-radius: 8px; background: rgba(59, 130, 246, 0.15); display: flex; align-items: center; justify-content: center; font-size: 18px;">📍</div>
+          <div>
+            <h2 id="map-picker-title" style="font-size: 15px; margin: 0; font-weight: 700; color: var(--text-primary);">Ajuste Quirúrgico de Ubicación Cartográfica</h2>
+            <p style="font-size: 11px; color: var(--text-muted); margin: 2px 0 0 0;">Arrastre el marcador al punto exacto o haga clic sobre el techo / ochava</p>
+          </div>
+        </div>
+        <button class="modal-close" data-close="modal-map-picker">&times;</button>
+      </div>
+
+      <!-- Barra de herramientas superior: Búsqueda y Capas -->
+      <div class="map-picker-toolbar" style="padding: 8px 16px; background: var(--bg-tertiary); display: flex; gap: 10px; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--border-subtle); flex-wrap: wrap;">
+        <div style="display: flex; gap: 6px; flex: 1; min-width: 280px;">
+          <input type="text" id="map-picker-search" class="form-input" placeholder="Buscar calle, altura, esquina o pegar link de Google Maps..." style="padding: 6px 10px; font-size: 12px;">
+          <button type="button" class="btn btn-secondary btn-sm" id="map-picker-btn-search">Buscar / Ubicar</button>
+        </div>
+        <div style="display: flex; gap: 4px; align-items: center;">
+          <span style="font-size: 11px; color: var(--text-muted); margin-right: 4px;">Vista:</span>
+          <button type="button" class="btn btn-outline btn-xs btn-picker-layer active" data-layer="dark">🗺️ Oscuro</button>
+          <button type="button" class="btn btn-outline btn-xs btn-picker-layer" data-layer="satelite">🛰️ Satelital</button>
+          <button type="button" class="btn btn-outline btn-xs btn-picker-layer" data-layer="calles">🏙️ Calles</button>
+        </div>
+      </div>
+
+      <!-- Mapa interactivo -->
+      <div id="map-picker-map" style="flex: 1; width: 100%; position: relative; min-height: 380px;"></div>
+
+      <!-- Barra inferior con datos en tiempo real y confirmación -->
+      <div class="map-picker-footer" style="padding: 10px 18px; background: var(--bg-secondary); border-top: 1px solid var(--border-subtle); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+        <div style="display: flex; flex-direction: column; gap: 3px;">
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <strong id="map-picker-address-display" style="font-size: 13px; color: var(--text-primary);">Arrastre el pin sobre el mapa</strong>
+            <span id="map-picker-precision-display"></span>
+          </div>
+          <div style="display: flex; align-items: center; gap: 12px; font-size: 11px; font-family: var(--font-mono); color: var(--text-secondary);">
+            <span id="map-picker-coords">Lat: -31.633300 | Lng: -60.693600</span>
+            <button type="button" class="btn btn-link btn-xs" id="map-picker-btn-copy" style="font-size: 10px; padding: 0;">📋 Copiar Coords</button>
+            <a href="#" id="map-picker-btn-gmaps" target="_blank" rel="noopener noreferrer" style="color: #60A5FA; text-decoration: none; display: flex; align-items: center; gap: 3px;">
+              <span>↗️ Ver en Google Maps</span>
+            </a>
+          </div>
+        </div>
+        <div style="display: flex; gap: 8px;">
+          <button type="button" class="btn btn-ghost btn-sm" data-close="modal-map-picker">Cancelar</button>
+          <button type="button" class="btn btn-primary btn-sm" id="map-picker-btn-confirm" style="font-weight: 600; padding: 6px 14px;">
+            ✓ Confirmar Ubicación Quirúrgica
+          </button>
+        </div>
       </div>
     </div>
   </div>

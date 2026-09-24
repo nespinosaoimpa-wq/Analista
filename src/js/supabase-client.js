@@ -8,6 +8,19 @@ import {
   INITIAL_ALLANAMIENTOS,
   INITIAL_VINCULOS
 } from './initial-data.js';
+import {
+  geocodeAddress,
+  reverseGeocode,
+  parseCoordsOrUrl,
+  renderPrecisionBadge
+} from './geocoder.js';
+
+export {
+  geocodeAddress,
+  reverseGeocode,
+  parseCoordsOrUrl,
+  renderPrecisionBadge
+};
 
 let supabase = null;
 try {
@@ -781,33 +794,6 @@ export async function globalSearch(term) {
   }
 
   return results;
-}
-
-// ============================================================
-// GEOCODING (Mapbox)
-// ============================================================
-export async function geocodeAddress(address, barrio, localidad) {
-  if (!address) return null;
-  const token = CONFIG.mapbox.token;
-  if (!token) return null;
-
-  const query = [address, barrio, localidad || 'Santa Fe', 'Argentina'].filter(Boolean).join(', ');
-  const url = `${CONFIG.geocoding.baseUrl}/${encodeURIComponent(query)}.json?access_token=${token}&country=${CONFIG.geocoding.country}&proximity=${CONFIG.geocoding.proximity}&bbox=${CONFIG.geocoding.bbox}&limit=1`;
-
-  try {
-    const res = await fetch(url);
-    const data = await res.json();
-    if (data.features && data.features.length > 0) {
-      const feat = data.features[0];
-      const [lng, lat] = feat.center;
-      let precision = 'APROXIMADA';
-      if (feat.place_type?.includes('address')) precision = 'EXACTA_ALTURA';
-      else if (feat.place_type?.includes('poi')) precision = 'INTERSECCION';
-      else if (feat.place_type?.includes('neighborhood')) precision = 'BARRIO_CENTROIDE';
-      return { lat, lng, precision, confidence: feat.relevance || 0 };
-    }
-  } catch (e) { }
-  return null;
 }
 
 // ============================================================

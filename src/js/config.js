@@ -41,9 +41,10 @@ export const CONFIG = {
   geocoding: {
     // Mapbox Geocoding API - included with the token
     baseUrl: 'https://api.mapbox.com/geocoding/v5/mapbox.places',
-    proximity: '-60.6936,-31.6333', // Bias toward Santa Fe
+    proximity: '-60.705,-31.635', // Bias toward Santa Fe Capital center
     country: 'ar',
-    bbox: '-60.85,-31.78,-60.55,-31.50', // Bounding box around Santa Fe
+    bbox: '-60.76,-31.68,-60.66,-31.54', // Strict bounding box around Santa Fe Capital (excludes Santo Tomé / Recreo / Rosario)
+    bboxWide: '-60.85,-31.78,-60.55,-31.50', // Bounding box for Greater Santa Fe
   },
   lesividad: {
     labels: {
