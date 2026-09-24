@@ -871,6 +871,24 @@
                 <input type="text" id="persona-nacionalidad" class="form-input" value="Argentina">
               </div>
             </div>
+
+            <!-- Organización Criminal Asociada (Acceso directo en pestaña Identidad) -->
+            <div class="form-row" style="background:rgba(255,255,255,0.03);padding:12px;border-radius:8px;border:1px solid var(--border-default);margin-top:10px;">
+              <div class="form-group" style="flex:1;margin-bottom:0;">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+                  <label for="persona-banda-quick" style="margin:0;font-size:12px;font-weight:700;">🏴 Organización Criminal Asociada</label>
+                  <button type="button" class="btn btn-outline btn-xs" id="btn-crear-banda-desde-tab1" style="font-size:10px;padding:2px 8px;color:var(--accent-primary);border-color:rgba(245,158,11,0.4);font-weight:700;">
+                    ➕ Crear Nueva Organización
+                  </button>
+                </div>
+                <select id="persona-banda-quick" class="form-input" style="font-size:12px;">
+                  <option value="">👤 Operador Individual / Sin banda asignada</option>
+                </select>
+                <span style="font-size:11px;color:var(--text-muted);display:block;margin-top:4px;">
+                  Si la persona no pertenece a ninguna organización, mantenga "Individual". Puede crear una banda nueva en cualquier momento con el botón "+".
+                </span>
+              </div>
+            </div>
           </div>
 
           <!-- TAB 2: DOCUMENTOS Y ADJUNTOS (.pdf, .doc, .docx, imágenes) -->
@@ -993,15 +1011,14 @@
 
             <div class="form-row">
               <div class="form-group" style="flex:1">
-                <label for="persona-banda">Organización Criminal Asociada</label>
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+                  <label for="persona-banda" style="margin-bottom:0">Organización Criminal Asociada</label>
+                  <button type="button" class="btn btn-outline btn-xs" id="btn-crear-banda-desde-persona" style="font-size:10px;padding:2px 8px;color:var(--accent-primary);border-color:rgba(245,158,11,0.4)">
+                    ➕ Nueva Organización
+                  </button>
+                </div>
                 <select id="persona-banda" class="form-input">
-                  <option value="">Individual / Sin banda asignada</option>
-                  <option value="banda-los-de-siempre">Los de Siempre</option>
-                  <option value="banda-la-negrada">La Negrada</option>
-                  <option value="banda-polaco-maidana">Banda del Polaco Maidana</option>
-                  <option value="banda-puchingas">Los Puchingas</option>
-                  <option value="banda-correntino">Banda del Correntino (Beban)</option>
-                  <option value="banda-espinillos">Los Espinillos</option>
+                  <option value="">👤 Individual / Sin banda asignada</option>
                 </select>
               </div>
               <div class="form-group" style="flex:1">
@@ -1134,12 +1151,64 @@
             <textarea id="banda-modus" class="form-input" rows="2" placeholder="Comercialización de estupefacientes, usurpación, abuso de armas..."></textarea>
           </div>
           <div class="form-group">
-            <label for="banda-observaciones">Observaciones e Inteligencia Táctica</label>
+            <label for="banda-observaciones">Observaciones e Información Operativa</label>
             <textarea id="banda-observaciones" class="form-input" rows="3" placeholder="Disputas territoriales, puntos de acopio, contactos clave..."></textarea>
           </div>
           <div class="form-actions">
             <button type="button" class="btn btn-ghost" data-close="modal-banda">Cancelar</button>
             <button type="submit" class="btn btn-primary">Guardar Banda</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Asignar o Crear Organización Criminal para Persona -->
+  <div class="modal-overlay hidden" id="modal-asignar-banda-persona">
+    <div class="modal" style="max-width: 480px;">
+      <div class="modal-header">
+        <h2 id="modal-asignar-banda-title">Asignar Organización Criminal</h2>
+        <button class="modal-close" data-close="modal-asignar-banda-persona">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p style="font-size:12px;color:var(--text-secondary);margin-bottom:14px;line-height:1.4">
+          Seleccione una organización existente o cree una nueva para asociarla de inmediato a este investigado.
+        </p>
+        <form id="form-asignar-banda-persona">
+          <input type="hidden" id="asignar-banda-persona-id" value="">
+          
+          <div class="form-group">
+            <label for="select-asignar-banda">Organización Existente</label>
+            <select id="select-asignar-banda" class="form-input">
+              <option value="">-- Seleccionar Organización --</option>
+            </select>
+          </div>
+
+          <div style="display:flex;align-items:center;gap:10px;margin:16px 0 12px 0;">
+            <div style="flex:1;height:1px;background:var(--border-default);"></div>
+            <span style="font-size:10px;color:var(--text-muted);font-weight:700;letter-spacing:0.5px;">O CREAR NUEVA ORGANIZACIÓN</span>
+            <div style="flex:1;height:1px;background:var(--border-default);"></div>
+          </div>
+
+          <div class="form-group">
+            <label for="input-nueva-banda-nombre">Nombre de la Nueva Banda / Estructura</label>
+            <input type="text" id="input-nueva-banda-nombre" class="form-input" placeholder="Ej: La Banda de Barranquitas, Los Monos">
+          </div>
+
+          <div class="form-row">
+            <div class="form-group" style="flex:1">
+              <label for="input-nueva-banda-barrio">Barrio Base / Zona</label>
+              <input type="text" id="input-nueva-banda-barrio" class="form-input" placeholder="Ej: Barranquitas">
+            </div>
+            <div class="form-group" style="width:110px">
+              <label for="input-nueva-banda-color">Color Distintivo</label>
+              <input type="color" id="input-nueva-banda-color" class="form-input" value="#0EA5E9" style="height:42px;padding:2px 6px">
+            </div>
+          </div>
+
+          <div class="form-actions" style="margin-top:16px;">
+            <button type="button" class="btn btn-ghost" data-close="modal-asignar-banda-persona">Cancelar</button>
+            <button type="submit" class="btn btn-primary" id="btn-submit-asignar-banda">Guardar y Vincular</button>
           </div>
         </form>
       </div>

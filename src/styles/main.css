@@ -857,13 +857,310 @@ a:hover { text-decoration: underline; }
 
 .cards-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
-  gap: var(--space-md);
+  grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+  gap: 16px;
   overflow-y: auto;
   flex: 1;
   padding-bottom: var(--space-xl);
 }
 
+/* ---- High-Tech Persona Intelligence Cards ---- */
+.persona-card {
+  background: rgba(15, 23, 42, 0.92);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  padding: 14px;
+  cursor: pointer;
+  transition: all var(--transition-base);
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 185px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(10px);
+}
+
+.persona-card:hover {
+  border-color: var(--accent-primary);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.65), 0 0 14px rgba(245, 158, 11, 0.2);
+}
+
+.persona-card-captura {
+  border-color: rgba(239, 68, 68, 0.8) !important;
+  background: linear-gradient(180deg, rgba(239, 68, 68, 0.12) 0%, rgba(15, 23, 42, 0.96) 40%) !important;
+  box-shadow: 0 4px 20px rgba(239, 68, 68, 0.25), inset 0 0 14px rgba(239, 68, 68, 0.08) !important;
+}
+
+.persona-card-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.persona-banda-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  max-width: 65%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.persona-banda-tag.tag-individual {
+  background: rgba(148, 163, 184, 0.12) !important;
+  border: 1px solid rgba(148, 163, 184, 0.3) !important;
+  color: #94A3B8 !important;
+}
+
+.btn-quick-add-banda {
+  background: rgba(245, 158, 11, 0.12);
+  border: 1px dashed rgba(245, 158, 11, 0.5);
+  color: #FCD34D;
+  font-size: 10px;
+  font-weight: 800;
+  padding: 2px 7px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  white-space: nowrap;
+}
+.btn-quick-add-banda:hover {
+  background: #F59E0B;
+  color: #060A13;
+  border-color: #F59E0B;
+  box-shadow: 0 0 8px rgba(245, 158, 11, 0.4);
+}
+
+.persona-status-tag {
+  font-size: 10px;
+  font-weight: 800;
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-secondary);
+  letter-spacing: 0.5px;
+  white-space: nowrap;
+}
+
+.persona-status-tag.status-captura {
+  background: #DC2626;
+  border-color: #EF4444;
+  color: #FFFFFF;
+  animation: pulse-captura 2s infinite;
+}
+
+.persona-peligro-badge {
+  font-size: 10px;
+  font-weight: 800;
+  padding: 2px 6px;
+  border-radius: 4px;
+  white-space: nowrap;
+  letter-spacing: 0.3px;
+}
+.persona-peligro-badge.peligro-alto {
+  background: rgba(239, 68, 68, 0.2);
+  border: 1px solid rgba(239, 68, 68, 0.5);
+  color: #FCA5A5;
+}
+.persona-peligro-badge.peligro-medio {
+  background: rgba(245, 158, 11, 0.2);
+  border: 1px solid rgba(245, 158, 11, 0.5);
+  color: #FCD34D;
+}
+.persona-peligro-badge.peligro-bajo {
+  background: rgba(16, 185, 129, 0.2);
+  border: 1px solid rgba(16, 185, 129, 0.5);
+  color: #6EE7B7;
+}
+
+@keyframes pulse-captura {
+  0% { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.5); }
+  70% { box-shadow: 0 0 0 6px rgba(220, 38, 38, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0); }
+}
+
+.persona-card-main {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.persona-thumb-container {
+  position: relative;
+  width: 68px;
+  height: 68px;
+  flex-shrink: 0;
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1.5px solid var(--border-default);
+  background: var(--bg-tertiary);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.4);
+}
+
+.persona-thumb-container.thumb-captura {
+  border-color: #EF4444;
+  box-shadow: 0 0 10px rgba(239, 68, 68, 0.35);
+}
+
+.persona-thumb-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.persona-thumb-placeholder {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, rgba(30, 41, 59, 0.95), rgba(15, 23, 42, 0.95));
+  color: var(--accent-secondary);
+  font-weight: 800;
+  font-family: var(--font-mono);
+  user-select: none;
+}
+
+.thumb-initials-mini {
+  font-size: 11px;
+  font-weight: 800;
+  color: var(--accent-secondary);
+  letter-spacing: 0.5px;
+  margin-top: 1px;
+}
+
+.persona-danger-badge {
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  left: 0;
+  text-align: center;
+  font-size: 8px;
+  font-weight: 900;
+  background: #DC2626;
+  color: #FFFFFF;
+  padding: 1px 0;
+  letter-spacing: 0.5px;
+  box-shadow: 0 -1px 4px rgba(0, 0, 0, 0.5);
+}
+
+.persona-card-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.persona-card-name {
+  font-size: 15px;
+  font-weight: 700;
+  color: #FFFFFF;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.2;
+}
+
+.persona-card-alias {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--accent-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.persona-card-dni {
+  font-size: 11px;
+  color: var(--text-secondary);
+  display: flex;
+  gap: 6px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.persona-card-address {
+  font-size: 11px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-top: 1px;
+}
+
+.persona-card-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  padding-top: 8px;
+  margin-top: 2px;
+}
+
+.persona-card-tags {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  align-items: center;
+  min-height: 20px;
+}
+
+.persona-mini-tag {
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.persona-mini-tag.cuij-tag {
+  color: var(--accent-primary);
+  font-family: var(--font-mono);
+  background: rgba(245, 158, 11, 0.08);
+  border-color: rgba(245, 158, 11, 0.25);
+}
+
+.persona-card-actions {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.btn-card-dossier {
+  background: #0284c7 !important;
+  color: #FFFFFF !important;
+  font-weight: 800 !important;
+  border: 1px solid #38bdf8 !important;
+  font-size: 11px !important;
+  padding: 4px 10px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 4px !important;
+}
+.btn-card-dossier:hover {
+  background: #0369a1 !important;
+  box-shadow: 0 0 10px rgba(14, 165, 233, 0.4) !important;
+}
+
+/* Generic entity card legacy support */
 .entity-card {
   background: var(--bg-secondary);
   border: 1px solid var(--border-default);
@@ -879,18 +1176,6 @@ a:hover { text-decoration: underline; }
   transform: translateY(-2px);
   box-shadow: var(--shadow-glow);
 }
-.entity-card::after {
-  content: '';
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  height: 2px;
-  background: linear-gradient(90deg, var(--accent-primary), var(--accent-secondary));
-  opacity: 0;
-  transition: var(--transition-base);
-}
-.entity-card:hover::after { opacity: 1; }
 
 .entity-card-header {
   display: flex;

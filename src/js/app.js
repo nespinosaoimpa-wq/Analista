@@ -366,7 +366,7 @@ function setupModals() {
   // Open buttons
   document.getElementById('btn-form-hecho')?.addEventListener('click', () => openModal('modal-hecho'));
   
-  const handleOpenNuevaPersona = () => {
+  const handleOpenNuevaPersona = async () => {
     const f = document.getElementById('form-persona');
     if (f) f.reset();
     const editIdEl = document.getElementById('persona-edit-id');
@@ -409,6 +409,9 @@ function setupModals() {
     document.querySelector('#persona-form-nav [data-form-tab="tab-f-identidad"]')?.classList.add('active');
     document.querySelectorAll('.persona-tab-pane').forEach(p => p.classList.add('hidden'));
     document.getElementById('tab-f-identidad')?.classList.remove('hidden');
+
+    // Populate gang dropdowns dynamically
+    await populatePersonaBandaSelects('', '');
 
     openModal('modal-persona');
   };
@@ -508,8 +511,16 @@ function setupForms() {
 
     try {
       const bandaSelect = document.getElementById('persona-banda');
-      const selectedBandaId = bandaSelect?.value || null;
-      const selectedBandaNombre = bandaSelect?.options[bandaSelect.selectedIndex]?.text || null;
+      const bandaQuickSelect = document.getElementById('persona-banda-quick');
+      let selectedBandaId = bandaSelect?.value || bandaQuickSelect?.value || null;
+      if (selectedBandaId === '__NEW_BANDA__') selectedBandaId = null;
+      let selectedBandaNombre = null;
+      let selectedBandaColor = '#0EA5E9';
+      if (selectedBandaId) {
+        const opt = (bandaSelect && bandaSelect.value) ? bandaSelect.options[bandaSelect.selectedIndex] : (bandaQuickSelect ? bandaQuickSelect.options[bandaQuickSelect.selectedIndex] : null);
+        selectedBandaNombre = opt?.getAttribute('data-nombre') || opt?.text?.split('(')[0]?.trim() || null;
+        selectedBandaColor = opt?.getAttribute('data-color') || '#0EA5E9';
+      }
 
       // Domicilios dinámicos
       const domicilios = [];
@@ -627,6 +638,7 @@ function setupForms() {
         foto_url: foto_url || null,
         banda_id: selectedBandaId,
         banda_nombre: selectedBandaId ? selectedBandaNombre : 'Individual',
+        banda_color: selectedBandaId ? selectedBandaColor : '#94A3B8',
         roles: document.getElementById('persona-roles')?.value || '',
         score_peligrosidad: parseInt(document.getElementById('persona-peligrosidad')?.value) || 5,
         pedido_captura: isCaptura,
@@ -662,6 +674,9 @@ function setupForms() {
       // Refresco inmediato en Mapbox y métricas sin recargar la página
       await loadPersonasMapData();
       updateHeaderStats();
+      const filterSelect = document.getElementById('personas-banda-filter');
+      if (filterSelect) filterSelect._populatedOnce = false;
+      await populatePersonasBandaFilter();
 
       if (document.getElementById('view-personas')?.classList.contains('active')) {
         await renderPersonasView();
@@ -1071,7 +1086,112 @@ async function openBriefingModal() {
 // ============================================================
 // PERSONAS VIEW & TRACKING DE PRÓFUGOS
 // ============================================================
+// ============================================================
+// PERSONAS VIEW & TRACKING DE PRÓFUGOS
+// ============================================================
 let currentPersonaFilter = 'todos';
+
+async function populatePersonasBandaFilter() {
+  const filterSelect = document.getElementById('personas-banda-filter');
+  if (!filterSelect || filterSelect._populatedOnce) return;
+
+  const currentVal = filterSelect.value;
+  try {
+    const bandas = await getBandas({ limit: 1000 });
+    filterSelect.innerHTML = `
+      <option value="">Todas las bandas</option>
+      <option value="__INDIVIDUAL__">👤 Operadores Individuales / Sin Banda</option>
+      ${bandas.map(b => `<option value="${b.nombre}">${b.nombre}</option>`).join('')}
+    `;
+    if (currentVal) filterSelect.value = currentVal;
+    filterSelect._populatedOnce = true;
+  } catch (e) {
+    console.warn('Error populating personas banda filter:', e);
+  }
+}
+
+async function populatePersonaBandaSelects(selectedBandaId = '', selectedBandaNombre = '') {
+  const selQuick = document.getElementById('persona-banda-quick');
+  const selTab8 = document.getElementById('persona-banda');
+  if (!selQuick && !selTab8) return;
+
+  try {
+    const bandas = await getBandas({ limit: 1000 });
+    const optionsHtml = `
+      <option value="">👤 Operador Individual / Sin banda asignada</option>
+      ${bandas.map(b => `
+        <option value="${b.id}" data-nombre="${b.nombre}" data-color="${b.color_hex || '#0EA5E9'}">
+          ${b.nombre} ${b.barrio_base ? `(${b.barrio_base})` : ''}
+        </option>
+      `).join('')}
+      <option value="__NEW_BANDA__">➕ Crear Nueva Organización Criminal...</option>
+    `;
+
+    if (selQuick) selQuick.innerHTML = optionsHtml;
+    if (selTab8) selTab8.innerHTML = optionsHtml;
+
+    // Set value
+    let valToSet = '';
+    if (selectedBandaId) {
+      valToSet = selectedBandaId;
+    } else if (selectedBandaNombre && selectedBandaNombre.toLowerCase() !== 'individual') {
+      const match = bandas.find(b => b.nombre.toLowerCase() === selectedBandaNombre.toLowerCase());
+      if (match) valToSet = match.id;
+    }
+
+    if (selQuick) selQuick.value = valToSet;
+    if (selTab8) selTab8.value = valToSet;
+  } catch (e) {
+    console.warn('Error populating banda selects:', e);
+  }
+}
+
+window.abrirModalAsignarBanda = async function(personaId) {
+  try {
+    const p = await getPersonaById(personaId);
+    if (!p) {
+      showToast('No se encontró el perfil de la persona', 'error');
+      return;
+    }
+
+    const modalId = 'modal-asignar-banda-persona';
+    const idInput = document.getElementById('asignar-banda-persona-id');
+    const titleEl = document.getElementById('modal-asignar-banda-title');
+    const selectBanda = document.getElementById('select-asignar-banda');
+    const inputNombre = document.getElementById('input-nueva-banda-nombre');
+    const inputBarrio = document.getElementById('input-nueva-banda-barrio');
+    const inputColor = document.getElementById('input-nueva-banda-color');
+
+    if (idInput) idInput.value = p.id;
+    if (titleEl) {
+      const nombreCompleto = `${p.nombre || ''} ${p.apellido || ''}`.trim() || 'Persona';
+      titleEl.textContent = `Asignar o Crear Organización: ${nombreCompleto}`;
+    }
+
+    if (inputNombre) inputNombre.value = '';
+    if (inputBarrio) inputBarrio.value = '';
+    if (inputColor) inputColor.value = '#0EA5E9';
+
+    if (selectBanda) {
+      const bandas = await getBandas({ limit: 1000 });
+      const isInd = !p.banda_id || !p.banda_nombre || p.banda_nombre.toLowerCase() === 'individual';
+      selectBanda.innerHTML = `
+        <option value="">-- Seleccionar Organización Existente --</option>
+        <option value="__INDIVIDUAL__" ${isInd ? 'selected' : ''}>👤 Operador Individual (Sin organización)</option>
+        ${bandas.map(b => `
+          <option value="${b.id}" data-nombre="${b.nombre}" data-color="${b.color_hex || '#0EA5E9'}" ${(p.banda_id === b.id || p.banda_nombre === b.nombre) ? 'selected' : ''}>
+            ${b.nombre} ${b.barrio_base ? `(${b.barrio_base})` : ''}
+          </option>
+        `).join('')}
+      `;
+    }
+
+    openModal(modalId);
+  } catch (err) {
+    console.error('Error al abrir modal asignar banda:', err);
+    showToast('Error abriendo asignador de banda', 'error');
+  }
+};
 
 async function renderPersonasView() {
   const grid = document.getElementById('personas-grid');
@@ -1080,6 +1200,8 @@ async function renderPersonasView() {
   grid.innerHTML = '<div class="empty-state"><div class="spinner"></div><span>Cargando nómina de personas...</span></div>';
 
   try {
+    await populatePersonasBandaFilter();
+
     const search = document.getElementById('personas-search')?.value;
     const bandaFilter = document.getElementById('personas-banda-filter')?.value;
     let personas = await getPersonas({ search, limit: 500 });
@@ -1093,7 +1215,11 @@ async function renderPersonasView() {
 
     // Apply banda dropdown filter
     if (bandaFilter) {
-      personas = personas.filter(p => p.banda_nombre?.toLowerCase().includes(bandaFilter.toLowerCase()));
+      if (bandaFilter === '__INDIVIDUAL__') {
+        personas = personas.filter(p => !p.banda_id || !p.banda_nombre || p.banda_nombre.toLowerCase() === 'individual');
+      } else {
+        personas = personas.filter(p => p.banda_nombre?.toLowerCase().includes(bandaFilter.toLowerCase()) || p.banda_id === bandaFilter);
+      }
     }
 
     if (personas.length === 0) {
@@ -1109,52 +1235,108 @@ async function renderPersonasView() {
 
     grid.innerHTML = personas.map(p => {
       const initials = `${(p.nombre || '?')[0]}${(p.apellido || '')[0] || ''}`.toUpperCase();
-      const pClass = p.score_peligrosidad >= 7 ? 'peligrosidad-alta' : p.score_peligrosidad >= 4 ? 'peligrosidad-media' : 'peligrosidad-baja';
-      const isCaptura = p.pedido_captura;
+      const score = p.score_peligrosidad || 5;
+      const pelClass = score >= 8 ? 'peligro-alto' : score >= 5 ? 'peligro-medio' : 'peligro-bajo';
+      const isCaptura = Boolean(p.pedido_captura);
+      const isIndividual = !p.banda_id || !p.banda_nombre || p.banda_nombre.toLowerCase() === 'individual';
+      const bandaColor = p.banda_color || '#0EA5E9';
+      const nombreCompleto = `${p.nombre || ''} ${p.apellido || ''}`.trim() || 'Sin nombre registrado';
+      const aliases = Array.isArray(p.alias) ? p.alias : (p.alias ? [p.alias] : []);
+      const roles = Array.isArray(p.roles) ? p.roles : (p.roles ? [p.roles] : []);
+      const domicilioText = p.domicilio_principal || (Array.isArray(p.domicilios) && p.domicilios[0]?.direccion) || 'Sin domicilio registrado';
+
+      const fotoHtml = p.foto_url
+        ? `<img src="${p.foto_url}" class="persona-thumb-img" alt="${nombreCompleto}" loading="lazy" onerror="this.onerror=null; this.style.display='none'; this.nextElementSibling.style.display='flex';">
+           <div class="persona-thumb-placeholder" style="display:none;"><span class="thumb-initials-mini">${initials}</span></div>`
+        : `<div class="persona-thumb-placeholder">
+             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" style="opacity:0.75;"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+             <span class="thumb-initials-mini">${initials}</span>
+           </div>`;
 
       return `
-        <div class="entity-card ${isCaptura ? 'card-captura' : ''}" data-id="${p.id}" data-type="persona" style="${isCaptura ? 'border-color:rgba(239,68,68,0.7);box-shadow:0 0 14px rgba(239,68,68,0.18);' : ''}">
-          ${isCaptura ? `
-            <div style="background:#DC2626;color:#FFFFFF;font-size:10px;font-weight:800;letter-spacing:1px;padding:4px 12px;border-radius:6px 6px 0 0;margin:-16px -16px 12px -16px;display:flex;align-items:center;justify-content:space-between;">
-              <span>🚨 PEDIDO DE CAPTURA ACTIVO</span>
-              <span>PELIGROSIDAD: ${p.score_peligrosidad || 9}/10</span>
+        <div class="persona-card ${isCaptura ? 'persona-card-captura' : ''}" data-id="${p.id}" data-type="persona">
+          <!-- Topbar -->
+          <div class="persona-card-topbar">
+            <div style="display:flex;align-items:center;gap:6px;flex:1;min-width:0;overflow:hidden;">
+              ${!isIndividual ? `
+                <span class="persona-banda-tag" style="background:${bandaColor}22;border:1px solid ${bandaColor}55;color:${bandaColor};" title="Organización: ${p.banda_nombre}">
+                  <span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:${bandaColor};flex-shrink:0;"></span>
+                  ${p.banda_nombre}
+                </span>
+              ` : `
+                <span class="persona-banda-tag tag-individual" title="Investigado sin organización criminal asociada">
+                  👤 Individual
+                </span>
+                <button type="button" class="btn-quick-add-banda" onclick="event.stopPropagation(); window.abrirModalAsignarBanda('${p.id}');" title="Asignar o crear nueva organización criminal">
+                  ➕ Banda
+                </button>
+              `}
             </div>
-          ` : ''}
-          <div class="entity-card-header">
-            <div class="entity-avatar persona" style="${isCaptura ? 'background:linear-gradient(135deg, #EF4444, #991B1B);color:#fff;border:1px solid #F87171;' : ''}">${initials}</div>
-            <div style="flex:1;">
-              <div class="entity-card-name" style="font-weight:700;display:flex;align-items:center;gap:6px;">
-                <span>${p.nombre || ''} ${p.apellido || ''}</span>
+
+            <div style="display:flex;align-items:center;gap:6px;flex-shrink:0;">
+              <span class="persona-peligro-badge ${pelClass}" title="Nivel de peligrosidad: ${score}/10">
+                ⚔️ ${score}/10
+              </span>
+              ${isCaptura ? `
+                <span class="persona-status-tag status-captura" title="Pedido de captura activo en causas penales">
+                  🚨 CAPTURA
+                </span>
+              ` : ''}
+            </div>
+          </div>
+
+          <!-- Main Info + Thumbnail Photo -->
+          <div class="persona-card-main">
+            <div class="persona-thumb-container ${isCaptura ? 'thumb-captura' : ''}">
+              ${fotoHtml}
+              ${isCaptura ? `<div class="persona-danger-badge">CAPTURA</div>` : ''}
+            </div>
+
+            <div class="persona-card-info">
+              <div class="persona-card-name" title="${nombreCompleto}">
+                ${nombreCompleto}
               </div>
-              <div class="entity-card-sub" style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:2px;">
+              ${aliases.length > 0 ? `
+                <div class="persona-card-alias" title="Alias: ${aliases.join(', ')}">
+                  "${aliases.slice(0, 2).join('", "')}"
+                </div>
+              ` : ''}
+              <div class="persona-card-dni">
                 <span>${p.dni ? `DNI: ${p.dni}` : 'Sin DNI'}</span>
-                ${p.banda_nombre ? `<span style="color:#0EA5E9;font-weight:600;">• ${p.banda_nombre}</span>` : ''}
+                ${p.estado_procesal ? `<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:140px;">• ${p.estado_procesal}</span>` : ''}
+              </div>
+              <div class="persona-card-address" title="${domicilioText}">
+                📍 ${domicilioText}
               </div>
             </div>
           </div>
-          <div class="entity-card-body">
-            ${p.domicilio_principal ? `<div class="entity-field"><span class="entity-field-label">Domicilio</span><span class="entity-field-value">${p.domicilio_principal}</span></div>` : ''}
-            ${p.delitos_asociados?.length ? `<div class="entity-field"><span class="entity-field-label">Delitos</span><span class="entity-field-value" style="color:var(--text-secondary);font-size:12px;">${p.delitos_asociados.join(', ')}</span></div>` : ''}
-            ${p.cuij_asociados?.length ? `<div class="entity-field"><span class="entity-field-label">CUIJ</span><span class="entity-field-value" style="font-family:var(--font-mono);color:var(--accent-primary);font-size:11px;">${p.cuij_asociados.join(' | ')}</span></div>` : ''}
+
+          <!-- Tags: Roles and CUIJ -->
+          <div class="persona-card-tags">
+            ${roles.slice(0, 2).map(r => `<span class="persona-mini-tag" style="background:rgba(14,165,233,0.1);color:#38BDF8;border-color:rgba(14,165,233,0.25)">⚔️ ${r}</span>`).join('')}
+            ${p.cuij_asociados?.slice(0, 1).map(c => `<span class="persona-mini-tag cuij-tag" title="Causa CUIJ: ${c}">⚖️ ${c}</span>`).join('') || ''}
+            ${p.delitos_asociados?.slice(0, 1).map(d => `<span class="persona-mini-tag" style="color:var(--text-muted);">${d}</span>`).join('') || ''}
           </div>
-          <div class="entity-tags" style="margin-top:12px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;">
-            <div style="display:flex;gap:4px;flex-wrap:wrap;">
-              ${p.alias?.slice(0, 2).map(a => `<span class="tag alias">${a}</span>`).join('') || ''}
-              ${p.roles?.slice(0, 2).map(r => `<span class="tag rol">${r}</span>`).join('') || ''}
-              ${!isCaptura ? `<span class="tag ${pClass}">Peligro: ${p.score_peligrosidad || 5}/10</span>` : ''}
-            </div>
-            <div style="display:flex;gap:4px;align-items:center;">
-              <button class="btn btn-primary btn-xs" onclick="event.stopPropagation(); window.abrirDossierDigital('${p.id}');" title="Abrir Dossier Digital Completo" style="font-size:10px;padding:3px 8px;font-weight:800;display:inline-flex;align-items:center;gap:4px;background:#0284c7;border:1px solid #38bdf8;color:#fff;">
-                📋 Dossier
+
+          <!-- Footer Actions -->
+          <div class="persona-card-footer">
+            <button class="btn btn-primary btn-xs btn-card-dossier" onclick="event.stopPropagation(); window.abrirDossierDigital('${p.id}');" title="Abrir Legajo y Dossier Institucional">
+              📋 Dossier
+            </button>
+            <div class="persona-card-actions">
+              ${isIndividual ? `
+                <button class="btn btn-outline btn-xs" onclick="event.stopPropagation(); window.abrirModalAsignarBanda('${p.id}');" title="Asignar o Crear Organización Criminal" style="font-size:10px;padding:3px 7px;color:#F59E0B;border-color:rgba(245,158,11,0.5);font-weight:700;">
+                  🏴 +Banda
+                </button>
+              ` : ''}
+              <button class="btn btn-outline btn-xs" onclick="event.stopPropagation(); window.centrarPersonaEnMapa('${p.id}');" title="Ver Domicilio en Mapa" style="font-size:10px;padding:3px 7px;">
+                📍 Mapa
               </button>
-              <button class="btn btn-outline btn-xs" onclick="event.stopPropagation(); window.abrirEdicionPersona('${p.id}');" title="Editar Perfil" style="font-size:10px;padding:3px 6px;">
+              <button class="btn btn-outline btn-xs" onclick="event.stopPropagation(); window.enfocarPersonaEnGrafo('${p.id}');" title="Ver en Red de Vínculos" style="font-size:10px;padding:3px 7px;">
+                🕸️ Red
+              </button>
+              <button class="btn btn-outline btn-xs" onclick="event.stopPropagation(); window.abrirEdicionPersona('${p.id}');" title="Editar Perfil" style="font-size:10px;padding:3px 7px;">
                 ✏️
-              </button>
-              <button class="btn btn-outline btn-xs" onclick="event.stopPropagation(); window.centrarPersonaEnMapa('${p.id}');" title="Ver Domicilio en Mapa" style="font-size:10px;padding:3px 6px;">
-                📍
-              </button>
-              <button class="btn btn-outline btn-xs" onclick="event.stopPropagation(); window.enfocarPersonaEnGrafo('${p.id}');" title="Ver en Red de Vínculos" style="font-size:10px;padding:3px 7px;display:flex;align-items:center;gap:3px;">
-                🕸️
               </button>
             </div>
           </div>
@@ -1162,9 +1344,13 @@ async function renderPersonasView() {
       `;
     }).join('');
 
-    // Click en la tarjeta abre directamente el Dossier Digital nativo
-    grid.querySelectorAll('.entity-card').forEach(card => {
-      card.addEventListener('click', () => window.abrirDossierDigital(card.dataset.id));
+    // Click anywhere on card opens dossier
+    grid.querySelectorAll('.persona-card').forEach(card => {
+      card.addEventListener('click', (e) => {
+        if (!e.target.closest('button')) {
+          window.abrirDossierDigital(card.dataset.id);
+        }
+      });
     });
 
   } catch (err) {
@@ -1337,6 +1523,124 @@ export function initDossierSystem() {
     if (currentViewingDossierId) {
       closeModal('modal-dossier-digital');
       window.abrirEdicionPersona(currentViewingDossierId);
+    }
+  });
+
+  // Creación rápida de nueva banda desde el formulario de perfil
+  const handleCrearNuevaBandaRapida = async () => {
+    const nombre = prompt('Ingrese el nombre de la nueva organización criminal a registrar:');
+    if (!nombre || !nombre.trim()) return;
+
+    try {
+      showLoading('Registrando nueva organización criminal...');
+      const created = await insertBanda({
+        nombre: nombre.trim(),
+        color_hex: '#0EA5E9',
+        activa: true,
+        descripcion: 'Organización registrada desde formulario de legajo'
+      });
+      showToast(`Organización "${created.nombre}" registrada correctamente`, 'success');
+      await populatePersonaBandaSelects(created.id, created.nombre);
+      const filterSelect = document.getElementById('personas-banda-filter');
+      if (filterSelect) filterSelect._populatedOnce = false;
+      await populatePersonasBandaFilter();
+    } catch (err) {
+      showToast(`Error al crear organización: ${err.message}`, 'error');
+    } finally {
+      hideLoading();
+    }
+  };
+
+  document.getElementById('btn-crear-banda-desde-tab1')?.addEventListener('click', handleCrearNuevaBandaRapida);
+  document.getElementById('btn-crear-banda-desde-persona')?.addEventListener('click', handleCrearNuevaBandaRapida);
+
+  const selQuick = document.getElementById('persona-banda-quick');
+  const selTab8 = document.getElementById('persona-banda');
+
+  selQuick?.addEventListener('change', () => {
+    if (selTab8) selTab8.value = selQuick.value;
+    if (selQuick.value === '__NEW_BANDA__') handleCrearNuevaBandaRapida();
+  });
+  selTab8?.addEventListener('change', () => {
+    if (selQuick) selQuick.value = selTab8.value;
+    if (selTab8.value === '__NEW_BANDA__') handleCrearNuevaBandaRapida();
+  });
+
+  // Modal: Asignar o Crear Organización Criminal para Persona
+  document.getElementById('form-asignar-banda-persona')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const personaId = document.getElementById('asignar-banda-persona-id')?.value;
+    if (!personaId) return;
+
+    showLoading('Actualizando organización...');
+    try {
+      const selectBanda = document.getElementById('select-asignar-banda');
+      const inputNombre = document.getElementById('input-nueva-banda-nombre')?.value?.trim();
+      const inputBarrio = document.getElementById('input-nueva-banda-barrio')?.value?.trim();
+      const inputColor = document.getElementById('input-nueva-banda-color')?.value || '#0EA5E9';
+
+      let newBandaId = null;
+      let newBandaNombre = 'Individual';
+      let newBandaColor = '#94A3B8';
+
+      if (inputNombre) {
+        const createdBanda = await insertBanda({
+          nombre: inputNombre,
+          barrio_base: inputBarrio || null,
+          color_hex: inputColor,
+          nivel_amenaza: 6,
+          activa: true,
+          descripcion: `Organización creada y asignada a persona ID ${personaId}`
+        });
+        newBandaId = createdBanda.id;
+        newBandaNombre = createdBanda.nombre;
+        newBandaColor = createdBanda.color_hex || inputColor;
+        showToast(`Organización "${newBandaNombre}" creada y vinculada`, 'success');
+      } else if (selectBanda && selectBanda.value) {
+        if (selectBanda.value === '__INDIVIDUAL__') {
+          newBandaId = null;
+          newBandaNombre = 'Individual';
+          newBandaColor = '#94A3B8';
+        } else {
+          const selectedOpt = selectBanda.options[selectBanda.selectedIndex];
+          newBandaId = selectBanda.value;
+          newBandaNombre = selectedOpt.getAttribute('data-nombre') || selectedOpt.text.split('(')[0].trim();
+          newBandaColor = selectedOpt.getAttribute('data-color') || '#0EA5E9';
+        }
+      } else {
+        hideLoading();
+        showToast('Seleccione una organización o escriba el nombre de una nueva', 'warning');
+        return;
+      }
+
+      const updated = await updatePersona(personaId, {
+        banda_id: newBandaId,
+        banda_nombre: newBandaNombre,
+        banda_color: newBandaColor
+      });
+
+      closeModal('modal-asignar-banda-persona');
+      showToast('Organización criminal asignada correctamente', 'success');
+
+      // Refresh filter and views
+      const filterSelect = document.getElementById('personas-banda-filter');
+      if (filterSelect) filterSelect._populatedOnce = false;
+      await populatePersonasBandaFilter();
+
+      if (document.getElementById('view-personas')?.classList.contains('active')) {
+        await renderPersonasView();
+      }
+      if (document.getElementById('view-bandas')?.classList.contains('active')) {
+        await renderBandasView();
+      }
+      if (currentViewingDossierId === personaId && updated) {
+        renderDossierDigitalBody(updated);
+      }
+    } catch (err) {
+      console.error('Error al vincular banda a persona:', err);
+      showToast(`Error: ${err.message}`, 'error');
+    } finally {
+      hideLoading();
     }
   });
 }
@@ -1637,19 +1941,8 @@ window.abrirEdicionPersona = async function(personaId) {
       if (fotoPlh) fotoPlh.style.display = 'block';
     }
 
-    // Banda
-    const bandaSelect = document.getElementById('persona-banda');
-    if (bandaSelect) {
-      if (p.banda_id) {
-        bandaSelect.value = p.banda_id;
-      } else if (p.banda_nombre) {
-        const opt = Array.from(bandaSelect.options).find(o => o.text.toLowerCase() === p.banda_nombre.toLowerCase());
-        if (opt) bandaSelect.value = opt.value;
-        else bandaSelect.value = '';
-      } else {
-        bandaSelect.value = '';
-      }
-    }
+    // Banda (Sincronizado dinámicamente en Tab 1 y Tab 8)
+    await populatePersonaBandaSelects(p.banda_id, p.banda_nombre);
 
     document.getElementById('persona-roles').value = Array.isArray(p.roles) ? p.roles.join(', ') : (p.roles || '');
 
@@ -1886,9 +2179,21 @@ function renderDossierDigitalBody(p) {
           </div>
 
           <div style="display:flex;align-items:center;gap:8px;margin-top:8px;flex-wrap:wrap">
-            <span style="background:${bandaColor}22;border:1px solid ${bandaColor}66;color:${bandaColor};padding:3px 10px;border-radius:12px;font-size:11px;font-weight:800">
-              🏴 ${p.banda_nombre || 'Individual'}
-            </span>
+            ${(!p.banda_nombre || p.banda_nombre.toLowerCase() === 'individual') ? `
+              <span style="background:rgba(148,163,184,0.12);border:1px solid rgba(148,163,184,0.3);color:#94A3B8;padding:3px 10px;border-radius:12px;font-size:11px;font-weight:800">
+                👤 Operador Individual
+              </span>
+              <button type="button" class="btn btn-outline btn-xs" onclick="window.abrirModalAsignarBanda('${p.id}');" style="font-size:11px;padding:3px 9px;color:#F59E0B;border-color:rgba(245,158,11,0.5);font-weight:700;">
+                ➕ Asignar / Crear Banda
+              </button>
+            ` : `
+              <span style="background:${bandaColor}22;border:1px solid ${bandaColor}66;color:${bandaColor};padding:3px 10px;border-radius:12px;font-size:11px;font-weight:800">
+                🏴 ${p.banda_nombre}
+              </span>
+              <button type="button" class="btn btn-outline btn-xs" onclick="window.abrirModalAsignarBanda('${p.id}');" style="font-size:10px;padding:2px 6px;color:var(--text-secondary);border-color:rgba(255,255,255,0.15);" title="Cambiar organización asignada">
+                ✏️ Cambiar Banda
+              </button>
+            `}
             <span style="background:${p.score_peligrosidad >= 8 ? '#EF4444' : '#F59E0B'};color:#fff;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:700">
               Peligrosidad: ${p.score_peligrosidad || 5}/10
             </span>
@@ -1900,6 +2205,9 @@ function renderDossierDigitalBody(p) {
         </div>
 
         <div style="display:flex;gap:8px;flex-direction:column;flex-shrink:0" class="dossier-actions-bar">
+          <button class="btn btn-primary btn-sm" onclick="closeModal('modal-dossier-digital'); window.abrirEdicionPersona('${p.id}');" style="display:flex;align-items:center;gap:6px;padding:6px 12px;font-size:11px;font-weight:700;background:#0284c7;border:1px solid #38bdf8;">
+            ✏️ Editar Perfil Completo
+          </button>
           <button class="btn btn-secondary btn-sm" onclick="window.centrarPersonaEnMapa('${p.id}'); closeModal('modal-dossier-digital');" style="display:flex;align-items:center;gap:6px;padding:6px 12px;font-size:11px;font-weight:600">
             📍 Centrar en Mapa
           </button>
