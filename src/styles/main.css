@@ -2649,48 +2649,253 @@ textarea.form-input { resize: vertical; min-height: 60px; }
   gap: 12px;
 }
 
-/* Print View Stylesheet */
+/* Elementos exclusivos para impresión (ocultos en vista de pantalla interactiva) */
+.dossier-print-only-header,
+.dossier-print-only-footer,
+.dossier-print-coords {
+  display: none;
+}
+
+/* ============================================================
+   PRINT VIEW STYLESHEET (Legajo y Dossier Institucional Completo)
+   ============================================================ */
 @media print {
-  body * {
-    visibility: hidden;
+  @page {
+    size: A4 portrait;
+    margin: 12mm 15mm 15mm 15mm;
   }
-  #modal-dossier-digital,
-  #modal-dossier-digital * {
-    visibility: visible;
-  }
-  #modal-dossier-digital {
-    position: absolute;
-    left: 0;
-    top: 0;
-    width: 100%;
-    height: auto;
+
+  html, body {
+    width: 100% !important;
+    height: auto !important;
+    min-height: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
     background: #FFFFFF !important;
-    color: #000000 !important;
+    color: #0F172A !important;
+    font-size: 10pt !important;
+    line-height: 1.4 !important;
+    overflow: visible !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Ocultar toda la interfaz de la aplicación excepto el modal del dossier */
+  #app-header,
+  #app-sidebar,
+  #app-main,
+  .hud-container,
+  .timeline-container,
+  .modal-overlay:not(#modal-dossier-digital),
+  .toast-container,
+  .loading-overlay {
+    display: none !important;
+    visibility: hidden !important;
+  }
+
+  /* El modal del dossier se convierte en el documento principal */
+  #modal-dossier-digital {
+    display: block !important;
+    visibility: visible !important;
+    position: static !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    overflow: visible !important;
+    inset: auto !important;
+    background: #FFFFFF !important;
+    color: #0F172A !important;
+    padding: 0 !important;
+    margin: 0 !important;
     box-shadow: none !important;
     border: none !important;
+    backdrop-filter: none !important;
+    transform: none !important;
   }
+
+  #modal-dossier-digital.hidden {
+    display: block !important;
+    visibility: visible !important;
+  }
+
+  #modal-dossier-digital .modal,
+  #modal-dossier-digital .modal-dossier-xl {
+    display: block !important;
+    visibility: visible !important;
+    position: static !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+    background: #FFFFFF !important;
+    color: #0F172A !important;
+    border: none !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    animation: none !important;
+    transform: none !important;
+  }
+
+  #modal-dossier-digital .modal-body,
+  #dossier-digital-content {
+    display: block !important;
+    visibility: visible !important;
+    position: static !important;
+    width: 100% !important;
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  /* Ocultar barra superior de navegación y botones interactivos de pantalla */
+  #modal-dossier-digital > .modal > .modal-header,
   .dossier-nav-tabs,
   .modal-close,
+  .dossier-actions-bar,
+  .btn,
+  button,
+  .file-dropzone-box,
   .btn-print-dossier,
   .btn-edit-dossier,
-  .file-dropzone-box {
+  .btn-dossier-file-open {
     display: none !important;
+    visibility: hidden !important;
   }
-  .dossier-header-bar {
-    background: #F1F5F9 !important;
-    color: #000000 !important;
-    border-bottom: 2px solid #000000 !important;
+
+  /* Mostrar membrete oficial de impresión y pie con firmas */
+  .dossier-print-only-header {
+    display: block !important;
+    visibility: visible !important;
   }
-  .dossier-section-box {
-    border: 1px solid #CBD5E1 !important;
-    background: #FFFFFF !important;
-    color: #000000 !important;
+
+  .dossier-print-only-footer {
+    display: block !important;
+    visibility: visible !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
   }
+
+  /* FORZAR LA VISIBILIDAD DE TODAS LAS SECCIONES DEL DOSSIER SIMULTÁNEAMENTE */
+  .dossier-content-section,
+  .dossier-content-section.hidden {
+    display: block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    position: static !important;
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+    margin-bottom: 24px !important;
+    page-break-inside: auto !important;
+    break-inside: auto !important;
+  }
+
+  /* Títulos de sección formales y nítidos */
   .dossier-section-title {
+    font-size: 11pt !important;
+    font-weight: 800 !important;
     color: #0F172A !important;
-    border-bottom: 1px solid #E2E8F0 !important;
+    border-bottom: 2px solid #0F172A !important;
+    padding-bottom: 4px !important;
+    margin-top: 18px !important;
+    margin-bottom: 10px !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.5px !important;
+    page-break-after: avoid !important;
+    break-after: avoid !important;
+  }
+
+  /* Cabecera del perfil */
+  .dossier-header-bar {
+    background: #F8FAFC !important;
+    color: #0F172A !important;
+    border: 1px solid #CBD5E1 !important;
+    border-radius: 6px !important;
+    padding: 12px 16px !important;
+    margin-bottom: 16px !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  /* Tarjetas y cajas de contenido - evitar que se corten por la mitad */
+  .dossier-content-section > div,
+  .file-attachment-card,
+  [style*="background:var(--bg-tertiary)"],
+  [style*="background: var(--bg-tertiary)"],
+  [style*="background:rgba(255,255,255"] {
+    background: #FFFFFF !important;
+    color: #0F172A !important;
+    border: 1px solid #CBD5E1 !important;
+    border-radius: 6px !important;
+    box-shadow: none !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+    margin-bottom: 10px !important;
+  }
+
+  /* Marco de foto */
+  [style*="width:84px;height:84px"] {
+    border: 2px solid #334155 !important;
+    background: #F1F5F9 !important;
+  }
+
+  /* Alto contraste para tinta de impresora */
+  #modal-dossier-digital * {
+    color: #0F172A !important;
+    text-shadow: none !important;
+  }
+
+  #modal-dossier-digital strong,
+  #modal-dossier-digital h2,
+  #modal-dossier-digital h3,
+  #modal-dossier-digital b {
+    color: #000000 !important;
+  }
+
+  #modal-dossier-digital [style*="color:var(--text-muted)"],
+  #modal-dossier-digital [style*="color:var(--text-secondary)"],
+  #modal-dossier-digital span[style*="color:var(--text-muted)"] {
+    color: #475569 !important;
+  }
+
+  /* Badges y etiquetas */
+  #modal-dossier-digital .badge,
+  #modal-dossier-digital span[style*="border-radius:12px"],
+  #modal-dossier-digital span[style*="border-radius:10px"],
+  #modal-dossier-digital span[style*="border-radius:4px"] {
+    border: 1px solid #64748B !important;
+    background: #F1F5F9 !important;
+    color: #0F172A !important;
+    font-weight: 700 !important;
+    padding: 2px 6px !important;
+  }
+
+  /* Alerta de requerimiento de captura activa */
+  [style*="background:rgba(239,68,68"] {
+    background: #FEF2F2 !important;
+    border: 2px solid #DC2626 !important;
+    color: #991B1B !important;
+  }
+  [style*="background:rgba(239,68,68"] * {
+    color: #991B1B !important;
+  }
+
+  /* Mostrar coordenadas GPS de domicilios */
+  .dossier-print-coords {
+    display: block !important;
+    color: #475569 !important;
+    font-size: 9pt !important;
+    margin-top: 3px !important;
   }
 }
+
 
 /* ============================================================
    MAP PICKER & PRECISION GEOCODING STYLES

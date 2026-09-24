@@ -2457,6 +2457,26 @@ function renderDossierDigitalBody(p) {
   const sc = p.situacion_crediticia || {};
 
   container.innerHTML = `
+    <!-- MEMBRETE OFICIAL EXCLUSIVO DE IMPRESIÓN POLICIAL Y JUDICIAL -->
+    <div class="dossier-print-only-header" style="border-bottom: 2px solid #0F172A; padding-bottom: 12px; margin-bottom: 20px;">
+      <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:10px;">
+        <div>
+          <div style="font-size:13pt; font-weight:900; letter-spacing:0.5px; color:#0F172A; text-transform:uppercase;">GOBIERNO DE LA PROVINCIA DE SANTA FE</div>
+          <div style="font-size:10.5pt; font-weight:800; color:#1E293B;">MINISTERIO DE JUSTICIA Y SEGURIDAD — POLICÍA DE LA PROVINCIA</div>
+          <div style="font-size:9pt; font-weight:700; color:#475569;">SISTEMA CRIMINT — DIVISIÓN ANÁLISIS E INTELIGENCIA CRIMINAL</div>
+        </div>
+        <div style="text-align:right;">
+          <div style="display:inline-block; border:2px solid #0F172A; padding:3px 9px; font-weight:900; font-size:9pt; letter-spacing:0.5px; text-transform:uppercase; color:#0F172A;">ESTRICTAMENTE RESERVADO</div>
+          <div style="font-size:8pt; color:#64748B; margin-top:3px;">USO OPERATIVO / JUDICIAL EXCLUSIVO</div>
+        </div>
+      </div>
+      <div style="display:flex; justify-content:space-between; align-items:center; background:#F1F5F9; padding:6px 12px; border-radius:4px; font-size:8.5pt; font-weight:700; color:#1E293B; border:1px solid #CBD5E1;">
+        <span>LEGAJO INSTITUCIONAL: <strong>LEG-${p.dni || p.id}</strong></span>
+        <span>EMISIÓN: <strong>${new Date().toLocaleDateString('es-AR')} ${new Date().toLocaleTimeString('es-AR', {hour:'2-digit', minute:'2-digit'})} HS</strong></span>
+        <span>DIVISIÓN: <strong>ANÁLISIS CRIMINAL Y MAPPINGS</strong></span>
+      </div>
+    </div>
+
     <!-- CABECERA RESUMEN DEL PERFIL (Visible en pantalla e impresión) -->
     <div class="dossier-header-bar" style="background:rgba(255,255,255,0.02);border:1px solid var(--border-default);border-radius:10px;padding:16px;margin-bottom:18px">
       ${isCaptura ? `
@@ -2604,17 +2624,17 @@ function renderDossierDigitalBody(p) {
     <!-- SECCIÓN 2: DOCUMENTOS Y ADJUNTOS (.pdf, .doc, .docx, imágenes) -->
     <div class="dossier-content-section hidden" id="dossier-tab-adjuntos">
       <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:12px;flex-wrap:wrap">
-        <div style="font-size:13px;font-weight:700;color:#fff">Documentación, Actas y Peritajes Incorporados al Dossier (${archivos.length})</div>
+        <div class="dossier-section-title" style="margin-bottom:0">Documentación, Actas y Peritajes Incorporados al Dossier (${archivos.length})</div>
         <button type="button" class="btn btn-secondary btn-xs" onclick="window.editarPersonaDesdeDossier('${p.id}', 'tab-f-adjuntos');" style="display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:700">
           ➕ Incorporar Archivos
         </button>
       </div>
 
       ${archivos.length === 0 ? `
-        <div style="text-align:center;padding:32px;background:rgba(255,255,255,0.015);border:1px dashed rgba(255,255,255,0.15);border-radius:8px">
-          <div style="font-size:28px;margin-bottom:6px">📎</div>
-          <div style="font-size:13px;font-weight:700;color:#fff">Sin archivos incorporados</div>
-          <div style="font-size:11px;color:var(--text-muted);margin:6px 0 14px">Puede incorporar actas de allanamiento, informes periciales, oficios o fotografías en formato PDF, DOC, DOCX o imágenes.</div>
+        <div style="text-align:center;padding:24px;background:rgba(255,255,255,0.015);border:1px dashed rgba(255,255,255,0.15);border-radius:8px">
+          <div style="font-size:24px;margin-bottom:4px">📎</div>
+          <div style="font-size:12px;font-weight:700;color:#fff">Sin archivos incorporados en soporte digital</div>
+          <div style="font-size:11px;color:var(--text-muted);margin:4px 0 12px">No se registraron actas de allanamiento, informes periciales, oficios ni fotografías anexas.</div>
           <button type="button" class="btn btn-primary btn-sm" onclick="window.editarPersonaDesdeDossier('${p.id}', 'tab-f-adjuntos');" style="display:inline-flex;align-items:center;gap:6px;font-weight:700">
             ➕ Incorporar Archivos
           </button>
@@ -2653,7 +2673,7 @@ function renderDossierDigitalBody(p) {
     <!-- SECCIÓN 3: DOMICILIOS GEORREFERENCIADOS -->
     <div class="dossier-content-section hidden" id="dossier-tab-domicilios">
       <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:12px;flex-wrap:wrap">
-        <div style="font-size:13px;font-weight:700;color:#fff">
+        <div class="dossier-section-title" style="margin-bottom:0">
           Inmuebles, Asentamientos y Puntos Territoriales Vinculados (${domicilios.length})
         </div>
         <button type="button" class="btn btn-secondary btn-xs" onclick="window.editarPersonaDesdeDossier('${p.id}', 'tab-f-domicilios');" style="display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:700">
@@ -2662,10 +2682,10 @@ function renderDossierDigitalBody(p) {
       </div>
 
       ${domicilios.length === 0 ? `
-        <div style="text-align:center;padding:32px 20px;background:rgba(255,255,255,0.015);border:1px dashed rgba(255,255,255,0.15);border-radius:8px">
-          <div style="font-size:28px;margin-bottom:6px">📍</div>
-          <div style="font-size:13px;font-weight:700;color:#fff">Sin domicilios territoriales vinculados</div>
-          <div style="font-size:11px;color:var(--text-muted);margin:6px 0 14px">Incorpore domicilios reales, legales, aguantaderos o bocas de expendio para georreferenciación cartográfica automática.</div>
+        <div style="text-align:center;padding:24px 20px;background:rgba(255,255,255,0.015);border:1px dashed rgba(255,255,255,0.15);border-radius:8px">
+          <div style="font-size:24px;margin-bottom:4px">📍</div>
+          <div style="font-size:12px;font-weight:700;color:#fff">Sin domicilios territoriales vinculados</div>
+          <div style="font-size:11px;color:var(--text-muted);margin:4px 0 12px">No se registraron domicilios reales, legales, aguantaderos ni bocas de expendio para este perfil.</div>
           <button type="button" class="btn btn-primary btn-sm" onclick="window.editarPersonaDesdeDossier('${p.id}', 'tab-f-domicilios');" style="display:inline-flex;align-items:center;gap:6px;font-weight:700">
             ➕ Agregar Domicilio
           </button>
@@ -2696,6 +2716,9 @@ function renderDossierDigitalBody(p) {
                     <div style="font-size:11px;color:var(--text-secondary)">
                       ${d.barrio ? `Barrio: ${d.barrio} | ` : ''} Santa Fe ${d.detalle ? `• ${d.detalle}` : ''}
                     </div>
+                    <div class="dossier-print-coords">
+                      ${coords ? `📍 Coordenadas Cartográficas GPS: Latitud ${coords.lat.toFixed(6)}, Longitud ${coords.lng.toFixed(6)}` : 'Sin georreferenciación cartográfica registrada'}
+                    </div>
                   </div>
                 </div>
 
@@ -2721,7 +2744,7 @@ function renderDossierDigitalBody(p) {
     <!-- SECCIÓN 4: CAUSAS Y PROCESOS CUIJ -->
     <div class="dossier-content-section hidden" id="dossier-tab-causas">
       <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:12px;flex-wrap:wrap">
-        <div style="font-size:13px;font-weight:700;color:#fff">
+        <div class="dossier-section-title" style="margin-bottom:0">
           Investigaciones Penales Preparatorias y Causas CUIJ (${causas.length})
         </div>
         <button type="button" class="btn btn-secondary btn-xs" onclick="window.editarPersonaDesdeDossier('${p.id}', 'tab-f-causas');" style="display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:700">
@@ -2730,10 +2753,10 @@ function renderDossierDigitalBody(p) {
       </div>
 
       ${causas.length === 0 ? `
-        <div style="text-align:center;padding:32px 20px;background:rgba(255,255,255,0.015);border:1px dashed rgba(255,255,255,0.15);border-radius:8px">
-          <div style="font-size:28px;margin-bottom:6px">⚖️</div>
-          <div style="font-size:13px;font-weight:700;color:#fff">No registra causas CUIJ vinculadas en el sistema</div>
-          <div style="font-size:11px;color:var(--text-muted);margin:6px 0 14px">Asocie legajos del MPA, números de CUIJ, carátulas y unidades fiscales de investigación.</div>
+        <div style="text-align:center;padding:24px 20px;background:rgba(255,255,255,0.015);border:1px dashed rgba(255,255,255,0.15);border-radius:8px">
+          <div style="font-size:24px;margin-bottom:4px">⚖️</div>
+          <div style="font-size:12px;font-weight:700;color:#fff">No registra causas CUIJ vinculadas en el sistema</div>
+          <div style="font-size:11px;color:var(--text-muted);margin:4px 0 12px">No se registraron legajos fiscales del MPA, números de CUIJ ni carátulas penales vinculadas.</div>
           <button type="button" class="btn btn-primary btn-sm" onclick="window.editarPersonaDesdeDossier('${p.id}', 'tab-f-causas');" style="display:inline-flex;align-items:center;gap:6px;font-weight:700">
             ➕ Agregar Causa CUIJ
           </button>
@@ -2770,7 +2793,7 @@ function renderDossierDigitalBody(p) {
     <!-- SECCIÓN 5: PARQUE AUTOMOTOR / VEHÍCULOS -->
     <div class="dossier-content-section hidden" id="dossier-tab-vehiculos">
       <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:12px;flex-wrap:wrap">
-        <div style="font-size:13px;font-weight:700;color:#fff">
+        <div class="dossier-section-title" style="margin-bottom:0">
           Parque Automotor y Rodados Detectados (${vehiculos.length})
         </div>
         <button type="button" class="btn btn-secondary btn-xs" onclick="window.editarPersonaDesdeDossier('${p.id}', 'tab-f-vehiculos');" style="display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:700">
@@ -2779,10 +2802,10 @@ function renderDossierDigitalBody(p) {
       </div>
 
       ${vehiculos.length === 0 ? `
-        <div style="text-align:center;padding:32px 20px;background:rgba(255,255,255,0.015);border:1px dashed rgba(255,255,255,0.15);border-radius:8px">
-          <div style="font-size:28px;margin-bottom:6px">🚗</div>
-          <div style="font-size:13px;font-weight:700;color:#fff">No registra vehículos asociados en este legajo</div>
-          <div style="font-size:11px;color:var(--text-muted);margin:6px 0 14px">Registre patentes, automóviles, motovehículos o utilitarios vinculados a la logística o titularidad.</div>
+        <div style="text-align:center;padding:24px 20px;background:rgba(255,255,255,0.015);border:1px dashed rgba(255,255,255,0.15);border-radius:8px">
+          <div style="font-size:24px;margin-bottom:4px">🚗</div>
+          <div style="font-size:12px;font-weight:700;color:#fff">No registra vehículos asociados en este legajo</div>
+          <div style="font-size:11px;color:var(--text-muted);margin:4px 0 12px">No se registraron patentes, automóviles, utilitarios ni motovehículos vinculados a este perfil.</div>
           <button type="button" class="btn btn-primary btn-sm" onclick="window.editarPersonaDesdeDossier('${p.id}', 'tab-f-vehiculos');" style="display:inline-flex;align-items:center;gap:6px;font-weight:700">
             ➕ Agregar Vehículo
           </button>
@@ -2822,8 +2845,8 @@ function renderDossierDigitalBody(p) {
     <!-- SECCIÓN 6: RED FAMILIAR Y VÍNCULOS DIRECTOS -->
     <div class="dossier-content-section hidden" id="dossier-tab-familia">
       <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:12px;flex-wrap:wrap">
-        <div style="font-size:13px;font-weight:700;color:#fff">
-          Red de Parentesco y Convivencia (${familiares.length})
+        <div class="dossier-section-title" style="margin-bottom:0">
+          Red de Parentesco y Convivencia Directa (${familiares.length})
         </div>
         <button type="button" class="btn btn-secondary btn-xs" onclick="window.editarPersonaDesdeDossier('${p.id}', 'tab-f-familia');" style="display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:700">
           ➕ Agregar / Editar Familiares
@@ -2831,10 +2854,10 @@ function renderDossierDigitalBody(p) {
       </div>
 
       ${familiares.length === 0 ? `
-        <div style="text-align:center;padding:32px 20px;background:rgba(255,255,255,0.015);border:1px dashed rgba(255,255,255,0.15);border-radius:8px">
-          <div style="font-size:28px;margin-bottom:6px">👥</div>
-          <div style="font-size:13px;font-weight:700;color:#fff">No se registraron vínculos familiares directos en este perfil</div>
-          <div style="font-size:11px;color:var(--text-muted);margin:6px 0 14px">Incorpore padres, parejas, hermanos, convivientes o vínculos directos para el análisis relacional y patrimonial.</div>
+        <div style="text-align:center;padding:24px 20px;background:rgba(255,255,255,0.015);border:1px dashed rgba(255,255,255,0.15);border-radius:8px">
+          <div style="font-size:24px;margin-bottom:4px">👥</div>
+          <div style="font-size:12px;font-weight:700;color:#fff">No se registraron vínculos familiares directos en este perfil</div>
+          <div style="font-size:11px;color:var(--text-muted);margin:4px 0 12px">No se registraron padres, parejas, hermanos, convivientes ni vínculos directos para el análisis patrimonial.</div>
           <button type="button" class="btn btn-primary btn-sm" onclick="window.editarPersonaDesdeDossier('${p.id}', 'tab-f-familia');" style="display:inline-flex;align-items:center;gap:6px;font-weight:700">
             ➕ Agregar Vínculo Familiar
           </button>
@@ -2869,7 +2892,7 @@ function renderDossierDigitalBody(p) {
     <!-- SECCIÓN 7: PERFIL FINANCIERO Y SITUACIÓN CREDITICIA -->
     <div class="dossier-content-section hidden" id="dossier-tab-financiero">
       <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:12px;flex-wrap:wrap">
-        <div style="font-size:13px;font-weight:700;color:#fff">Evaluación Financiera, Bancaria y Condición Fiscal</div>
+        <div class="dossier-section-title" style="margin-bottom:0">Evaluación Financiera, Bancaria y Condición Fiscal</div>
         <button type="button" class="btn btn-secondary btn-xs" onclick="window.editarPersonaDesdeDossier('${p.id}', 'tab-f-credito');" style="display:inline-flex;align-items:center;gap:4px;font-weight:700">
           ✏️ Editar Perfil Financiero
         </button>
@@ -2913,7 +2936,7 @@ function renderDossierDigitalBody(p) {
     <!-- SECCIÓN 8: INTELIGENCIA CRIMINAL -->
     <div class="dossier-content-section hidden" id="dossier-tab-inteligencia">
       <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:12px;flex-wrap:wrap">
-        <div style="font-size:13px;font-weight:700;color:#fff">Perfilación Territorial e Inteligencia Criminal</div>
+        <div class="dossier-section-title" style="margin-bottom:0">Perfilación Territorial e Inteligencia Criminal</div>
         <button type="button" class="btn btn-secondary btn-xs" onclick="window.editarPersonaDesdeDossier('${p.id}', 'tab-f-organizacion');" style="display:inline-flex;align-items:center;gap:4px;font-weight:700">
           ✏️ Editar Inteligencia y Organización
         </button>
@@ -2922,6 +2945,30 @@ function renderDossierDigitalBody(p) {
       <div style="background:var(--bg-tertiary);border:1px solid var(--border-default);border-radius:8px;padding:14px;margin-bottom:14px">
         <div style="font-size:12px;color:var(--text-secondary);line-height:1.6;white-space:pre-wrap">
           ${p.antecedentes_texto || 'Sin notas de inteligencia operativa adicionales.'}
+        </div>
+      </div>
+    </div>
+
+    <!-- PIE INSTITUCIONAL EXCLUSIVO DE IMPRESIÓN CON CONSTANCIA Y FIRMAS -->
+    <div class="dossier-print-only-footer" style="margin-top: 36px; padding-top: 20px; border-top: 2px solid #0F172A; page-break-inside: avoid; break-inside: avoid;">
+      <div style="font-size: 8pt; color: #475569; margin-bottom: 28px; text-align: justify; line-height: 1.35;">
+        <strong>CONSTANCIA DE VALIDEZ Y RESERVA INSTITUCIONAL:</strong> La información contenida en el presente Legajo de Inteligencia y Dossier Digital ha sido procesada mediante cruce analítico de bases policiales, fiscales y territoriales por la División de Análisis Criminal del Sistema CRIMINT de la Provincia de Santa Fe. Sus datos son confidenciales y están protegidos por el marco normativo de inteligencia criminal y protección de datos, con destino exclusivo a magistrados judiciales y mandos operativos intervinientes.
+      </div>
+      <div style="display: flex; justify-content: space-between; align-items: flex-end; gap: 24px; margin-top: 30px;">
+        <div style="flex: 1; text-align: center; border-top: 1px solid #334155; padding-top: 8px;">
+          <div style="font-size: 8.5pt; font-weight: 800; color: #0F172A;">ANALISTA OPERATIVO INTERVINIENTE</div>
+          <div style="font-size: 7.5pt; color: #64748B;">División Análisis e Inteligencia Criminal</div>
+          <div style="font-size: 7.5pt; color: #64748B;">Policía de la Provincia de Santa Fe</div>
+        </div>
+        <div style="flex: 1; text-align: center; border-top: 1px solid #334155; padding-top: 8px;">
+          <div style="font-size: 8.5pt; font-weight: 800; color: #0F172A;">JEFE DE DIVISIÓN / SUPERVISOR</div>
+          <div style="font-size: 7.5pt; color: #64748B;">Departamento de Informaciones e Inteligencia</div>
+          <div style="font-size: 7.5pt; color: #64748B;">Firma y Sello Aclaratorio</div>
+        </div>
+        <div style="flex: 1; text-align: center; border-top: 1px solid #334155; padding-top: 8px;">
+          <div style="font-size: 8.5pt; font-weight: 800; color: #0F172A;">RECEPCIÓN UNIDAD FISCAL / JUZGADO</div>
+          <div style="font-size: 7.5pt; color: #64748B;">Ministerio Público de la Acusación</div>
+          <div style="font-size: 7.5pt; color: #64748B;">Constancia de Cargo y Notificación</div>
         </div>
       </div>
     </div>
@@ -2952,16 +2999,37 @@ window.imprimirDossierDigital = async function(personaId) {
   if (!personaId && currentViewingDossierId) personaId = currentViewingDossierId;
   if (!personaId) return;
 
-  await window.abrirDossierDigital(personaId);
-  // Mostrar todas las secciones simultáneamente para impresión
+  const modalDossier = document.getElementById('modal-dossier-digital');
+  if (!modalDossier || modalDossier.classList.contains('hidden') || currentViewingDossierId !== personaId) {
+    await window.abrirDossierDigital(personaId);
+  }
+
+  // Desocultar todas las secciones para que el motor de impresión las capture todas en páginas continuas
   document.querySelectorAll('.dossier-content-section').forEach(s => s.classList.remove('hidden'));
-  window.print();
-  // Restaurar pestaña activa tras imprimir
-  const activeTabBtn = document.querySelector('#dossier-view-tabs .dossier-tab-btn.active');
-  const targetId = activeTabBtn ? activeTabBtn.dataset.dossierTab : 'dossier-tab-general';
-  document.querySelectorAll('.dossier-content-section').forEach(s => s.classList.add('hidden'));
-  document.getElementById(targetId)?.classList.remove('hidden');
+
+  // Breve espera para que el layout del navegador se estabilice con todas las secciones visibles antes de imprimir
+  setTimeout(() => {
+    window.print();
+  }, 150);
 };
+
+// Eventos de sincronización para impresión directa del navegador (ej. Ctrl+P o Menú Imprimir)
+window.addEventListener('beforeprint', () => {
+  const modalDossier = document.getElementById('modal-dossier-digital');
+  if (modalDossier && !modalDossier.classList.contains('hidden')) {
+    document.querySelectorAll('.dossier-content-section').forEach(s => s.classList.remove('hidden'));
+  }
+});
+
+window.addEventListener('afterprint', () => {
+  const modalDossier = document.getElementById('modal-dossier-digital');
+  if (modalDossier && !modalDossier.classList.contains('hidden')) {
+    const activeTabBtn = document.querySelector('#dossier-view-tabs .dossier-tab-btn.active');
+    const targetId = activeTabBtn ? activeTabBtn.dataset.dossierTab : 'dossier-tab-general';
+    document.querySelectorAll('.dossier-content-section').forEach(s => s.classList.add('hidden'));
+    document.getElementById(targetId)?.classList.remove('hidden');
+  }
+});
 
 // Global exposure for centering arbitrary coordinates on map
 window.centrarCoordenadasMapa = function(lng, lat, label) {
