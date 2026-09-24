@@ -3089,8 +3089,8 @@ window.enfocarBandaEnGrafo = async function(bandaId) {
   const navGrafo = document.querySelector('[data-view=grafo]');
   if (navGrafo) navGrafo.click();
   setTimeout(async () => {
-    if (bandaId === 'banda-la-negrada' || bandaId === 'banda-los-de-siempre') {
-      document.getElementById('btn-grafo-conflicto')?.click();
+    if (window.filtrarGrafoPorBanda) {
+      await window.filtrarGrafoPorBanda(bandaId);
     } else {
       await renderGrafoGeneral(bandaId);
     }
@@ -3222,175 +3222,622 @@ async function renderAllanamientosView() {
 }
 
 // ============================================================
-// GRAFO VIEW (vis-network) — RED DE VÍNCULOS DINÁMICA Y COMPLETA
+// ============================================================
+// GRAFO VIEW (vis-network) — RED DE INTELIGENCIA Y VÍNCULOS CRIMINALES
+// Relaciones derivadas de Dossiers: Jerarquías, Rodados, CUIJs y Vínculos Familiares
 // ============================================================
 let currentGrafoNetwork = null;
+let currentGrafoOptions = {
+  bandaId: '',
+  personaId: '',
+  filterMode: 'general',
+  hideUnlinked: true
+};
 
 async function setupGrafoView() {
-  const select = document.getElementById('grafo-persona-select');
-  if (!select) return;
+  const bandaSelect = document.getElementById('grafo-banda-select');
+  const personaSelect = document.getElementById('grafo-persona-select');
+  const toggleUnlinked = document.getElementById('grafo-toggle-unlinked');
+  const dynamicChips = document.getElementById('grafo-bandas-dynamic-chips');
+  const btnGeneral = document.getElementById('btn-grafo-general');
+  const btnProfugos = document.getElementById('btn-grafo-profugos');
+  const btnConflicto = document.getElementById('btn-grafo-conflicto');
+  const btnLoad = document.getElementById('btn-grafo-load');
+  const btnCloseDossier = document.getElementById('btn-close-dossier');
+
+  if (!bandaSelect || !personaSelect) return;
 
   try {
-    const personas = await getPersonas({ limit: 500 });
-    // Sort so fugitives with capture order are on top
-    personas.sort((a, b) => {
-      if (a.pedido_captura && !b.pedido_captura) return -1;
-      if (!a.pedido_captura && b.pedido_captura) return 1;
-      return (b.score_peligrosidad || 0) - (a.score_peligrosidad || 0);
-    });
+    const [personas, bandas] = await Promise.all([
+      getPersonas({ limit: 1000 }),
+      getBandas({ limit: 100 })
+    ]);
 
-    select.innerHTML = '<option value="">🌐 Red General de Organizaciones</option>';
+    // Calcular estadísticas por banda
+    const statsPorBanda = {};
     personas.forEach(p => {
-      const name = `${p.nombre || ''} ${p.apellido || ''}`.trim() || 'Sin nombre';
-      const aliasStr = p.alias?.length ? ` (${p.alias[0]})` : '';
-      const captStr = p.pedido_captura ? '🚨 [CAPTURA] ' : '';
-      const bandaStr = p.banda_nombre ? ` — ${p.banda_nombre}` : '';
-      select.innerHTML += `<option value="${p.id}">${captStr}${name}${aliasStr}${bandaStr}</option>`;
+      const bId = p.banda_id || (p.banda_nombre ? `banda-${p.banda_nombre.toLowerCase().replace(/[^a-z0-9]/g, '-')}` : null);
+      if (bId) {
+        if (!statsPorBanda[bId]) statsPorBanda[bId] = { total: 0, profugos: 0, personas: [] };
+        statsPorBanda[bId].total++;
+        if (p.pedido_captura) statsPorBanda[bId].profugos++;
+        statsPorBanda[bId].personas.push(p);
+      }
     });
+
+    // 1. Poblar Selector Principal de Banda
+    bandaSelect.innerHTML = `
+      <option value="">🌐 Todas las Organizaciones Criminales</option>
+      <option value="CONFLICT_NEGRADA_SIEMPRE">⚔️ Disputa Territorial (La Negrada vs Los de Siempre)</option>
+    `;
+    bandas.forEach(b => {
+      const stats = statsPorBanda[b.id] || { total: 0, profugos: 0 };
+      const captStr = stats.profugos > 0 ? ` — 🚨 ${stats.profugos} prófugo${stats.profugos > 1 ? 's' : ''}` : '';
+      bandaSelect.innerHTML += `
+        <option value="${b.id}">🏴 ${b.nombre} (${stats.total} integrantes${captStr})</option>
+      `;
+    });
+
+    // 2. Generar Chips Rápidos por Banda en Toolbar
+    if (dynamicChips) {
+      dynamicChips.innerHTML = '';
+      bandas.forEach(b => {
+        const stats = statsPorBanda[b.id] || { total: 0, profugos: 0 };
+        const bColor = b.color_hex || '#0EA5E9';
+        const chip = document.createElement('button');
+        chip.type = 'button';
+        chip.className = 'btn btn-outline btn-xs chip-banda';
+        chip.dataset.bandaId = b.id;
+        chip.style.cssText = `font-size:11px;font-weight:700;padding:3px 10px;border-radius:12px;border-color:${bColor};color:${bColor};background:rgba(255,255,255,0.03);white-space:nowrap;display:inline-flex;align-items:center;gap:4px;cursor:pointer;`;
+        chip.innerHTML = `🏴 ${b.nombre} <span style="font-size:10px;opacity:0.8;background:${bColor}22;padding:1px 5px;border-radius:8px;">${stats.total}</span>`;
+        chip.addEventListener('click', async () => {
+          await window.filtrarGrafoPorBanda(b.id);
+        });
+        dynamicChips.appendChild(chip);
+      });
+    }
+
+    // 3. Función para poblar personas según la banda seleccionada
+    function populatePersonaSelect(bId) {
+      personaSelect.innerHTML = '';
+      let list = [];
+
+      if (bId === 'CONFLICT_NEGRADA_SIEMPRE') {
+        personaSelect.innerHTML = '<option value="">⚔️ Ambas facciones en disputa (Todos)...</option>';
+        list = personas.filter(p => p.banda_nombre?.includes('Negrada') || p.banda_nombre?.includes('Siempre'));
+      } else if (bId) {
+        const currentBanda = bandas.find(b => b.id === bId);
+        personaSelect.innerHTML = `<option value="">Toda la organización (${currentBanda ? currentBanda.nombre : 'Banda'})...</option>`;
+        list = personas.filter(p => p.banda_id === bId || p.banda_nombre?.toLowerCase() === currentBanda?.nombre?.toLowerCase());
+      } else {
+        personaSelect.innerHTML = '<option value="">Todos los investigados (Focalizar sujeto)...</option>';
+        list = [...personas];
+      }
+
+      // Ordenar: prófugos primero, luego líderes/sicarios, luego peligrosidad
+      list.sort((a, b) => {
+        if (a.pedido_captura && !b.pedido_captura) return -1;
+        if (!a.pedido_captura && b.pedido_captura) return 1;
+        return (b.score_peligrosidad || 0) - (a.score_peligrosidad || 0);
+      });
+
+      list.slice(0, 150).forEach(p => {
+        const name = `${p.nombre || ''} ${p.apellido || ''}`.trim() || 'Sin nombre';
+        const aliasStr = p.alias?.length ? ` "${p.alias[0]}"` : '';
+        const captStr = p.pedido_captura ? '🚨 [CAPTURA] ' : '';
+        const roleStr = p.roles?.length ? ` • ${p.roles[0]}` : '';
+        personaSelect.innerHTML += `<option value="${p.id}">${captStr}${name}${aliasStr}${roleStr}</option>`;
+      });
+    }
+
+    populatePersonaSelect('');
+
+    // Actualizar estilo visual del botón activo
+    function updateActiveFilterButton(activeId) {
+      [btnGeneral, btnProfugos, btnConflicto].forEach(btn => btn?.classList.remove('active'));
+      document.querySelectorAll('#grafo-bandas-dynamic-chips .chip-banda').forEach(c => {
+        c.style.background = 'rgba(255,255,255,0.03)';
+      });
+
+      if (activeId === 'btn-grafo-general') btnGeneral?.classList.add('active');
+      else if (activeId === 'btn-grafo-profugos') btnProfugos?.classList.add('active');
+      else if (activeId === 'btn-grafo-conflicto') btnConflicto?.classList.add('active');
+      else if (activeId) {
+        const activeChip = document.querySelector(`#grafo-bandas-dynamic-chips [data-banda-id="${activeId}"]`);
+        if (activeChip) activeChip.style.background = 'rgba(255,255,255,0.18)';
+      }
+    }
+
+    // Eventos de controles
+    bandaSelect.addEventListener('change', async () => {
+      const bId = bandaSelect.value;
+      populatePersonaSelect(bId);
+      currentGrafoOptions.bandaId = bId;
+      currentGrafoOptions.personaId = '';
+      currentGrafoOptions.filterMode = bId === 'CONFLICT_NEGRADA_SIEMPRE' ? 'conflicto' : (bId ? 'banda' : 'general');
+      updateActiveFilterButton(bId);
+      await renderGrafoIntelligence();
+    });
+
+    personaSelect.addEventListener('change', async () => {
+      currentGrafoOptions.personaId = personaSelect.value;
+      if (personaSelect.value) {
+        await renderGrafoIntelligence({ focusPersonaId: personaSelect.value });
+      } else {
+        await renderGrafoIntelligence();
+      }
+    });
+
+    toggleUnlinked?.addEventListener('change', async () => {
+      currentGrafoOptions.hideUnlinked = toggleUnlinked.checked;
+      await renderGrafoIntelligence();
+    });
+
+    btnLoad?.addEventListener('click', async () => {
+      const bId = bandaSelect.value;
+      const pId = personaSelect.value;
+      currentGrafoOptions.bandaId = bId;
+      currentGrafoOptions.personaId = pId;
+      currentGrafoOptions.filterMode = bId === 'CONFLICT_NEGRADA_SIEMPRE' ? 'conflicto' : (bId ? 'banda' : 'general');
+      await renderGrafoIntelligence({ focusPersonaId: pId });
+    });
+
+    btnGeneral?.addEventListener('click', async () => {
+      updateActiveFilterButton('btn-grafo-general');
+      bandaSelect.value = '';
+      populatePersonaSelect('');
+      currentGrafoOptions.bandaId = '';
+      currentGrafoOptions.personaId = '';
+      currentGrafoOptions.filterMode = 'general';
+      await renderGrafoIntelligence();
+    });
+
+    btnProfugos?.addEventListener('click', async () => {
+      updateActiveFilterButton('btn-grafo-profugos');
+      bandaSelect.value = '';
+      populatePersonaSelect('');
+      currentGrafoOptions.bandaId = '';
+      currentGrafoOptions.personaId = '';
+      currentGrafoOptions.filterMode = 'profugos';
+      await renderGrafoIntelligence();
+    });
+
+    btnConflicto?.addEventListener('click', async () => {
+      updateActiveFilterButton('btn-grafo-conflicto');
+      bandaSelect.value = 'CONFLICT_NEGRADA_SIEMPRE';
+      populatePersonaSelect('CONFLICT_NEGRADA_SIEMPRE');
+      currentGrafoOptions.bandaId = 'CONFLICT_NEGRADA_SIEMPRE';
+      currentGrafoOptions.personaId = '';
+      currentGrafoOptions.filterMode = 'conflicto';
+      await renderGrafoIntelligence();
+    });
+
+    btnCloseDossier?.addEventListener('click', () => {
+      document.getElementById('grafo-node-dossier')?.classList.add('hidden');
+    });
+
+    // Cargar visualización inicial de la red
+    await renderGrafoIntelligence();
+
   } catch (e) {
-    console.error('Error cargando personas para grafo:', e);
+    console.error('Error inicializando vista de grafo relacional:', e);
   }
-
-  function setActiveBtn(btnId) {
-    ['btn-grafo-general', 'btn-grafo-profugos', 'btn-grafo-conflicto'].forEach(id => {
-      document.getElementById(id)?.classList.remove('active');
-    });
-    document.getElementById(btnId)?.classList.add('active');
-  }
-
-  document.getElementById('btn-grafo-general')?.addEventListener('click', () => {
-    setActiveBtn('btn-grafo-general');
-    select.value = '';
-    renderGrafoGeneral();
-  });
-
-  document.getElementById('btn-grafo-profugos')?.addEventListener('click', () => {
-    setActiveBtn('btn-grafo-profugos');
-    select.value = '';
-    renderGrafoProfugos();
-  });
-
-  document.getElementById('btn-grafo-conflicto')?.addEventListener('click', () => {
-    setActiveBtn('btn-grafo-conflicto');
-    select.value = '';
-    renderGrafoConflicto();
-  });
-
-  document.getElementById('btn-grafo-load')?.addEventListener('click', async () => {
-    const personaId = select.value;
-    if (!personaId) {
-      setActiveBtn('btn-grafo-general');
-      renderGrafoGeneral();
-    } else {
-      await renderGrafo(personaId);
-    }
-  });
-
-  select.addEventListener('change', async () => {
-    if (select.value) {
-      await renderGrafo(select.value);
-    } else {
-      setActiveBtn('btn-grafo-general');
-      renderGrafoGeneral();
-    }
-  });
-
-  document.getElementById('btn-close-dossier')?.addEventListener('click', () => {
-    document.getElementById('grafo-node-dossier')?.classList.add('hidden');
-  });
-
-  // AUTO-LOAD IMMEDIATELY ON VIEW ACTIVATION
-  await renderGrafoGeneral();
 }
 
-async function renderGrafoGeneral(bandaHighlightId = null) {
+// ============================================================
+// CONSTRUCTOR CENTRAL DE INTELIGENCIA RELACIONAL
+// ============================================================
+async function renderGrafoIntelligence(customOverrides = {}) {
   const container = document.getElementById('grafo-canvas');
   if (!container) return;
 
-  container.innerHTML = '<div class="empty-state"><div class="spinner"></div><span>Construyendo red criminal...</span></div>';
+  const opts = {
+    ...currentGrafoOptions,
+    hideUnlinked: document.getElementById('grafo-toggle-unlinked')?.checked ?? true,
+    ...customOverrides
+  };
+
+  container.innerHTML = `
+    <div class="empty-state" style="height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;">
+      <div class="spinner"></div>
+      <span style="font-weight:600;color:var(--text-secondary);">Procesando inteligencia de legajos y cruzamiento relacional...</span>
+    </div>
+  `;
 
   try {
     const [personas, bandas, vinculos] = await Promise.all([
-      getPersonas({ limit: 500 }),
-      getBandas({ limit: 50 }),
+      getPersonas({ limit: 1000 }),
+      getBandas({ limit: 100 }),
       getAllVinculos()
     ]);
 
-    container.innerHTML = '';
+    const personasMap = new Map(personas.map(p => [p.id, p]));
+    const bandasMap = new Map(bandas.map(b => [b.id, b]));
 
+    // ------------------------------------------------------------
+    // 1. EXTRACCIÓN Y CRUZAMIENTO DE DATOS DE DOSSIERS
+    // ------------------------------------------------------------
+
+    // A. Cruzamiento de Rodados Compartidos (p.vehiculos)
+    const vehiculosIndex = new Map(); // patenteNorm -> Array<{ personaId, veh }>
+    personas.forEach(p => {
+      if (Array.isArray(p.vehiculos)) {
+        p.vehiculos.forEach(v => {
+          const rawPat = (v.patente || '').trim().toUpperCase().replace(/[\s-]/g, '');
+          if (rawPat.length >= 5) {
+            if (!vehiculosIndex.has(rawPat)) vehiculosIndex.set(rawPat, []);
+            vehiculosIndex.get(rawPat).push({ personaId: p.id, veh: v });
+          }
+        });
+      }
+    });
+
+    // B. Cruzamiento de CUIJs / Causas Judiciales (p.causas + p.cuij_asociados)
+    const cuijsIndex = new Map(); // cuijNorm -> Set<personaId>
+    personas.forEach(p => {
+      const personCuijs = new Set();
+      if (Array.isArray(p.causas)) {
+        p.causas.forEach(c => {
+          if (c.cuij) personCuijs.add(c.cuij.trim());
+        });
+      }
+      if (Array.isArray(p.cuij_asociados)) {
+        p.cuij_asociados.forEach(c => {
+          if (c) personCuijs.add(c.trim());
+        });
+      }
+      personCuijs.forEach(c => {
+        const norm = c.replace(/[\s]/g, '');
+        if (norm.length >= 6) {
+          if (!cuijsIndex.has(norm)) cuijsIndex.set(norm, new Set());
+          cuijsIndex.get(norm).add(p.id);
+        }
+      });
+    });
+
+    // C. Cruzamiento de Vínculos Familiares (p.familiares)
+    const familyEdges = [];
+    personas.forEach(p => {
+      if (Array.isArray(p.familiares)) {
+        p.familiares.forEach(fam => {
+          const dni = (fam.dni || '').trim().replace(/\D/g, '');
+          const famName = (fam.nombre || '').toLowerCase().trim();
+          if (dni || famName.length >= 5) {
+            const match = personas.find(o => {
+              if (o.id === p.id) return false;
+              if (dni && o.dni && o.dni.trim().replace(/\D/g, '') === dni) return true;
+              if (famName && o.apellido && famName.includes(o.apellido.toLowerCase().trim()) && o.nombre && famName.includes(o.nombre.toLowerCase().trim())) return true;
+              return false;
+            });
+            if (match) {
+              familyEdges.push({
+                from: p.id,
+                to: match.id,
+                parentesco: fam.parentesco || 'Familiar',
+                obs: fam.observacion || ''
+              });
+            }
+          }
+        });
+      }
+    });
+
+    // ------------------------------------------------------------
+    // 2. FILTRADO DE ENTIDADES RELEVANTES
+    // ------------------------------------------------------------
+    const activePersonaIds = new Set();
+    const activeBandaIds = new Set();
+
+    if (opts.focusPersonaId && personasMap.has(opts.focusPersonaId)) {
+      // Modo Sujeto Focal: Sujeto + su banda + contactos directos
+      const focal = personasMap.get(opts.focusPersonaId);
+      activePersonaIds.add(focal.id);
+      if (focal.banda_id) activeBandaIds.add(focal.banda_id);
+
+      // Contactos por vínculos directos
+      vinculos.forEach(v => {
+        const oId = v.persona_origen_id || v.origen_id;
+        const dId = v.persona_destino_id || v.destino_id;
+        if (oId === focal.id && dId) activePersonaIds.add(dId);
+        if (dId === focal.id && oId) activePersonaIds.add(oId);
+      });
+
+      // Contactos por rodados compartidos
+      vehiculosIndex.forEach((entries) => {
+        if (entries.some(e => e.personaId === focal.id)) {
+          entries.forEach(e => activePersonaIds.add(e.personaId));
+        }
+      });
+
+      // Contactos por CUIJ compartida
+      cuijsIndex.forEach((pIds) => {
+        if (pIds.has(focal.id)) {
+          pIds.forEach(id => activePersonaIds.add(id));
+        }
+      });
+
+      // Familiares
+      familyEdges.forEach(f => {
+        if (f.from === focal.id) activePersonaIds.add(f.to);
+        if (f.to === focal.id) activePersonaIds.add(f.from);
+      });
+
+    } else if (opts.bandaId === 'CONFLICT_NEGRADA_SIEMPRE' || opts.filterMode === 'conflicto') {
+      // Disputa Negrada vs Siempre
+      bandas.forEach(b => {
+        if (b.nombre.includes('Negrada') || b.nombre.includes('Siempre')) {
+          activeBandaIds.add(b.id);
+        }
+      });
+      personas.forEach(p => {
+        if (activeBandaIds.has(p.banda_id) || p.banda_nombre?.includes('Negrada') || p.banda_nombre?.includes('Siempre')) {
+          activePersonaIds.add(p.id);
+        }
+      });
+
+    } else if (opts.bandaId) {
+      // Filtrar por Banda Específica
+      const targetBanda = bandasMap.get(opts.bandaId);
+      if (targetBanda) {
+        activeBandaIds.add(targetBanda.id);
+
+        // Integrantes de la banda
+        personas.forEach(p => {
+          if (p.banda_id === targetBanda.id || p.banda_nombre?.toLowerCase() === targetBanda.nombre.toLowerCase()) {
+            activePersonaIds.add(p.id);
+          }
+        });
+
+        // Contactos directos de los miembros (rodados, causas comunes, familiares o vínculos)
+        const memberIds = new Set(activePersonaIds);
+        vinculos.forEach(v => {
+          const oId = v.persona_origen_id || v.origen_id;
+          const dId = v.persona_destino_id || v.destino_id;
+          if (memberIds.has(oId) && dId) activePersonaIds.add(dId);
+          if (memberIds.has(dId) && oId) activePersonaIds.add(oId);
+        });
+
+        vehiculosIndex.forEach((entries) => {
+          if (entries.some(e => memberIds.has(e.personaId))) {
+            entries.forEach(e => activePersonaIds.add(e.personaId));
+          }
+        });
+
+        cuijsIndex.forEach((pIds) => {
+          if ([...pIds].some(id => memberIds.has(id))) {
+            pIds.forEach(id => activePersonaIds.add(id));
+          }
+        });
+
+        familyEdges.forEach(f => {
+          if (memberIds.has(f.from)) activePersonaIds.add(f.to);
+          if (memberIds.has(f.to)) activePersonaIds.add(f.from);
+        });
+
+        // Agregar bandas rivales mencionadas
+        targetBanda.rivales?.forEach(rivName => {
+          const riv = bandas.find(b => b.nombre.toLowerCase().includes(rivName.toLowerCase()));
+          if (riv) activeBandaIds.add(riv.id);
+        });
+      }
+
+    } else if (opts.filterMode === 'profugos') {
+      // Modo Prófugos
+      personas.forEach(p => {
+        if (p.pedido_captura) {
+          activePersonaIds.add(p.id);
+          if (p.banda_id) activeBandaIds.add(p.banda_id);
+        }
+      });
+
+      // Contactos de los prófugos
+      const profugoIds = new Set(activePersonaIds);
+      vinculos.forEach(v => {
+        const oId = v.persona_origen_id || v.origen_id;
+        const dId = v.persona_destino_id || v.destino_id;
+        if (profugoIds.has(oId) && dId) activePersonaIds.add(dId);
+        if (profugoIds.has(dId) && oId) activePersonaIds.add(oId);
+      });
+
+      vehiculosIndex.forEach((entries) => {
+        if (entries.some(e => profugoIds.has(e.personaId))) {
+          entries.forEach(e => activePersonaIds.add(e.personaId));
+        }
+      });
+
+      cuijsIndex.forEach((pIds) => {
+        if ([...pIds].some(id => profugoIds.has(id))) {
+          pIds.forEach(id => activePersonaIds.add(id));
+        }
+      });
+
+      familyEdges.forEach(f => {
+        if (profugoIds.has(f.from)) activePersonaIds.add(f.to);
+        if (profugoIds.has(f.to)) activePersonaIds.add(f.from);
+      });
+
+    } else {
+      // Modo General (Todas las bandas)
+      bandas.forEach(b => activeBandaIds.add(b.id));
+      personas.forEach(p => {
+        // Incluir miembros de bandas o sujetos con causas/vehículos/vínculos
+        if (p.banda_id || p.pedido_captura || (p.score_peligrosidad || 0) >= 7) {
+          activePersonaIds.add(p.id);
+        }
+      });
+
+      // Si no se ocultan los huérfanos, agregar todas las personas
+      if (!opts.hideUnlinked) {
+        personas.forEach(p => activePersonaIds.add(p.id));
+      }
+    }
+
+    // ------------------------------------------------------------
+    // 3. CONSTRUCCIÓN DE NODOS Y ARISTAS VIS-NETWORK
+    // ------------------------------------------------------------
     const nodesMap = new Map();
-    const edges = [];
+    const edgesList = [];
+    const edgeKeySet = new Set();
 
-    // 1. Add Gang Nodes as central hubs
+    function addEdge(from, to, edgeProps) {
+      if (!from || !to || from === to) return;
+      const sortedKey = [from, to].sort().join('___') + '___' + (edgeProps.type || edgeProps.label || '');
+      if (edgeKeySet.has(sortedKey)) return;
+      edgeKeySet.add(sortedKey);
+      edgesList.push({ from, to, ...edgeProps });
+    }
+
+    // A. Agregar Nodos de Bandas
     bandas.forEach(b => {
+      if (!activeBandaIds.has(b.id) && opts.bandaId) return;
+      if (!activeBandaIds.has(b.id) && !opts.bandaId) {
+        // En modo general, mostrar solo bandas activas con al menos 1 miembro
+        const hasMembers = personas.some(p => p.banda_id === b.id);
+        if (!hasMembers) return;
+      }
+
       const bColor = b.color_hex || '#EF4444';
       nodesMap.set(b.id, {
         id: b.id,
-        label: `🏴 ${b.nombre}\n(${b.barrio_base || 'Base'})`,
+        label: `🏴 ${b.nombre}\n📍 ${b.barrio_base || 'Base Territorial'}`,
         shape: 'box',
         color: {
-          background: '#0F172A',
+          background: '#0B1120',
           border: bColor,
           highlight: { background: bColor, border: '#FFFFFF' }
         },
         font: { color: '#F8FAFC', size: 14, face: 'Inter', strokeWidth: 2, strokeColor: '#000' },
-        borderWidth: 2,
-        margin: 10,
+        borderWidth: 3,
+        margin: 12,
         type: 'banda',
-        data: b
+        data: b,
+        shadow: { enabled: true, color: bColor, size: 10 }
       });
     });
 
-    // 2. Add Key Person Nodes
+    // B. Agregar Nodos de Personas
     personas.forEach(p => {
+      if (!activePersonaIds.has(p.id)) return;
+
       const isCaptura = p.pedido_captura;
-      const isHigh = (p.score_peligrosidad || 0) >= 8;
+      const dangerousness = p.score_peligrosidad || 0;
+      const isHigh = dangerousness >= 8;
+      const isLeader = p.roles?.some(r => /l[íi]der|cabecilla|jefe|conducci[óo]n/i.test(r));
+      const isSicario = p.roles?.some(r => /sicario|tirador|brazo armado/i.test(r));
+      const isLogistica = p.roles?.some(r => /log[íi]stica|acopio|finanzas/i.test(r));
+
       const name = `${p.nombre || ''} ${p.apellido || ''}`.trim() || 'Desconocido';
       const alias = p.alias?.length ? `"${p.alias[0]}"` : '';
-      const label = `${isCaptura ? '🚨 ' : ''}${alias || name}\n${isCaptura ? '[PRÓFUGO]' : ''}`;
+      const displayTitle = alias || name;
 
-      // Color mapping
-      let borderColor = '#0EA5E9';
+      let iconPrefix = '';
+      if (isCaptura) iconPrefix = '🚨 ';
+      else if (isLeader) iconPrefix = '👑 ';
+      else if (isSicario) iconPrefix = '⚔️ ';
+      else if (isLogistica) iconPrefix = '💼 ';
+
+      const label = `${iconPrefix}${displayTitle}\n${isCaptura ? '[PRÓFUGO]' : (p.roles?.[0] || 'Miembro')}`;
+
+      // Estilización táctica de nodos
+      let borderColor = '#38BDF8';
       let bgColor = '#1E293B';
+      let fontColor = '#E2E8F0';
+      let nodeSize = 18;
+      let borderWidth = 2;
+
       if (isCaptura) {
         borderColor = '#EF4444';
         bgColor = '#450A0A';
-      } else if (isHigh) {
+        fontColor = '#FCA5A5';
+        nodeSize = 27;
+        borderWidth = 3.5;
+      } else if (isLeader) {
         borderColor = '#F59E0B';
-        bgColor = '#3B2005';
+        bgColor = '#451A03';
+        fontColor = '#FDE68A';
+        nodeSize = 25;
+        borderWidth = 3;
+      } else if (isSicario) {
+        borderColor = '#DC2626';
+        bgColor = '#2A0B0B';
+        fontColor = '#FECACA';
+        nodeSize = 22;
+        borderWidth = 2.5;
+      } else if (isLogistica) {
+        borderColor = '#8B5CF6';
+        bgColor = '#2E1065';
+        fontColor = '#DDD6FE';
+        nodeSize = 20;
+        borderWidth = 2;
+      } else if (isHigh) {
+        borderColor = '#F97316';
+        bgColor = '#331606';
+        fontColor = '#FFEDD5';
+        nodeSize = 20;
       }
 
       nodesMap.set(p.id, {
         id: p.id,
         label: label,
-        shape: 'dot',
-        size: isCaptura ? 26 : isHigh ? 22 : 16,
+        shape: isLeader ? 'diamond' : 'dot',
+        size: nodeSize,
         color: {
           background: bgColor,
           border: borderColor,
           highlight: { background: '#F59E0B', border: '#FFFFFF' }
         },
-        borderWidth: isCaptura ? 3 : 1.5,
-        font: { color: isCaptura ? '#FCA5A5' : '#E2E8F0', size: 11, face: 'Inter' },
+        borderWidth: borderWidth,
+        font: { color: fontColor, size: isCaptura || isLeader ? 12 : 10, face: 'Inter' },
         type: 'persona',
-        data: p
+        data: p,
+        shadow: isCaptura ? { enabled: true, color: '#EF4444', size: 12 } : false
       });
+    });
 
-      // Connect person to their gang if assigned
-      if (p.banda_id && nodesMap.has(p.banda_id)) {
-        edges.push({
-          from: p.id,
-          to: p.banda_id,
-          label: p.roles?.[0] || 'Miembro',
-          color: { color: 'rgba(148, 163, 184, 0.4)', opacity: 0.5 },
-          font: { color: '#64748B', size: 9 },
-          dashes: true,
+    // ------------------------------------------------------------
+    // 4. CONEXIÓN DE ARISTAS TÁCTICAS Y RELACIONALES
+    // ------------------------------------------------------------
+
+    // A. Jerarquía y pertenencia a Banda (p.banda_id -> b.id)
+    personas.forEach(p => {
+      if (nodesMap.has(p.id) && p.banda_id && nodesMap.has(p.banda_id)) {
+        const isLeader = p.roles?.some(r => /l[íi]der|cabecilla|jefe|conducci[óo]n/i.test(r));
+        const isSicario = p.roles?.some(r => /sicario|tirador|brazo armado/i.test(r));
+        const isLogistica = p.roles?.some(r => /log[íi]stica|acopio|finanzas/i.test(r));
+
+        let roleLabel = p.roles?.[0] || 'Miembro';
+        let edgeColor = 'rgba(148, 163, 184, 0.4)';
+        let edgeWidth = 1.5;
+        let isDashed = true;
+
+        if (isLeader) {
+          roleLabel = '👑 Mando Superior';
+          edgeColor = '#F59E0B';
+          edgeWidth = 3;
+          isDashed = false;
+        } else if (isSicario) {
+          roleLabel = '⚔️ Brazo Armado';
+          edgeColor = '#EF4444';
+          edgeWidth = 2.5;
+        } else if (isLogistica) {
+          roleLabel = '💼 Logística';
+          edgeColor = '#8B5CF6';
+          edgeWidth = 2;
+        }
+
+        addEdge(p.id, p.banda_id, {
+          type: 'JERARQUIA_BANDA',
+          label: roleLabel,
+          color: { color: edgeColor, opacity: 0.8 },
+          width: edgeWidth,
+          dashes: isDashed,
+          font: { color: isLeader ? '#F59E0B' : '#94A3B8', size: 9 },
           arrows: { to: { enabled: true, scaleFactor: 0.5 } }
         });
       }
     });
 
-    // 3. Add Relationship Edges from VINCULOS
+    // B. Vínculos Explícitos (getAllVinculos)
     vinculos.forEach(v => {
       const oId = v.persona_origen_id || v.origen_id;
       const dId = v.persona_destino_id || v.destino_id;
@@ -3400,343 +3847,185 @@ async function renderGrafoGeneral(bandaHighlightId = null) {
         const isDisputa = tipo.includes('DISPUTA') || tipo.includes('TIROTEO') || tipo.includes('RIVAL');
         const edgeColor = CONFIG.vinculoColors[tipo] || (isDisputa ? '#EF4444' : '#64748B');
 
-        edges.push({
-          from: oId,
-          to: dId,
+        addEdge(oId, dId, {
+          type: tipo,
           label: tipo.replace(/_/g, ' '),
-          color: { color: edgeColor, highlight: '#FFFFFF', opacity: 0.8 },
-          width: isDisputa ? 3 : 1.5,
+          color: { color: edgeColor, highlight: '#FFFFFF', opacity: 0.85 },
+          width: isDisputa ? 3.5 : 2,
           dashes: isDisputa ? [6, 4] : false,
-          font: { color: isDisputa ? '#EF4444' : '#94A3B8', size: 9, strokeWidth: 0 },
+          font: { color: isDisputa ? '#EF4444' : '#94A3B8', size: 9 },
           arrows: { to: { enabled: !isDisputa, scaleFactor: 0.6 } }
         });
       }
     });
 
-    // Vis-network setup
-    const nodes = new DataSet(Array.from(nodesMap.values()));
-    const edgeDataSet = new DataSet(edges);
+    // C. Vínculos de Rodados Compartidos (Dossier p.vehiculos)
+    vehiculosIndex.forEach((entries, plate) => {
+      if (entries.length >= 2) {
+        for (let i = 0; i < entries.length; i++) {
+          for (let j = i + 1; j < entries.length; j++) {
+            const idA = entries[i].personaId;
+            const idB = entries[j].personaId;
+            if (nodesMap.has(idA) && nodesMap.has(idB)) {
+              addEdge(idA, idB, {
+                type: 'RODADO_COMPARTIDO',
+                label: `🚗 Rodado [${plate}]`,
+                color: { color: '#38BDF8', highlight: '#7DD3FC', opacity: 0.9 },
+                width: 2.5,
+                dashes: [5, 3],
+                font: { color: '#38BDF8', size: 9 },
+                title: `Vehículo compartido: ${plate} (${entries[i].veh.marca || ''} ${entries[i].veh.modelo || ''})`
+              });
+            }
+          }
+        }
+      }
+    });
+
+    // D. Vínculos de Causas Judiciales Compartidas (Dossier CUIJs)
+    cuijsIndex.forEach((pIdsSet, cuij) => {
+      const pIds = Array.from(pIdsSet);
+      if (pIds.length >= 2) {
+        const shortCuij = cuij.length > 13 ? cuij.slice(0, 13) + '…' : cuij;
+        for (let i = 0; i < pIds.length; i++) {
+          for (let j = i + 1; j < pIds.length; j++) {
+            const idA = pIds[i];
+            const idB = pIds[j];
+            if (nodesMap.has(idA) && nodesMap.has(idB)) {
+              addEdge(idA, idB, {
+                type: 'CO_IMPUTADOS_CUIJ',
+                label: `⚖️ CUIJ ${shortCuij}`,
+                color: { color: '#C084FC', highlight: '#E9D5FF', opacity: 0.85 },
+                width: 2,
+                dashes: [4, 4],
+                font: { color: '#C084FC', size: 9 },
+                title: `Co-imputados en causa CUIJ: ${cuij}`
+              });
+            }
+          }
+        }
+      }
+    });
+
+    // E. Vínculos Familiares de Dossiers (p.familiares)
+    familyEdges.forEach(f => {
+      if (nodesMap.has(f.from) && nodesMap.has(f.to)) {
+        addEdge(f.from, f.to, {
+          type: 'FAMILIAR_DOSSIER',
+          label: `👥 ${f.parentesco}`,
+          color: { color: '#F59E0B', highlight: '#FDE68A', opacity: 0.9 },
+          width: 2.5,
+          font: { color: '#F59E0B', size: 9 },
+          title: `Vínculo familiar de dossier: ${f.parentesco} (${f.obs})`
+        });
+      }
+    });
+
+    // F. Disputas Territoriales Armadas entre Bandas (b.rivales)
+    bandas.forEach(b => {
+      if (nodesMap.has(b.id) && Array.isArray(b.rivales)) {
+        b.rivales.forEach(rivName => {
+          const riv = bandas.find(o => o.nombre.toLowerCase().includes(rivName.toLowerCase()));
+          if (riv && nodesMap.has(riv.id)) {
+            addEdge(b.id, riv.id, {
+              type: 'DISPUTA_ARMADA_BANDAS',
+              label: '⚔️ Disputa Territorial Armada',
+              color: { color: '#EF4444', highlight: '#F87171', opacity: 1 },
+              width: 4,
+              dashes: [8, 4],
+              font: { color: '#EF4444', size: 10, strokeWidth: 2, strokeColor: '#000' }
+            });
+          }
+        });
+      }
+    });
+
+    // ------------------------------------------------------------
+    // 5. SUPRESIÓN DE NODOS HUÉRFANOS / AISLADOS
+    // ------------------------------------------------------------
+    if (opts.hideUnlinked) {
+      // Contar incidentes
+      const incidentCounts = new Map();
+      edgesList.forEach(e => {
+        incidentCounts.set(e.from, (incidentCounts.get(e.from) || 0) + 1);
+        incidentCounts.set(e.to, (incidentCounts.get(e.to) || 0) + 1);
+      });
+
+      // Eliminar personas que no tienen ninguna conexión en este gráfico
+      Array.from(nodesMap.entries()).forEach(([id, node]) => {
+        if (node.type === 'persona') {
+          const degree = incidentCounts.get(id) || 0;
+          if (degree === 0 && id !== opts.focusPersonaId) {
+            nodesMap.delete(id);
+          }
+        }
+      });
+    }
+
+    container.innerHTML = '';
+
+    const nodesDataSet = new DataSet(Array.from(nodesMap.values()));
+    const edgesDataSet = new DataSet(edgesList);
 
     if (currentGrafoNetwork) currentGrafoNetwork.destroy();
 
-    currentGrafoNetwork = new Network(container, { nodes, edges: edgeDataSet }, {
+    currentGrafoNetwork = new Network(container, { nodes: nodesDataSet, edges: edgesDataSet }, {
       physics: {
-        barnesHut: { gravitationalConstant: -4000, centralGravity: 0.3, springLength: 160 },
-        stabilization: { iterations: 120 }
+        solver: 'barnesHut',
+        barnesHut: {
+          gravitationalConstant: -4000,
+          centralGravity: 0.25,
+          springLength: 175,
+          springConstant: 0.04,
+          damping: 0.09,
+          avoidOverlap: 0.5
+        },
+        stabilization: { iterations: 140 }
       },
-      interaction: { hover: true, tooltipDelay: 150 }
+      interaction: {
+        hover: true,
+        tooltipDelay: 120,
+        navigationButtons: true,
+        keyboard: true
+      }
     });
 
-    // Node click: show intelligence dossier
+    // Evento Click: Abrir Detalle Táctico de Inteligencia
     currentGrafoNetwork.on('click', (params) => {
       if (params.nodes.length > 0) {
-        const nodeId = params.nodes[0];
-        mostrarDossierNodo(nodeId);
+        mostrarDossierNodo(params.nodes[0]);
       } else {
         document.getElementById('grafo-node-dossier')?.classList.add('hidden');
       }
     });
 
-    // Focus on requested gang if provided
-    if (bandaHighlightId && nodesMap.has(bandaHighlightId)) {
-      currentGrafoNetwork.focus(bandaHighlightId, { scale: 1.2, animation: true });
-      mostrarDossierNodo(bandaHighlightId);
+    // Foco automático
+    if (opts.focusPersonaId && nodesMap.has(opts.focusPersonaId)) {
+      setTimeout(() => {
+        currentGrafoNetwork.focus(opts.focusPersonaId, { scale: 1.25, animation: true });
+        mostrarDossierNodo(opts.focusPersonaId);
+      }, 300);
+    } else if (opts.bandaId && nodesMap.has(opts.bandaId)) {
+      setTimeout(() => {
+        currentGrafoNetwork.focus(opts.bandaId, { scale: 1.15, animation: true });
+        mostrarDossierNodo(opts.bandaId);
+      }, 300);
     }
 
   } catch (err) {
-    container.innerHTML = `<div class="empty-state"><h3>Error cargando grafo</h3><p>${err.message}</p></div>`;
+    console.error('Error renderizando grafo:', err);
+    container.innerHTML = `
+      <div class="empty-state">
+        <h3 style="color:#EF4444">Error al construir la red</h3>
+        <p>${err.message}</p>
+      </div>
+    `;
   }
 }
 
-async function renderGrafoProfugos() {
-  const container = document.getElementById('grafo-canvas');
-  if (!container) return;
-
-  try {
-    const [personas, vinculos] = await Promise.all([
-      getPersonas({ limit: 500 }),
-      getAllVinculos()
-    ]);
-
-    const profugos = personas.filter(p => p.pedido_captura);
-    const profugoIds = new Set(profugos.map(p => p.id));
-
-    // Find direct contacts
-    const contactIds = new Set();
-    vinculos.forEach(v => {
-      const oId = v.persona_origen_id || v.origen_id;
-      const dId = v.persona_destino_id || v.destino_id;
-      if (profugoIds.has(oId)) contactIds.add(dId);
-      if (profugoIds.has(dId)) contactIds.add(oId);
-    });
-
-    const relevantPersons = personas.filter(p => profugoIds.has(p.id) || contactIds.has(p.id));
-
-    container.innerHTML = '';
-    const nodesMap = new Map();
-    const edges = [];
-
-    relevantPersons.forEach(p => {
-      const isCaptura = p.pedido_captura;
-      const name = `${p.nombre || ''} ${p.apellido || ''}`.trim() || 'Desconocido';
-      const alias = p.alias?.length ? `"${p.alias[0]}"` : '';
-      const label = `${isCaptura ? '🚨 ' : ''}${alias || name}\n${isCaptura ? '[PRÓFUGO BUSCADO]' : '(Contacto)'}`;
-
-      nodesMap.set(p.id, {
-        id: p.id,
-        label: label,
-        shape: 'dot',
-        size: isCaptura ? 28 : 16,
-        color: {
-          background: isCaptura ? '#7F1D1D' : '#1E293B',
-          border: isCaptura ? '#EF4444' : '#64748B',
-          highlight: { background: '#DC2626', border: '#FFF' }
-        },
-        borderWidth: isCaptura ? 3 : 1,
-        font: { color: isCaptura ? '#FCA5A5' : '#CBD5E1', size: 12, face: 'Inter' },
-        type: 'persona',
-        data: p
-      });
-    });
-
-    vinculos.forEach(v => {
-      const oId = v.persona_origen_id || v.origen_id;
-      const dId = v.persona_destino_id || v.destino_id;
-      const tipo = v.tipo_relacion || v.tipo || '';
-
-      if (oId && dId && nodesMap.has(oId) && nodesMap.has(dId)) {
-        edges.push({
-          from: oId,
-          to: dId,
-          label: tipo.replace(/_/g, ' '),
-          color: { color: CONFIG.vinculoColors[tipo] || '#64748B', opacity: 0.8 },
-          width: 2,
-          font: { color: '#94A3B8', size: 9 },
-          arrows: { to: { enabled: true, scaleFactor: 0.6 } }
-        });
-      }
-    });
-
-    const nodes = new DataSet(Array.from(nodesMap.values()));
-    const edgeDataSet = new DataSet(edges);
-
-    if (currentGrafoNetwork) currentGrafoNetwork.destroy();
-
-    currentGrafoNetwork = new Network(container, { nodes, edges: edgeDataSet }, {
-      physics: {
-        barnesHut: { gravitationalConstant: -3000, springLength: 140 },
-        stabilization: { iterations: 100 }
-      }
-    });
-
-    currentGrafoNetwork.on('click', (params) => {
-      if (params.nodes.length > 0) mostrarDossierNodo(params.nodes[0]);
-    });
-
-  } catch (err) {
-    container.innerHTML = `<div class="empty-state"><h3>Error</h3><p>${err.message}</p></div>`;
-  }
-}
-
-async function renderGrafoConflicto() {
-  const container = document.getElementById('grafo-canvas');
-  if (!container) return;
-
-  try {
-    const [personas, bandas, vinculos] = await Promise.all([
-      getPersonas({ limit: 500 }),
-      getBandas({ limit: 50 }),
-      getAllVinculos()
-    ]);
-
-    const targetGangs = bandas.filter(b => b.nombre.includes('Negrada') || b.nombre.includes('Siempre'));
-    const targetGangIds = new Set(targetGangs.map(b => b.id));
-
-    const gangMembers = personas.filter(p =>
-      p.banda_id && (targetGangIds.has(p.banda_id) || p.banda_nombre?.includes('Negrada') || p.banda_nombre?.includes('Siempre'))
-    );
-    const memberIds = new Set(gangMembers.map(p => p.id));
-
-    container.innerHTML = '';
-    const nodesMap = new Map();
-    const edges = [];
-
-    // Add 2 gang hubs
-    targetGangs.forEach(b => {
-      nodesMap.set(b.id, {
-        id: b.id,
-        label: `🏴 ${b.nombre}\n(${b.barrio_base})`,
-        shape: 'box',
-        color: { background: '#0F172A', border: b.color_hex || '#EF4444' },
-        font: { color: '#FFF', size: 16, strokeWidth: 2, strokeColor: '#000' },
-        borderWidth: 3,
-        type: 'banda',
-        data: b
-      });
-    });
-
-    // Add members
-    gangMembers.forEach(p => {
-      const isCaptura = p.pedido_captura;
-      const isNegrada = p.banda_nombre?.includes('Negrada');
-      const bColor = isNegrada ? '#EF4444' : '#0EA5E9';
-
-      nodesMap.set(p.id, {
-        id: p.id,
-        label: `${isCaptura ? '🚨 ' : ''}${p.alias?.[0] || p.nombre || ''}\n(${isNegrada ? 'Negrada' : 'Siempre'})`,
-        shape: 'dot',
-        size: isCaptura ? 25 : 18,
-        color: { background: isNegrada ? '#450A0A' : '#082F49', border: bColor },
-        borderWidth: isCaptura ? 3 : 1.5,
-        font: { color: isNegrada ? '#FCA5A5' : '#7DD3FC', size: 11 },
-        type: 'persona',
-        data: p
-      });
-
-      if (p.banda_id && nodesMap.has(p.banda_id)) {
-        edges.push({
-          from: p.id,
-          to: p.banda_id,
-          label: p.roles?.[0] || '',
-          color: { color: bColor, opacity: 0.5 },
-          dashes: true
-        });
-      }
-    });
-
-    // Add dispute and command edges
-    vinculos.forEach(v => {
-      const oId = v.persona_origen_id || v.origen_id;
-      const dId = v.persona_destino_id || v.destino_id;
-      const tipo = v.tipo_relacion || v.tipo || '';
-
-      if (oId && dId && nodesMap.has(oId) && nodesMap.has(dId)) {
-        const isDisputa = tipo.includes('DISPUTA') || tipo.includes('TIROTEO') || tipo.includes('RIVAL');
-        edges.push({
-          from: oId,
-          to: dId,
-          label: tipo.replace(/_/g, ' '),
-          color: { color: isDisputa ? '#EF4444' : '#38BDF8', opacity: 0.9 },
-          width: isDisputa ? 3.5 : 1.5,
-          dashes: isDisputa ? [6, 4] : false,
-          font: { color: isDisputa ? '#EF4444' : '#94A3B8', size: 10 }
-        });
-      }
-    });
-
-    const nodes = new DataSet(Array.from(nodesMap.values()));
-    const edgeDataSet = new DataSet(edges);
-
-    if (currentGrafoNetwork) currentGrafoNetwork.destroy();
-
-    currentGrafoNetwork = new Network(container, { nodes, edges: edgeDataSet }, {
-      physics: {
-        barnesHut: { gravitationalConstant: -4000, springLength: 170 },
-        stabilization: { iterations: 120 }
-      }
-    });
-
-    currentGrafoNetwork.on('click', (params) => {
-      if (params.nodes.length > 0) mostrarDossierNodo(params.nodes[0]);
-    });
-
-  } catch (err) {
-    container.innerHTML = `<div class="empty-state"><h3>Error</h3><p>${err.message}</p></div>`;
-  }
-}
-
-async function renderGrafo(personaId) {
-  const container = document.getElementById('grafo-canvas');
-  if (!container) return;
-
-  try {
-    const [persona, vinculos] = await Promise.all([
-      getPersonaById(personaId),
-      getGrafoPersona(personaId)
-    ]);
-
-    if (!persona) return renderGrafoGeneral();
-
-    container.innerHTML = '';
-
-    const nodesMap = new Map();
-    const edges = [];
-
-    // Center focal node
-    const isCaptura = persona.pedido_captura;
-    nodesMap.set(persona.id, {
-      id: persona.id,
-      label: `★ ${persona.nombre || ''} ${persona.apellido || ''}\n${persona.alias?.length ? `"${persona.alias[0]}"` : ''}`,
-      shape: 'dot',
-      size: 32,
-      color: {
-        background: isCaptura ? '#991B1B' : '#D97706',
-        border: isCaptura ? '#EF4444' : '#F59E0B',
-        highlight: { background: '#F59E0B', border: '#FFF' }
-      },
-      borderWidth: 4,
-      font: { color: '#FFF', size: 14, strokeWidth: 2, strokeColor: '#000' },
-      type: 'persona',
-      data: persona
-    });
-
-    // Add surrounding contacts
-    vinculos.forEach(v => {
-      const oId = v.persona_origen_id || v.origen_id;
-      const dId = v.persona_destino_id || v.destino_id;
-      const tipo = v.tipo_relacion || v.tipo || '';
-      const otherId = oId === personaId ? dId : oId;
-      const otherName = oId === personaId ? (v.destino_nombre || 'Contacto') : (v.origen_nombre || 'Contacto');
-
-      if (otherId && !nodesMap.has(otherId)) {
-        nodesMap.set(otherId, {
-          id: otherId,
-          label: otherName,
-          shape: 'dot',
-          size: 20,
-          color: { background: '#1E293B', border: '#0EA5E9' },
-          font: { color: '#E2E8F0', size: 11 },
-          type: 'persona'
-        });
-      }
-
-      if (oId && dId && nodesMap.has(oId) && nodesMap.has(dId)) {
-        const edgeColor = CONFIG.vinculoColors[tipo] || '#64748B';
-        edges.push({
-          from: oId,
-          to: dId,
-          label: tipo.replace(/_/g, ' '),
-          color: { color: edgeColor, opacity: 0.85 },
-          width: 2,
-          font: { color: '#94A3B8', size: 10 },
-          arrows: { to: { enabled: true, scaleFactor: 0.6 } }
-        });
-      }
-    });
-
-    const nodes = new DataSet(Array.from(nodesMap.values()));
-    const edgeDataSet = new DataSet(edges);
-
-    if (currentGrafoNetwork) currentGrafoNetwork.destroy();
-
-    currentGrafoNetwork = new Network(container, { nodes, edges: edgeDataSet }, {
-      physics: {
-        barnesHut: { gravitationalConstant: -2500, springLength: 150 },
-        stabilization: { iterations: 80 }
-      }
-    });
-
-    currentGrafoNetwork.on('click', (params) => {
-      if (params.nodes.length > 0) mostrarDossierNodo(params.nodes[0]);
-    });
-
-    mostrarDossierNodo(personaId);
-
-  } catch (err) {
-    container.innerHTML = `<div class="empty-state"><h3>Error</h3><p>${err.message}</p></div>`;
-  }
-}
-
+// ============================================================
+// DRAWER DE INTELIGENCIA DE NODO (BANDA O PERSONA)
+// ============================================================
 async function mostrarDossierNodo(nodeId) {
   const panel = document.getElementById('grafo-node-dossier');
   const content = document.getElementById('dossier-content');
@@ -3745,33 +4034,100 @@ async function mostrarDossierNodo(nodeId) {
 
   panel.classList.remove('hidden');
 
-  // Check if it's a Banda or Persona
+  // Caso 1: Estructura Criminal / Banda
   const b = await getBandaById(nodeId);
   if (b) {
     if (badge) {
       badge.textContent = 'ESTRUCTURA CRIMINAL';
       badge.style.background = b.color_hex || '#EF4444';
     }
+
+    const personas = await getPersonas({ limit: 1000 });
+    const members = personas.filter(p => p.banda_id === b.id || p.banda_nombre?.toLowerCase() === b.nombre.toLowerCase());
+    const profugos = members.filter(p => p.pedido_captura);
+
     content.innerHTML = `
       <div style="font-weight:800;font-size:16px;color:#F8FAFC;margin-bottom:4px;">${b.nombre}</div>
-      <div style="font-size:12px;color:var(--accent-primary);margin-bottom:12px;">Base: ${b.barrio_base || 'Santa Fe'}</div>
-      ${b.cabecilla_principal ? `<div style="font-size:12px;margin-bottom:6px;"><strong style="color:var(--text-muted);">Liderazgo:</strong> ${b.cabecilla_principal}</div>` : ''}
-      ${b.actividad_principal ? `<div style="font-size:12px;margin-bottom:6px;"><strong style="color:var(--text-muted);">Actividad:</strong> ${b.actividad_principal}</div>` : ''}
-      ${b.delitos_alta_lesividad ? `<div style="font-size:12px;margin-bottom:6px;color:#F87171;"><strong style="color:#EF4444;">Alta Lesividad:</strong> ${b.delitos_alta_lesividad}</div>` : ''}
-      <div style="margin-top:14px;display:flex;gap:6px;">
-        <button class="btn btn-outline btn-xs" onclick="showEntityDetail('banda', '${b.id}')">Ver Ficha Completa</button>
+      <div style="font-size:12px;color:var(--accent-primary);margin-bottom:12px;">📍 Base: ${b.barrio_base || 'Santa Fe Capital'}</div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:12px;font-size:11px;">
+        <div style="background:rgba(255,255,255,0.03);padding:6px 8px;border-radius:6px;border:1px solid var(--border-subtle);">
+          <span style="color:var(--text-muted);display:block;font-size:10px;">INTEGRANTES</span>
+          <strong style="font-size:14px;color:#38BDF8;">${members.length}</strong>
+        </div>
+        <div style="background:rgba(239,68,68,0.08);padding:6px 8px;border-radius:6px;border:1px solid rgba(239,68,68,0.2);">
+          <span style="color:#FCA5A5;display:block;font-size:10px;">PRÓFUGOS</span>
+          <strong style="font-size:14px;color:#EF4444;">${profugos.length}</strong>
+        </div>
+      </div>
+
+      ${b.cabecilla_principal ? `<div style="font-size:11px;margin-bottom:6px;"><strong style="color:var(--text-muted);">Liderazgo:</strong> <span style="color:#FDE68A;">${b.cabecilla_principal}</span></div>` : ''}
+      ${b.actividad_principal ? `<div style="font-size:11px;margin-bottom:6px;"><strong style="color:var(--text-muted);">Actividad:</strong> ${b.actividad_principal}</div>` : ''}
+      ${b.delitos_alta_lesividad ? `<div style="font-size:11px;margin-bottom:8px;color:#F87171;"><strong style="color:#EF4444;">Alta Lesividad:</strong> ${b.delitos_alta_lesividad}</div>` : ''}
+
+      <div style="margin-top:14px;display:flex;flex-direction:column;gap:6px;">
+        <button class="btn btn-primary btn-sm" onclick="window.filtrarGrafoPorBanda('${b.id}')" style="font-size:11px;font-weight:700;padding:7px 10px;justify-content:center;display:flex;align-items:center;gap:6px;background:var(--accent-primary);color:#fff;">
+          🔍 Aislar Estructura de esta Banda
+        </button>
+        <button class="btn btn-secondary btn-sm" onclick="showEntityDetail('banda', '${b.id}')" style="font-size:11px;font-weight:600;padding:6px 10px;justify-content:center;display:flex;align-items:center;gap:6px;">
+          📄 Ver Ficha Completa
+        </button>
       </div>
     `;
     return;
   }
 
+  // Caso 2: Persona Investigada / Imputada
   const p = await getPersonaById(nodeId);
   if (p) {
     const isCaptura = p.pedido_captura;
     if (badge) {
-      badge.textContent = isCaptura ? '🚨 PEDIDO DE CAPTURA' : 'PERSONA DE INTERÉS';
+      badge.textContent = isCaptura ? '🚨 PEDIDO DE CAPTURA ACTIVO' : 'PERSONA DE INTERÉS';
       badge.style.background = isCaptura ? '#DC2626' : 'var(--accent-secondary)';
     }
+
+    // Resumen de Rodados
+    const vehiculosHtml = Array.isArray(p.vehiculos) && p.vehiculos.length > 0
+      ? `<div style="margin-top:8px;">
+          <span style="font-size:10px;font-weight:700;color:#38BDF8;text-transform:uppercase;letter-spacing:0.5px;">🚗 Rodados en Legajo (${p.vehiculos.length}):</span>
+          <div style="display:flex;flex-direction:column;gap:3px;margin-top:3px;">
+            ${p.vehiculos.map(v => `
+              <div style="font-size:10px;background:rgba(56,189,248,0.06);padding:3px 6px;border-radius:4px;border:1px solid rgba(56,189,248,0.2);display:flex;justify-content:space-between;">
+                <strong>${v.patente || 'S/D'}</strong> <span>${v.marca || ''} ${v.modelo || ''}</span>
+              </div>
+            `).join('')}
+          </div>
+        </div>`
+      : '';
+
+    // Resumen de Causas Judiciales
+    const causasHtml = Array.isArray(p.causas) && p.causas.length > 0
+      ? `<div style="margin-top:8px;">
+          <span style="font-size:10px;font-weight:700;color:#C084FC;text-transform:uppercase;letter-spacing:0.5px;">⚖️ Causas Judiciales (${p.causas.length}):</span>
+          <div style="display:flex;flex-direction:column;gap:3px;margin-top:3px;">
+            ${p.causas.slice(0, 3).map(c => `
+              <div style="font-size:10px;background:rgba(192,132,252,0.06);padding:3px 6px;border-radius:4px;border:1px solid rgba(192,132,252,0.2);">
+                <span style="font-family:var(--font-mono);font-weight:700;color:#C084FC;">${c.cuij || 'S/D'}</span>
+                <div style="color:var(--text-secondary);font-size:9px;">${c.caratula ? c.caratula.slice(0, 45) + '…' : ''}</div>
+              </div>
+            `).join('')}
+          </div>
+        </div>`
+      : '';
+
+    // Resumen de Vínculos Familiares
+    const familiaresHtml = Array.isArray(p.familiares) && p.familiares.length > 0
+      ? `<div style="margin-top:8px;">
+          <span style="font-size:10px;font-weight:700;color:#F59E0B;text-transform:uppercase;letter-spacing:0.5px;">👥 Núcleo Familiar (${p.familiares.length}):</span>
+          <div style="display:flex;flex-direction:column;gap:3px;margin-top:3px;">
+            ${p.familiares.map(f => `
+              <div style="font-size:10px;background:rgba(245,158,11,0.06);padding:3px 6px;border-radius:4px;border:1px solid rgba(245,158,11,0.2);display:flex;justify-content:space-between;">
+                <strong>${f.parentesco || 'Familiar'}:</strong> <span>${f.nombre}</span>
+              </div>
+            `).join('')}
+          </div>
+        </div>`
+      : '';
 
     content.innerHTML = `
       ${isCaptura ? `
@@ -3780,26 +4136,135 @@ async function mostrarDossierNodo(nodeId) {
         </div>
       ` : ''}
       <div style="font-weight:800;font-size:15px;color:#F8FAFC;">${p.nombre || ''} ${p.apellido || ''}</div>
-      <div style="font-size:12px;color:var(--text-secondary);margin-bottom:10px;">
-        ${p.alias?.length ? `Alias: <strong>${p.alias.join(', ')}</strong> • ` : ''}DNI: ${p.dni || 'S/D'}
+      <div style="font-size:12px;color:var(--text-secondary);margin-bottom:8px;">
+        ${p.alias?.length ? `Alias: <strong style="color:#FDE68A;">"${p.alias.join('", "')}"</strong> • ` : ''}DNI: ${p.dni || 'S/D'}
       </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:11px;background:rgba(255,255,255,0.03);padding:8px;border-radius:6px;margin-bottom:10px;">
-        <div><span style="color:var(--text-muted);display:block;">BANDA:</span><strong>${p.banda_nombre || 'Individual'}</strong></div>
-        <div><span style="color:var(--text-muted);display:block;">PELIGROSIDAD:</span><strong style="color:${(p.score_peligrosidad || 0) >= 8 ? '#EF4444' : '#F59E0B'}">${p.score_peligrosidad || 5}/10</strong></div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:11px;background:rgba(255,255,255,0.03);padding:8px;border-radius:6px;margin-bottom:8px;">
+        <div><span style="color:var(--text-muted);display:block;font-size:10px;">BANDA:</span><strong>${p.banda_nombre || 'Individual'}</strong></div>
+        <div><span style="color:var(--text-muted);display:block;font-size:10px;">PELIGROSIDAD:</span><strong style="color:${(p.score_peligrosidad || 0) >= 8 ? '#EF4444' : '#F59E0B'}">${p.score_peligrosidad || 5}/10</strong></div>
       </div>
+
+      ${p.roles?.length ? `<div style="font-size:11px;margin-bottom:4px;"><span style="color:var(--text-muted);">Rol Táctico:</span> <span style="font-weight:600;color:#38BDF8;">${p.roles.join(', ')}</span></div>` : ''}
       ${p.domicilio_principal ? `<div style="font-size:11px;margin-bottom:6px;"><span style="color:var(--text-muted);">Domicilio:</span> ${p.domicilio_principal}</div>` : ''}
-      ${p.cuij_asociados?.length ? `<div style="font-size:11px;margin-bottom:6px;"><span style="color:var(--text-muted);">CUIJ:</span> <span style="font-family:var(--font-mono);color:var(--accent-primary);">${p.cuij_asociados.join(', ')}</span></div>` : ''}
-      <div style="margin-top:14px;display:flex;gap:8px;">
-        <button class="btn btn-secondary btn-sm" onclick="window.abrirDossierDigital('${p.id}')" style="background:#1E293B;color:#FFFFFF;border:1px solid #475569;flex:1;font-size:11px;font-weight:700;padding:7px 10px;justify-content:center;display:flex;align-items:center;gap:4px;" title="Abrir legajo y expediente completo">
-          📋 Ver Dossier
-        </button>
-        <button class="btn btn-primary btn-sm" onclick="renderGrafo('${p.id}')" style="background:linear-gradient(135deg, #F59E0B, #D97706);color:#060A13;font-weight:800;border:1px solid #F59E0B;flex:1;font-size:11px;padding:7px 10px;justify-content:center;display:flex;align-items:center;gap:4px;" title="Enfocar vínculos directos de esta persona">
-          🕸️ Enfocar Red
-        </button>
+
+      ${vehiculosHtml}
+      ${causasHtml}
+      ${familiaresHtml}
+
+      <!-- Botones de Acción Inmediata de Dossier -->
+      <div style="margin-top:14px;display:flex;flex-direction:column;gap:6px;">
+        <div style="display:flex;gap:6px;">
+          <button class="btn btn-secondary btn-sm" onclick="window.abrirDossierDigital('${p.id}')" style="background:#1E293B;color:#FFFFFF;border:1px solid #475569;flex:1;font-size:11px;font-weight:700;padding:7px 8px;justify-content:center;display:flex;align-items:center;gap:4px;" title="Abrir legajo y expediente completo">
+            📋 Abrir Dossier
+          </button>
+          <button class="btn btn-secondary btn-sm" onclick="window.imprimirDossierDigital('${p.id}')" style="background:#1E293B;color:#CBD5E1;border:1px solid #475569;font-size:11px;font-weight:700;padding:7px 10px;justify-content:center;display:flex;align-items:center;gap:4px;" title="Imprimir dossier táctico">
+            🖨️ Imprimir
+          </button>
+        </div>
+
+        <div style="display:flex;gap:6px;">
+          <button class="btn btn-outline btn-xs" onclick="window.centrarPersonaEnMapa('${p.id}')" style="flex:1;font-size:11px;padding:6px 8px;justify-content:center;display:flex;align-items:center;gap:4px;border-color:var(--border-default);">
+            📍 Ver en Mapa
+          </button>
+          ${p.banda_id ? `
+            <button class="btn btn-outline btn-xs" onclick="window.filtrarGrafoPorBanda('${p.banda_id}')" style="flex:1;font-size:11px;padding:6px 8px;justify-content:center;display:flex;align-items:center;gap:4px;border-color:var(--accent-primary);color:var(--accent-primary);">
+              🏴 Aislar su Banda
+            </button>
+          ` : ''}
+        </div>
       </div>
     `;
   }
 }
+
+// ============================================================
+// COMPATIBILIDAD GLOBAL Y ACCIONES EXTERNAS
+// ============================================================
+window.filtrarGrafoPorBanda = async function(bandaId) {
+  const bandaSelect = document.getElementById('grafo-banda-select');
+  const personaSelect = document.getElementById('grafo-persona-select');
+
+  if (bandaSelect) {
+    bandaSelect.value = bandaId || '';
+  }
+
+  // Actualizar lista de personas
+  if (personaSelect) {
+    try {
+      const personas = await getPersonas({ limit: 1000 });
+      personaSelect.innerHTML = '<option value="">Toda la organización...</option>';
+      const list = bandaId ? personas.filter(p => p.banda_id === bandaId) : personas;
+      list.forEach(p => {
+        personaSelect.innerHTML += `<option value="${p.id}">${p.pedido_captura ? '🚨 ' : ''}${p.nombre || ''} ${p.apellido || ''}</option>`;
+      });
+    } catch (e) {
+      console.warn('Error refrescando selector de personas:', e);
+    }
+  }
+
+  // Marcar chip activo
+  document.querySelectorAll('#grafo-bandas-dynamic-chips .chip-banda').forEach(c => {
+    c.style.background = c.dataset.bandaId === bandaId ? 'rgba(255,255,255,0.18)' : 'rgba(255,255,255,0.03)';
+  });
+
+  currentGrafoOptions.bandaId = bandaId || '';
+  currentGrafoOptions.personaId = '';
+  currentGrafoOptions.filterMode = bandaId ? 'banda' : 'general';
+
+  await renderGrafoIntelligence({ bandaId });
+};
+
+window.renderGrafoGeneral = async function(bandaHighlightId = null) {
+  currentGrafoOptions.bandaId = bandaHighlightId || '';
+  currentGrafoOptions.personaId = '';
+  currentGrafoOptions.filterMode = 'general';
+  await renderGrafoIntelligence({ bandaId: bandaHighlightId });
+};
+
+window.renderGrafoProfugos = async function() {
+  currentGrafoOptions.filterMode = 'profugos';
+  currentGrafoOptions.bandaId = '';
+  currentGrafoOptions.personaId = '';
+  await renderGrafoIntelligence({ filterMode: 'profugos' });
+};
+
+window.renderGrafoConflicto = async function() {
+  currentGrafoOptions.filterMode = 'conflicto';
+  currentGrafoOptions.bandaId = 'CONFLICT_NEGRADA_SIEMPRE';
+  currentGrafoOptions.personaId = '';
+  await renderGrafoIntelligence({ filterMode: 'conflicto', bandaId: 'CONFLICT_NEGRADA_SIEMPRE' });
+};
+
+window.renderGrafo = async function(personaId) {
+  currentGrafoOptions.personaId = personaId;
+  const personaSelect = document.getElementById('grafo-persona-select');
+  if (personaSelect) personaSelect.value = personaId;
+  await renderGrafoIntelligence({ focusPersonaId: personaId });
+};
+
+window.centrarPersonaEnMapa = async function(personaId) {
+  try {
+    const p = await getPersonaById(personaId);
+    if (!p) return;
+    document.querySelector('[data-view="mapa"]')?.click();
+    setTimeout(() => {
+      let coords = null;
+      if (p.domicilio_principal_geom) {
+        const m = p.domicilio_principal_geom.match(/POINT\(([^ ]+)\s+([^)]+)\)/);
+        if (m) coords = { lng: parseFloat(m[1]), lat: parseFloat(m[2]) };
+      }
+      if (coords) {
+        flyTo(coords.lng, coords.lat, 17);
+        showToast(`Ubicado: ${p.domicilio_principal || 'Domicilio'}`, 'info');
+      } else {
+        showToast(`El sujeto no registra geolocalización cargada`, 'warning');
+      }
+    }, 200);
+  } catch (e) {
+    console.error('Error centrando persona en mapa:', e);
+  }
+};
 
 // ============================================================
 // GENERADOR DE INFORME CUANTITATIVO CRIMINAL

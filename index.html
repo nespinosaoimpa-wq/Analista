@@ -562,46 +562,83 @@
 
     <!-- GRAFO VIEW -->
     <div class="view" id="view-grafo">
-      <div class="grafo-container" style="position:relative;">
-        <div class="grafo-toolbar" style="flex-wrap:wrap;gap:10px;">
-          <div>
-            <h1 style="margin:0;">Red de Vínculos Criminales</h1>
-            <span style="font-size:12px;color:var(--text-secondary);">Análisis relacional, jerarquías de mando, relaciones familiares y disputas armadas</span>
+      <div class="grafo-container" style="position:relative;display:flex;flex-direction:column;height:100%;">
+        <div class="grafo-toolbar" style="padding:12px 18px;border-bottom:1px solid var(--border-default);background:var(--bg-secondary);flex-shrink:0;">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px;margin-bottom:8px;">
+            <div>
+              <h1 style="margin:0;font-size:19px;font-weight:800;display:flex;align-items:center;gap:8px;">
+                <span>🕸️</span> Red de Vínculos y Estructuras Criminales
+              </h1>
+              <span style="font-size:12px;color:var(--text-secondary);">
+                Mapeo relacional derivado de dossiers: jerarquías, vínculos familiares, rodados compartidos y disputas territoriales
+              </span>
+            </div>
+
+            <!-- Controles y Filtros Principales -->
+            <div class="grafo-controls" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+              <!-- Selector Principal de Banda -->
+              <div style="display:flex;align-items:center;gap:6px;">
+                <label for="grafo-banda-select" style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Banda:</label>
+                <select id="grafo-banda-select" class="filter-select" style="min-width:240px;font-weight:700;border-color:var(--accent-primary);background:var(--bg-tertiary);color:#FFF;">
+                  <option value="">🌐 Todas las Bandas Activas</option>
+                </select>
+              </div>
+
+              <!-- Selector Opcional de Persona Focal -->
+              <div style="display:flex;align-items:center;gap:6px;">
+                <label for="grafo-persona-select" style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Persona:</label>
+                <select id="grafo-persona-select" class="filter-select" style="min-width:210px;max-width:240px;background:var(--bg-tertiary);color:#FFF;">
+                  <option value="">Toda la organización...</option>
+                </select>
+              </div>
+
+              <button class="btn btn-primary btn-sm" id="btn-grafo-load" style="font-weight:700;padding:6px 14px;">
+                🔍 Enfocar
+              </button>
+
+              <!-- Checkbox para eliminar nodos huérfanos aislados -->
+              <label style="display:inline-flex;align-items:center;gap:6px;font-size:11px;color:var(--text-secondary);cursor:pointer;background:rgba(255,255,255,0.04);padding:5px 9px;border-radius:6px;border:1px solid var(--border-subtle);margin-left:4px;" title="Ocultar personas individuales sin vínculos para limpiar el gráfico y evitar ruido">
+                <input type="checkbox" id="grafo-toggle-unlinked" checked style="cursor:pointer;accent-color:var(--accent-primary);">
+                <span>Ocultar nodos sin vínculos</span>
+              </label>
+            </div>
           </div>
-          <div class="grafo-controls" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-            <button class="btn btn-outline btn-sm active" id="btn-grafo-general" style="background:rgba(14,165,233,0.18);border:1px solid #0EA5E9;color:#38BDF8;font-weight:700;" title="Ver todos los vínculos de la red criminal">
-              🌐 Red General
+
+          <!-- Barra de Accesos Rápidos por Banda (Chips) -->
+          <div style="display:flex;align-items:center;gap:6px;overflow-x:auto;padding-top:4px;" id="grafo-bandas-chips">
+            <button type="button" class="btn btn-outline btn-xs active" id="btn-grafo-general" data-banda-chip="" style="font-weight:700;padding:3px 10px;border-radius:12px;">
+              🌐 Todas
             </button>
-            <button class="btn btn-outline btn-sm" id="btn-grafo-profugos" style="background:rgba(239,68,68,0.18);border:1px solid #EF4444;color:#FCA5A5;font-weight:700;" title="Filtrar integrantes con pedido de captura activo">
-              🚨 Prófugos
+            <button type="button" class="btn btn-outline btn-xs" id="btn-grafo-profugos" style="background:rgba(239,68,68,0.15);border-color:#EF4444;color:#FCA5A5;font-weight:700;padding:3px 10px;border-radius:12px;">
+              🚨 Solo Prófugos
             </button>
-            <button class="btn btn-outline btn-sm" id="btn-grafo-conflicto" style="background:rgba(245,158,11,0.18);border:1px solid #F59E0B;color:#FCD34D;font-weight:700;" title="Filtrar disputas y tiroteos entre facciones">
+            <button type="button" class="btn btn-outline btn-xs" id="btn-grafo-conflicto" style="background:rgba(245,158,11,0.15);border-color:#F59E0B;color:#FCD34D;font-weight:700;padding:3px 10px;border-radius:12px;">
               ⚔️ Disputas Territoriales
             </button>
-            <select id="grafo-persona-select" class="filter-select" style="max-width:280px;">
-              <option value="">Seleccionar persona focal...</option>
-            </select>
-            <button class="btn btn-primary btn-sm" id="btn-grafo-load">Enfocar</button>
+            <div id="grafo-bandas-dynamic-chips" style="display:inline-flex;gap:6px;"></div>
           </div>
         </div>
+
         <div class="grafo-wrapper" style="position:relative;width:100%;flex:1;min-height:500px;display:flex;">
           <div id="grafo-canvas" class="grafo-canvas" style="flex:1;width:100%;height:100%;"></div>
+
           <!-- Floating dossier on node click -->
-          <div id="grafo-node-dossier" class="grafo-node-dossier hidden" style="position:absolute;top:16px;right:16px;width:320px;max-height:calc(100% - 32px);background:rgba(15,23,42,0.95);border:1px solid var(--border-color);border-radius:10px;padding:16px;box-shadow:0 12px 32px rgba(0,0,0,0.6);z-index:20;overflow-y:auto;backdrop-filter:blur(10px);">
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
-              <span id="dossier-badge" class="tag" style="font-size:10px;background:var(--accent-primary);color:#fff;">DETALLE</span>
-              <button id="btn-close-dossier" style="background:none;border:none;color:var(--text-secondary);cursor:pointer;font-size:16px;">✕</button>
+          <div id="grafo-node-dossier" class="grafo-node-dossier hidden" style="position:absolute;top:16px;right:16px;width:340px;max-height:calc(100% - 32px);background:rgba(15,23,42,0.96);border:1px solid var(--border-default);border-radius:12px;padding:16px;box-shadow:0 16px 36px rgba(0,0,0,0.7);z-index:20;overflow-y:auto;backdrop-filter:blur(12px);">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+              <span id="dossier-badge" class="tag" style="font-size:10px;background:var(--accent-primary);color:#fff;font-weight:800;padding:3px 8px;border-radius:4px;">DETALLE DE INTELIGENCIA</span>
+              <button id="btn-close-dossier" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:18px;line-height:1;">✕</button>
             </div>
             <div id="dossier-content"></div>
           </div>
         </div>
-        <div class="grafo-legend" style="flex-wrap:wrap;gap:12px;">
+
+        <div class="grafo-legend" style="padding:10px 18px;border-top:1px solid var(--border-default);background:var(--bg-secondary);flex-wrap:wrap;gap:14px;flex-shrink:0;font-size:11px;">
           <span class="legend-item"><span class="legend-dot" style="background:#ef4444"></span>Disputa Armada / Tiroteo</span>
-          <span class="legend-item"><span class="legend-dot" style="background:#f59e0b"></span>Vínculo Familiar</span>
+          <span class="legend-item"><span class="legend-dot" style="background:#f59e0b"></span>Vínculo Familiar (Dossier)</span>
           <span class="legend-item"><span class="legend-dot" style="background:#8b5cf6"></span>Subordinación / Mando</span>
-          <span class="legend-item"><span class="legend-dot" style="background:#a855f7"></span>Sicario / Tirador</span>
-          <span class="legend-item"><span class="legend-dot" style="background:#0ea5e9"></span>Logística / Comercial</span>
-          <span class="legend-item"><span class="legend-dot" style="background:#ec4899"></span>Sentimental / Cónyuge</span>
+          <span class="legend-item"><span class="legend-dot" style="background:#38bdf8"></span>Vehículo Compartido (Dossier)</span>
+          <span class="legend-item"><span class="legend-dot" style="background:#c084fc"></span>Co-imputados CUIJ (Dossier)</span>
+          <span class="legend-item"><span class="legend-dot" style="background:#10b981"></span>Logística / Comercial</span>
         </div>
       </div>
     </div>
