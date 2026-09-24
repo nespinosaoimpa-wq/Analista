@@ -732,7 +732,26 @@
               <label for="input-docs" class="btn btn-primary btn-sm">Seleccionar Documentos</label>
               <button class="btn btn-accent btn-sm" id="btn-process-local-docs">Procesar Carpeta Local</button>
             </div>
-            <div class="import-status" id="llm-import-status"></div>
+          </div>
+        </div>
+
+        <!-- Historial y Planillas Procesadas -->
+        <div id="excel-history-section" style="margin-top:28px;background:var(--bg-secondary);border:1px solid var(--border-default);border-radius:12px;padding:22px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:8px;">
+            <div>
+              <h3 style="margin:0;font-size:16px;font-weight:800;display:flex;align-items:center;gap:8px;">
+                <span>📁</span> Planillas y Archivos Procesados en el Sistema
+              </h3>
+              <span style="font-size:12px;color:var(--text-secondary);">Registro de importaciones realizadas, destinos asignados y accesos directos</span>
+            </div>
+            <button class="btn btn-ghost btn-xs" id="btn-clear-excel-history" style="font-size:11px;color:var(--text-muted);">
+              Limpiar Historial
+            </button>
+          </div>
+          <div id="excel-history-list" style="display:flex;flex-direction:column;gap:8px;">
+            <div style="font-size:12px;color:var(--text-muted);padding:14px;text-align:center;background:rgba(255,255,255,0.02);border-radius:8px;border:1px dashed var(--border-subtle);">
+              Aún no se procesaron planillas en esta sesión. Al cargar un Excel, acá verás su registro, qué datos se extrajeron y el botón para verlos directamente en el sistema.
+            </div>
           </div>
         </div>
       </div>

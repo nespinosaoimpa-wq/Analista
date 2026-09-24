@@ -1,6 +1,6 @@
 import JSZip from 'jszip';
 import * as XLSX from 'xlsx';
-import supabase, { insertHecho, insertAllanamiento, insertZona } from './supabase-client.js';
+import supabase, { insertHecho, insertAllanamiento, insertZona, insertPersona } from './supabase-client.js';
 import { enrichTacticalFeature } from './analytics-engine.js';
 
 // ============================================================
@@ -301,10 +301,52 @@ export async function importExcelRows(rows, targetType = 'hechos', onProgress = 
       else if (['modusoperandi', 'mo', 'modalidad'].includes(nKey)) mapped.modus_operandi = val;
       else if (['resultado', 'result'].includes(nKey)) mapped.resultado = val;
       else if (['fuerza', 'fuerzainterviniente', 'policia'].includes(nKey)) mapped.fuerza_interviniente = val;
+      // Personas
+      else if (['nombre', 'nombres'].includes(nKey)) mapped.nombre = val;
+      else if (['apellido', 'apellidos'].includes(nKey)) mapped.apellido = val;
+      else if (['nombrecompleto', 'nombreyapellido', 'persona', 'sujeto', 'imputado'].includes(nKey)) mapped.nombre_completo = val;
+      else if (['alias', 'apodo', 'sobrenombre'].includes(nKey)) mapped.alias = val;
+      else if (['dni', 'documento', 'cuit', 'cuil'].includes(nKey)) mapped.dni = String(val);
+      else if (['banda', 'organizacion', 'bandanombre', 'faccion'].includes(nKey)) mapped.banda_nombre = val;
+      else if (['rol', 'roles', 'jerarquia', 'funcion'].includes(nKey)) mapped.roles = val;
+      else if (['peligrosidad', 'score', 'scorepeligrosidad'].includes(nKey)) mapped.score_peligrosidad = parseInt(val) || 5;
+      else if (['captura', 'pedidocaptura', 'profugo', 'buscado'].includes(nKey)) mapped.pedido_captura = val;
+      // Coordenadas
+      else if (['lat', 'latitud'].includes(nKey)) mapped.lat = parseFloat(val);
+      else if (['lon', 'lng', 'longitud'].includes(nKey)) mapped.lng = parseFloat(val);
     }
 
     try {
-      if (targetType === 'allanamientos') {
+      if (targetType === 'personas') {
+        let nombre = mapped.nombre || '';
+        let apellido = mapped.apellido || '';
+        if (mapped.nombre_completo && (!nombre || !apellido)) {
+          const parts = String(mapped.nombre_completo).trim().split(/\s+/);
+          if (parts.length > 1) {
+            apellido = parts[0];
+            nombre = parts.slice(1).join(' ');
+          } else {
+            nombre = mapped.nombre_completo;
+          }
+        }
+        const isCaptura = mapped.pedido_captura
+          ? /s[íi]|true|1|captura|profugo|buscado/i.test(String(mapped.pedido_captura))
+          : false;
+
+        const item = {
+          nombre: nombre || 'Investigado',
+          apellido: apellido || '',
+          dni: mapped.dni || null,
+          alias: mapped.alias ? String(mapped.alias).split(',').map(s => s.trim()).filter(Boolean) : [],
+          banda_nombre: mapped.banda_nombre || null,
+          roles: mapped.roles ? String(mapped.roles).split(',').map(s => s.trim()).filter(Boolean) : ['Investigado'],
+          score_peligrosidad: mapped.score_peligrosidad || (isCaptura ? 8 : 5),
+          pedido_captura: isCaptura,
+          domicilio_principal: mapped.direccion || null,
+          cuij_asociados: mapped.cuij ? [mapped.cuij] : []
+        };
+        await insertPersona(item);
+      } else if (targetType === 'allanamientos') {
         const item = {
           cuij: mapped.cuij || null,
           requerimiento: mapped.requerimiento || null,
@@ -318,6 +360,11 @@ export async function importExcelRows(rows, targetType = 'hechos', onProgress = 
         };
         await insertAllanamiento(item);
       } else {
+        // hechos
+        let geom = null;
+        if (!isNaN(mapped.lat) && !isNaN(mapped.lng)) {
+          geom = `SRID=4326;POINT(${mapped.lng} ${mapped.lat})`;
+        }
         const item = {
           tipo_penal: mapped.tipo_penal || 'Microtráfico',
           direccion: mapped.direccion || null,
@@ -329,6 +376,7 @@ export async function importExcelRows(rows, targetType = 'hechos', onProgress = 
           resumen: mapped.resumen || null,
           modus_operandi: mapped.modus_operandi || null,
           fecha: mapped.fecha ? new Date(mapped.fecha).toISOString() : new Date().toISOString(),
+          geom: geom
         };
         await insertHecho(item);
       }
@@ -339,7 +387,7 @@ export async function importExcelRows(rows, targetType = 'hechos', onProgress = 
     }
   }
 
-  return { inserted, errors, total: rows.length };
+  return { inserted, errors, total: rows.length, targetType };
 }
 
 // ============================================================

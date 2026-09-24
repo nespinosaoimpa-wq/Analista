@@ -1133,50 +1133,300 @@ function setupIngestion() {
   // XLSX File Input
   const inputXlsx = document.getElementById('input-xlsx');
   const statusXlsx = document.getElementById('xlsx-import-status');
-  inputXlsx?.addEventListener('change', async (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    statusXlsx.innerHTML = '<div class="spinner"></div> Leyendo planilla Excel...';
-    try {
-      const sheets = await parseExcel(file);
-      const sheetNames = Object.keys(sheets);
-      const firstSheet = sheets[sheetNames[0]] || [];
+  const historyList = document.getElementById('excel-history-list');
+  const historyCount = document.getElementById('excel-history-count');
+  const btnClearHistory = document.getElementById('btn-clear-excel-history');
 
-      statusXlsx.innerHTML = `
-        <div style="background:var(--bg-secondary);padding:12px;border-radius:8px;border:1px solid var(--border-color);margin-top:10px">
-          <div style="font-weight:600;color:var(--accent-primary)">Archivo Excel: ${file.name}</div>
-          <div style="font-size:12px;color:var(--text-secondary);margin:6px 0">
-            Hojas: ${sheetNames.join(', ')} | Filas en primera hoja: <strong>${firstSheet.length}</strong>
+  function getExcelHistory() {
+    try {
+      const raw = localStorage.getItem('crimint_excel_history');
+      return raw ? JSON.parse(raw) : [];
+    } catch {
+      return [];
+    }
+  }
+
+  function saveExcelHistoryItem(item) {
+    try {
+      const hist = getExcelHistory();
+      hist.unshift(item);
+      localStorage.setItem('crimint_excel_history', JSON.stringify(hist.slice(0, 20)));
+      renderExcelHistory();
+    } catch (e) {
+      console.warn('Error saving excel history:', e);
+    }
+  }
+
+  function renderExcelHistory() {
+    if (!historyList) return;
+    const hist = getExcelHistory();
+    if (historyCount) historyCount.textContent = `${hist.length} archivo${hist.length === 1 ? '' : 's'}`;
+
+    if (hist.length === 0) {
+      historyList.innerHTML = `
+        <div style="font-size:12px;color:var(--text-muted);padding:14px;text-align:center;background:rgba(255,255,255,0.02);border-radius:8px;border:1px dashed var(--border-subtle);">
+          Aún no se procesaron planillas en esta sesión. Al cargar un Excel, acá verás su registro, qué datos se extrajeron y el botón para verlos directamente en el sistema.
+        </div>
+      `;
+      return;
+    }
+
+    historyList.innerHTML = hist.map((item) => {
+      let destBadge = '';
+      let destAction = '';
+
+      if (item.targetType === 'allanamientos') {
+        destBadge = `<span style="background:rgba(245,158,11,0.15);color:#F59E0B;border:1px solid rgba(245,158,11,0.3);padding:2px 8px;border-radius:6px;font-size:11px;font-weight:700;">🎯 Allanamientos</span>`;
+        destAction = `<button class="btn btn-secondary btn-xs" onclick="navigateToView('allanamientos')" style="font-size:11px;padding:3px 9px;">Ver en Operativos →</button>`;
+      } else if (item.targetType === 'personas') {
+        destBadge = `<span style="background:rgba(14,165,233,0.15);color:#38BDF8;border:1px solid rgba(14,165,233,0.3);padding:2px 8px;border-radius:6px;font-size:11px;font-weight:700;">👤 Personas</span>`;
+        destAction = `<button class="btn btn-secondary btn-xs" onclick="navigateToView('personas')" style="font-size:11px;padding:3px 9px;">Ver en Personas →</button>`;
+      } else {
+        destBadge = `<span style="background:rgba(16,185,129,0.15);color:#10B981;border:1px solid rgba(16,185,129,0.3);padding:2px 8px;border-radius:6px;font-size:11px;font-weight:700;">🗺️ Hechos (Mapa)</span>`;
+        destAction = `<button class="btn btn-primary btn-xs" onclick="navigateToView('mapa')" style="font-size:11px;padding:3px 9px;">Ver en Mapa Táctico →</button>`;
+      }
+
+      return `
+        <div style="background:rgba(255,255,255,0.03);border:1px solid var(--border-subtle);border-radius:8px;padding:10px 14px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;">
+          <div style="display:flex;align-items:center;gap:10px;">
+            <div style="font-size:20px;">📊</div>
+            <div>
+              <div style="font-size:13px;font-weight:700;color:#F8FAFC;">${item.fileName}</div>
+              <div style="font-size:11px;color:var(--text-muted);display:flex;align-items:center;gap:8px;margin-top:2px;">
+                <span>${item.date}</span> • <span>${item.size}</span> • <span style="color:#10B981;font-weight:600;">✓ ${item.inserted} filas importadas</span>
+              </div>
+            </div>
           </div>
-          <div style="display:flex;gap:8px;margin-top:8px">
-            <button class="btn btn-primary btn-sm" id="btn-import-xlsx-hechos">Importar como Hechos</button>
-            <button class="btn btn-secondary btn-sm" id="btn-import-xlsx-ops">Importar como Allanamientos</button>
+          <div style="display:flex;align-items:center;gap:8px;">
+            ${destBadge}
+            ${destAction}
           </div>
         </div>
       `;
+    }).join('');
+  }
 
-      document.getElementById('btn-import-xlsx-hechos')?.addEventListener('click', async () => {
-        statusXlsx.innerHTML = '<div class="spinner"></div> Importando filas a hechos delictivos...';
-        try {
-          const res = await importExcelRows(firstSheet, 'hechos');
-          statusXlsx.innerHTML = `<div style="color:var(--accent-success);font-size:13px;padding:8px 0">✓ Importadas ${res.inserted} filas a Hechos (${res.errors} errores).</div>`;
-          showToast(`Se importaron ${res.inserted} hechos`, 'success');
-          loadMapData();
-        } catch (err) {
-          statusXlsx.innerHTML = `<div style="color:var(--accent-danger)">Error: ${err.message}</div>`;
-        }
-      });
+  btnClearHistory?.addEventListener('click', () => {
+    localStorage.removeItem('crimint_excel_history');
+    renderExcelHistory();
+    showToast('Historial de planillas limpiado', 'info');
+  });
 
-      document.getElementById('btn-import-xlsx-ops')?.addEventListener('click', async () => {
-        statusXlsx.innerHTML = '<div class="spinner"></div> Importando filas a allanamientos...';
-        try {
-          const res = await importExcelRows(firstSheet, 'allanamientos');
-          statusXlsx.innerHTML = `<div style="color:var(--accent-success);font-size:13px;padding:8px 0">✓ Importadas ${res.inserted} filas a Allanamientos (${res.errors} errores).</div>`;
-          showToast(`Se importaron ${res.inserted} allanamientos`, 'success');
-        } catch (err) {
-          statusXlsx.innerHTML = `<div style="color:var(--accent-danger)">Error: ${err.message}</div>`;
-        }
-      });
+  // Cargar historial previo de planillas
+  renderExcelHistory();
+
+  inputXlsx?.addEventListener('change', async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const mbSize = (file.size / 1024).toFixed(1);
+    statusXlsx.innerHTML = `<div class="spinner"></div> Leyendo y analizando estructura de ${file.name}...`;
+
+    try {
+      const sheets = await parseExcel(file);
+      const sheetNames = Object.keys(sheets);
+      let activeSheetName = sheetNames[0];
+      let currentRows = sheets[activeSheetName] || [];
+
+      function renderPreview() {
+        const previewRows = currentRows.slice(0, 4);
+        const headers = currentRows.length > 0 ? Object.keys(currentRows[0]).slice(0, 7) : [];
+
+        statusXlsx.innerHTML = `
+          <div style="background:var(--bg-secondary);padding:16px;border-radius:10px;border:1px solid var(--border-default);margin-top:12px;">
+            <!-- Encabezado del Archivo Adjunto -->
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px;border-bottom:1px solid var(--border-subtle);padding-bottom:12px;margin-bottom:12px;">
+              <div>
+                <div style="font-weight:800;color:#F8FAFC;font-size:14px;display:flex;align-items:center;gap:6px;">
+                  <span>📊</span> Planilla Adjuntada: <span style="color:var(--accent-primary);">${file.name}</span>
+                </div>
+                <div style="font-size:12px;color:var(--text-secondary);margin-top:2px;">
+                  Tamaño: <strong>${mbSize} KB</strong> • Total filas detectadas: <strong style="color:#10B981;">${currentRows.length}</strong>
+                </div>
+              </div>
+              ${sheetNames.length > 1 ? `
+                <div style="display:flex;align-items:center;gap:6px;">
+                  <label style="font-size:11px;color:var(--text-muted);font-weight:700;">Hoja:</label>
+                  <select id="select-xlsx-sheet" class="form-input" style="padding:3px 8px;font-size:11px;width:auto;">
+                    ${sheetNames.map(s => `<option value="${s}" ${s === activeSheetName ? 'selected' : ''}>${s} (${sheets[s].length} filas)</option>`).join('')}
+                  </select>
+                </div>
+              ` : ''}
+            </div>
+
+            <!-- Previsualización de Datos -->
+            <div style="margin-bottom:14px;">
+              <div style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;">
+                🔍 Previsualización de los datos (primeras ${previewRows.length} filas):
+              </div>
+              <div style="overflow-x:auto;max-height:140px;border:1px solid var(--border-subtle);border-radius:6px;background:rgba(0,0,0,0.2);">
+                <table style="width:100%;font-size:11px;border-collapse:collapse;white-space:nowrap;font-family:var(--font-mono);">
+                  <thead>
+                    <tr style="background:rgba(255,255,255,0.06);color:var(--text-secondary);text-align:left;">
+                      ${headers.map(h => `<th style="padding:5px 8px;border-bottom:1px solid var(--border-subtle);">${h}</th>`).join('')}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    ${previewRows.map(r => `
+                      <tr style="border-bottom:1px solid rgba(255,255,255,0.03);color:#CBD5E1;">
+                        ${headers.map(h => `<td style="padding:4px 8px;">${r[h] !== undefined ? String(r[h]).slice(0, 30) : ''}</td>`).join('')}
+                      </tr>
+                    `).join('')}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <!-- Opciones Claras de Destino: ¿A dónde lo manda? -->
+            <div style="margin-top:14px;">
+              <div style="font-size:12px;font-weight:800;color:#F8FAFC;margin-bottom:8px;">
+                ¿A qué módulo del sistema querés enviar esta planilla?
+              </div>
+              <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(210px, 1fr));gap:8px;">
+                
+                <!-- Opción 1: Hechos Delictivos -->
+                <div style="background:rgba(16,185,129,0.06);border:1px solid rgba(16,185,129,0.25);border-radius:8px;padding:10px;display:flex;flex-direction:column;justify-content:space-between;">
+                  <div>
+                    <div style="font-weight:700;color:#10B981;font-size:12px;display:flex;align-items:center;gap:6px;">
+                      <span>🗺️</span> Hechos Delictivos
+                    </div>
+                    <div style="font-size:11px;color:var(--text-secondary);margin:4px 0 10px;line-height:1.4;">
+                      Se guardan como incidentes, se ubican en el <strong>Mapa Táctico</strong> y actualizan los gráficos del <strong>Dashboard</strong>.
+                    </div>
+                  </div>
+                  <button class="btn btn-primary btn-xs" id="btn-import-xlsx-hechos" style="width:100%;font-weight:700;padding:6px;justify-content:center;">
+                    Importar a Hechos (Mapa)
+                  </button>
+                </div>
+
+                <!-- Opción 2: Operativos y Allanamientos -->
+                <div style="background:rgba(245,158,11,0.06);border:1px solid rgba(245,158,11,0.25);border-radius:8px;padding:10px;display:flex;flex-direction:column;justify-content:space-between;">
+                  <div>
+                    <div style="font-weight:700;color:#F59E0B;font-size:12px;display:flex;align-items:center;gap:6px;">
+                      <span>🎯</span> Allanamientos y Operativos
+                    </div>
+                    <div style="font-size:11px;color:var(--text-secondary);margin:4px 0 10px;line-height:1.4;">
+                      Se incorporan al módulo de <strong>Operativos</strong> con CUIJ, juzgado, fuerza policial y resultados.
+                    </div>
+                  </div>
+                  <button class="btn btn-secondary btn-xs" id="btn-import-xlsx-ops" style="width:100%;font-weight:700;padding:6px;justify-content:center;border-color:#F59E0B;color:#FCD34D;">
+                    Importar a Allanamientos
+                  </button>
+                </div>
+
+                <!-- Opción 3: Personas e Investigados -->
+                <div style="background:rgba(14,165,233,0.06);border:1px solid rgba(14,165,233,0.25);border-radius:8px;padding:10px;display:flex;flex-direction:column;justify-content:space-between;">
+                  <div>
+                    <div style="font-weight:700;color:#38BDF8;font-size:12px;display:flex;align-items:center;gap:6px;">
+                      <span>👤</span> Personas e Investigados
+                    </div>
+                    <div style="font-size:11px;color:var(--text-secondary);margin:4px 0 10px;line-height:1.4;">
+                      Se dan de alta en el padrón de <strong>Personas</strong>, generando legajos periciales y vínculos en el <strong>Grafo</strong>.
+                    </div>
+                  </div>
+                  <button class="btn btn-secondary btn-xs" id="btn-import-xlsx-personas" style="width:100%;font-weight:700;padding:6px;justify-content:center;border-color:#38BDF8;color:#7DD3FC;">
+                    Importar a Personas
+                  </button>
+                </div>
+
+              </div>
+            </div>
+          </div>
+        `;
+
+        document.getElementById('select-xlsx-sheet')?.addEventListener('change', (ev) => {
+          activeSheetName = ev.target.value;
+          currentRows = sheets[activeSheetName] || [];
+          renderPreview();
+        });
+
+        // Handler común para ejecutar la importación
+        const executeImport = async (targetType, targetName, viewDestination, viewDestinationLabel) => {
+          statusXlsx.innerHTML = `
+            <div style="background:var(--bg-secondary);padding:14px;border-radius:8px;border:1px solid var(--border-default);margin-top:10px;">
+              <div style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text-secondary);margin-bottom:6px;">
+                <div class="spinner"></div> Importando filas a ${targetName}...
+              </div>
+              <div style="background:var(--bg-tertiary);height:6px;border-radius:3px;overflow:hidden;">
+                <div id="xlsx-progress-bar" style="background:var(--accent-primary);width:0%;height:100%;transition:width 0.15s;"></div>
+              </div>
+              <div id="xlsx-progress-text" style="font-size:11px;color:var(--text-muted);margin-top:4px;">0 / ${currentRows.length}</div>
+            </div>
+          `;
+
+          try {
+            const res = await importExcelRows(currentRows, targetType, (done, total) => {
+              const pct = Math.round((done / total) * 100);
+              const bar = document.getElementById('xlsx-progress-bar');
+              const txt = document.getElementById('xlsx-progress-text');
+              if (bar) bar.style.width = `${pct}%`;
+              if (txt) txt.textContent = `${done} / ${total} (${pct}%)`;
+            });
+
+            // Guardar en historial
+            saveExcelHistoryItem({
+              fileName: file.name,
+              size: `${mbSize} KB`,
+              targetType: targetType,
+              targetLabel: targetName,
+              inserted: res.inserted,
+              date: new Date().toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+            });
+
+            // Mostrar confirmación completa y accesible
+            statusXlsx.innerHTML = `
+              <div style="background:rgba(16,185,129,0.08);border:1px solid #10B981;border-radius:10px;padding:16px;margin-top:12px;">
+                <div style="font-weight:800;color:#10B981;font-size:15px;display:flex;align-items:center;gap:6px;margin-bottom:6px;">
+                  <span>✅</span> ¡Planilla procesada e importada con éxito!
+                </div>
+                <div style="font-size:13px;color:#E2E8F0;margin-bottom:12px;line-height:1.5;">
+                  Se incorporaron <strong>${res.inserted}</strong> registros correctamente a <strong>${targetName}</strong> desde el archivo <code>${file.name}</code> (${res.errors} descartados o con error).
+                </div>
+                <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                  <button class="btn btn-primary btn-sm" onclick="navigateToView('${viewDestination}')" style="font-weight:700;">
+                    🚀 Ir a verlos en ${viewDestinationLabel}
+                  </button>
+                  <button class="btn btn-secondary btn-sm" id="btn-reset-excel-import">
+                    ➕ Cargar otra planilla
+                  </button>
+                </div>
+              </div>
+            `;
+
+            document.getElementById('btn-reset-excel-import')?.addEventListener('click', () => {
+              inputXlsx.value = '';
+              statusXlsx.innerHTML = '';
+            });
+
+            showToast(`Se importaron ${res.inserted} registros a ${targetName}`, 'success');
+
+            if (targetType === 'hechos') loadMapData();
+            if (targetType === 'personas') {
+              if (window.renderPersonasView) renderPersonasView();
+            }
+            if (targetType === 'allanamientos') {
+              if (window.renderAllanamientosView) renderAllanamientosView();
+            }
+
+          } catch (err) {
+            statusXlsx.innerHTML = `<div style="color:var(--accent-danger);padding:10px;background:rgba(239,68,68,0.1);border-radius:6px;border:1px solid #EF4444;margin-top:10px;">Error al importar: ${err.message}</div>`;
+          }
+        };
+
+        document.getElementById('btn-import-xlsx-hechos')?.addEventListener('click', () => {
+          executeImport('hechos', 'Hechos Delictivos (Mapa Táctico)', 'mapa', 'el Mapa Táctico');
+        });
+
+        document.getElementById('btn-import-xlsx-ops')?.addEventListener('click', () => {
+          executeImport('allanamientos', 'Operativos y Allanamientos', 'allanamientos', 'Allanamientos');
+        });
+
+        document.getElementById('btn-import-xlsx-personas')?.addEventListener('click', () => {
+          executeImport('personas', 'Personas e Investigados', 'personas', 'Personas');
+        });
+      }
+
+      renderPreview();
+
     } catch (err) {
       statusXlsx.innerHTML = `<div style="color:var(--accent-danger);margin-top:8px">Error al leer Excel: ${err.message}</div>`;
     }
