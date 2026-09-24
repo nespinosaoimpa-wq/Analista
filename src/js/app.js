@@ -3004,7 +3004,8 @@ window.imprimirDossierDigital = async function(personaId) {
     await window.abrirDossierDigital(personaId);
   }
 
-  // Desocultar todas las secciones para que el motor de impresión las capture todas en páginas continuas
+  // Activar modo de impresión en el body y desocultar todas las secciones del dossier
+  document.body.classList.add('printing-dossier');
   document.querySelectorAll('.dossier-content-section').forEach(s => s.classList.remove('hidden'));
 
   // Breve espera para que el layout del navegador se estabilice con todas las secciones visibles antes de imprimir
@@ -3017,11 +3018,13 @@ window.imprimirDossierDigital = async function(personaId) {
 window.addEventListener('beforeprint', () => {
   const modalDossier = document.getElementById('modal-dossier-digital');
   if (modalDossier && !modalDossier.classList.contains('hidden')) {
+    document.body.classList.add('printing-dossier');
     document.querySelectorAll('.dossier-content-section').forEach(s => s.classList.remove('hidden'));
   }
 });
 
 window.addEventListener('afterprint', () => {
+  document.body.classList.remove('printing-dossier');
   const modalDossier = document.getElementById('modal-dossier-digital');
   if (modalDossier && !modalDossier.classList.contains('hidden')) {
     const activeTabBtn = document.querySelector('#dossier-view-tabs .dossier-tab-btn.active');

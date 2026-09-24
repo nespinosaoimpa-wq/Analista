@@ -2656,6 +2656,22 @@ textarea.form-input { resize: vertical; min-height: 60px; }
   display: none;
 }
 
+/* Modo de impresión de dossier activo en body */
+body.printing-dossier > *:not(#modal-dossier-digital),
+body.printing-dossier #app-header,
+body.printing-dossier .app-header,
+body.printing-dossier #sidebar,
+body.printing-dossier .sidebar,
+body.printing-dossier #main-content,
+body.printing-dossier .main-content,
+body.printing-dossier .view,
+body.printing-dossier .toast-container,
+body.printing-dossier .loading-overlay {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+}
+
 /* ============================================================
    PRINT VIEW STYLESHEET (Legajo y Dossier Institucional Completo)
    ============================================================ */
@@ -2680,31 +2696,59 @@ textarea.form-input { resize: vertical; min-height: 60px; }
     print-color-adjust: exact !important;
   }
 
-  /* Ocultar toda la interfaz de la aplicación excepto el modal del dossier */
+  /* Ocultar absolutamente toda la interfaz de la aplicación de fondo */
+  body > *:not(#modal-dossier-digital),
   #app-header,
-  #app-sidebar,
-  #app-main,
+  .app-header,
+  #sidebar,
+  .sidebar,
+  #main-content,
+  .main-content,
+  .view,
+  #view-personas,
+  #view-mapa,
+  #view-dashboard,
+  #view-bandas,
+  #view-grafo,
+  #view-allanamientos,
+  #view-carga,
   .hud-container,
   .timeline-container,
   .modal-overlay:not(#modal-dossier-digital),
   .toast-container,
-  .loading-overlay {
+  .loading-overlay,
+  #address-inspector-drawer,
+  .mapboxgl-map,
+  .map-container {
     display: none !important;
     visibility: hidden !important;
+    position: absolute !important;
+    top: -99999px !important;
+    left: -99999px !important;
+    width: 0 !important;
+    height: 0 !important;
+    max-height: 0 !important;
+    overflow: hidden !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
   }
 
-  /* El modal del dossier se convierte en el documento principal */
+  /* El modal del dossier se convierte en el ÚNICO documento visible para la impresora */
   #modal-dossier-digital {
     display: block !important;
     visibility: visible !important;
     position: static !important;
+    inset: auto !important;
+    top: auto !important;
+    left: auto !important;
+    right: auto !important;
+    bottom: auto !important;
     width: 100% !important;
     max-width: 100% !important;
     height: auto !important;
     min-height: 0 !important;
     max-height: none !important;
     overflow: visible !important;
-    inset: auto !important;
     background: #FFFFFF !important;
     color: #0F172A !important;
     padding: 0 !important;
@@ -2713,6 +2757,9 @@ textarea.form-input { resize: vertical; min-height: 60px; }
     border: none !important;
     backdrop-filter: none !important;
     transform: none !important;
+    animation: none !important;
+    opacity: 1 !important;
+    z-index: 99999 !important;
   }
 
   #modal-dossier-digital.hidden {
@@ -2728,6 +2775,7 @@ textarea.form-input { resize: vertical; min-height: 60px; }
     width: 100% !important;
     max-width: 100% !important;
     height: auto !important;
+    min-height: 0 !important;
     max-height: none !important;
     overflow: visible !important;
     background: #FFFFFF !important;
@@ -2755,18 +2803,23 @@ textarea.form-input { resize: vertical; min-height: 60px; }
   }
 
   /* Ocultar barra superior de navegación y botones interactivos de pantalla */
-  #modal-dossier-digital > .modal > .modal-header,
-  .dossier-nav-tabs,
-  .modal-close,
-  .dossier-actions-bar,
-  .btn,
-  button,
+  #modal-dossier-digital .modal-header,
+  #modal-dossier-digital .dossier-nav-tabs,
+  #modal-dossier-digital .modal-close,
+  #modal-dossier-digital .dossier-actions-bar,
+  #modal-dossier-digital .btn,
+  #modal-dossier-digital button,
   .file-dropzone-box,
   .btn-print-dossier,
   .btn-edit-dossier,
   .btn-dossier-file-open {
     display: none !important;
     visibility: hidden !important;
+    height: 0 !important;
+    max-height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: hidden !important;
   }
 
   /* Mostrar membrete oficial de impresión y pie con firmas */
