@@ -21,28 +21,42 @@ try {
 }
 
 // Hydrate from localStorage for offline/client-side persistence of new investigations
+function getCustomStore(key) {
+  try {
+    if (typeof localStorage === 'undefined') return [];
+    const raw = localStorage.getItem(`crimint_custom_${key}`);
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (e) {
+    return [];
+  }
+}
+
 function hydrateCustomStore(key, targetList) {
   try {
-    const raw = typeof localStorage !== 'undefined' ? localStorage.getItem(`crimint_custom_${key}`) : null;
-    if (raw) {
-      const items = JSON.parse(raw);
-      if (Array.isArray(items)) {
-        items.forEach(it => {
-          if (!targetList.some(x => x.id === it.id)) {
-            targetList.unshift(it);
-          }
-        });
+    const items = getCustomStore(key);
+    items.forEach(it => {
+      if (!it || !it.id) return;
+      const idx = targetList.findIndex(x => x.id === it.id);
+      if (idx !== -1) {
+        targetList[idx] = { ...targetList[idx], ...it };
+      } else {
+        targetList.unshift(it);
       }
-    }
+    });
   } catch (e) { }
 }
 
 function persistCustomItem(key, item) {
   try {
-    if (typeof localStorage === 'undefined') return;
-    const raw = localStorage.getItem(`crimint_custom_${key}`);
-    const list = raw ? JSON.parse(raw) : [];
-    list.unshift(item);
+    if (typeof localStorage === 'undefined' || !item || !item.id) return;
+    const list = getCustomStore(key);
+    const idx = list.findIndex(x => x.id === item.id);
+    if (idx !== -1) {
+      list[idx] = { ...list[idx], ...item };
+    } else {
+      list.unshift(item);
+    }
     localStorage.setItem(`crimint_custom_${key}`, JSON.stringify(list));
   } catch (e) { }
 }
@@ -149,6 +163,7 @@ export async function getHechoById(id) {
 // PERSONAS
 // ============================================================
 export async function getPersonas({ search, limit = 200 } = {}) {
+  let list = [];
   try {
     if (supabase) {
       let query = supabase.from('personas').select('*').eq('activo', true).order('fecha_creacion', { ascending: false });
@@ -157,21 +172,41 @@ export async function getPersonas({ search, limit = 200 } = {}) {
       }
       if (limit) query = query.limit(limit);
       const { data, error } = await query;
-      if (!error && data && data.length > 0) return data;
+      if (!error && data && data.length > 0) {
+        list = data.map(dbItem => {
+          const localItem = INITIAL_PERSONAS.find(p => p.id === dbItem.id);
+          if (localItem) {
+            return {
+              ...localItem,
+              ...dbItem,
+              domicilios: localItem.domicilios || dbItem.domicilios,
+              causas: localItem.causas || dbItem.causas,
+              vehiculos: localItem.vehiculos || dbItem.vehiculos,
+              familiares: localItem.familiares || dbItem.familiares,
+              archivos_adjuntos: localItem.archivos_adjuntos || dbItem.archivos_adjuntos,
+              situacion_crediticia: localItem.situacion_crediticia || dbItem.situacion_crediticia,
+              banda_color: localItem.banda_color || dbItem.banda_color
+            };
+          }
+          return dbItem;
+        });
+      }
     }
   } catch (e) {
     console.warn('Supabase personas fallback:', e?.message);
   }
 
-  let list = [...INITIAL_PERSONAS];
-  if (search) {
-    const s = search.toLowerCase();
-    list = list.filter(p =>
-      p.nombre?.toLowerCase().includes(s) ||
-      p.apellido?.toLowerCase().includes(s) ||
-      p.dni?.includes(s) ||
-      p.alias?.some(a => a.toLowerCase().includes(s))
-    );
+  if (list.length === 0) {
+    list = [...INITIAL_PERSONAS];
+    if (search) {
+      const s = search.toLowerCase();
+      list = list.filter(p =>
+        p.nombre?.toLowerCase().includes(s) ||
+        p.apellido?.toLowerCase().includes(s) ||
+        p.dni?.includes(s) ||
+        p.alias?.some(a => a.toLowerCase().includes(s))
+      );
+    }
   }
   return list.slice(0, limit);
 }
@@ -214,19 +249,46 @@ export async function insertPersona(persona) {
     if (b && b.color_hex) persona.banda_color = b.color_hex;
   }
 
+  const localId = persona.id || `local-persona-${Date.now()}`;
+  const localObj = { ...persona, id: localId };
+  INITIAL_PERSONAS.unshift(localObj);
+  persistCustomItem('personas', localObj);
+
   try {
     if (supabase) {
-      const { data, error } = await supabase.from('personas').insert(persona).select();
-      if (!error && data?.[0]) return data[0];
+      const sanitized = { ...persona };
+      delete sanitized.domicilios;
+      delete sanitized.causas;
+      delete sanitized.vehiculos;
+      delete sanitized.familiares;
+      delete sanitized.situacion_crediticia;
+      delete sanitized.archivos_adjuntos;
+      delete sanitized.banda_color;
+      delete sanitized.orden_captura_datos;
+
+      const { data, error } = await supabase.from('personas').insert(sanitized).select();
+      if (!error && data?.[0]) {
+        const merged = { ...localObj, ...data[0] };
+        if (localObj.domicilios) merged.domicilios = localObj.domicilios;
+        if (localObj.causas) merged.causas = localObj.causas;
+        if (localObj.vehiculos) merged.vehiculos = localObj.vehiculos;
+        if (localObj.familiares) merged.familiares = localObj.familiares;
+        if (localObj.situacion_crediticia) merged.situacion_crediticia = localObj.situacion_crediticia;
+        if (localObj.archivos_adjuntos) merged.archivos_adjuntos = localObj.archivos_adjuntos;
+        if (localObj.banda_color) merged.banda_color = localObj.banda_color;
+        if (localObj.orden_captura_datos) merged.orden_captura_datos = localObj.orden_captura_datos;
+
+        const currentIdx = INITIAL_PERSONAS.findIndex(p => p.id === localId || p.id === data[0].id);
+        if (currentIdx !== -1) INITIAL_PERSONAS[currentIdx] = merged;
+        persistCustomItem('personas', merged);
+        return merged;
+      }
     }
   } catch (e) {
     console.warn('Insert persona fallback local:', e);
   }
 
-  const p = { ...persona, id: `local-persona-${Date.now()}` };
-  INITIAL_PERSONAS.unshift(p);
-  persistCustomItem('personas', p);
-  return p;
+  return localObj;
 }
 
 export async function updatePersona(id, updates = {}) {
@@ -266,27 +328,54 @@ export async function updatePersona(id, updates = {}) {
     if (b && b.color_hex) updates.banda_color = b.color_hex;
   }
 
-  try {
-    if (supabase) {
-      const { data, error } = await supabase.from('personas').update(updates).eq('id', id).select();
-      if (!error && data?.[0]) {
-        const idx = INITIAL_PERSONAS.findIndex(p => p.id === id);
-        if (idx !== -1) INITIAL_PERSONAS[idx] = { ...INITIAL_PERSONAS[idx], ...data[0] };
-        return data[0];
-      }
-    }
-  } catch (e) {
-    console.warn('Update persona fallback local:', e);
-  }
-
-  // Actualización local
+  // Actualización local completa siempre primero
+  let localObj = null;
   const idx = INITIAL_PERSONAS.findIndex(p => p.id === id);
   if (idx !== -1) {
     INITIAL_PERSONAS[idx] = { ...INITIAL_PERSONAS[idx], ...updates };
-    persistCustomItem('personas', INITIAL_PERSONAS[idx]);
-    return INITIAL_PERSONAS[idx];
+    localObj = INITIAL_PERSONAS[idx];
+  } else {
+    localObj = { id, ...updates };
+    INITIAL_PERSONAS.unshift(localObj);
   }
-  return null;
+  persistCustomItem('personas', localObj);
+
+  // Sincronización sanitizada en Supabase para evitar fallas por campos locales
+  try {
+    if (supabase) {
+      const sanitized = { ...updates };
+      delete sanitized.domicilios;
+      delete sanitized.causas;
+      delete sanitized.vehiculos;
+      delete sanitized.familiares;
+      delete sanitized.situacion_crediticia;
+      delete sanitized.archivos_adjuntos;
+      delete sanitized.banda_color;
+      delete sanitized.orden_captura_datos;
+
+      const { data, error } = await supabase.from('personas').update(sanitized).eq('id', id).select();
+      if (!error && data?.[0]) {
+        const merged = { ...localObj, ...data[0] };
+        if (localObj.domicilios) merged.domicilios = localObj.domicilios;
+        if (localObj.causas) merged.causas = localObj.causas;
+        if (localObj.vehiculos) merged.vehiculos = localObj.vehiculos;
+        if (localObj.familiares) merged.familiares = localObj.familiares;
+        if (localObj.situacion_crediticia) merged.situacion_crediticia = localObj.situacion_crediticia;
+        if (localObj.archivos_adjuntos) merged.archivos_adjuntos = localObj.archivos_adjuntos;
+        if (localObj.banda_color) merged.banda_color = localObj.banda_color;
+        if (localObj.orden_captura_datos) merged.orden_captura_datos = localObj.orden_captura_datos;
+
+        const currentIdx = INITIAL_PERSONAS.findIndex(p => p.id === id);
+        if (currentIdx !== -1) INITIAL_PERSONAS[currentIdx] = merged;
+        persistCustomItem('personas', merged);
+        return merged;
+      }
+    }
+  } catch (e) {
+    console.warn('Update persona Supabase sync fallback:', e);
+  }
+
+  return localObj;
 }
 
 export async function getPersonasGeoJSON() {
@@ -380,14 +469,26 @@ export async function getPersonasGeoJSON() {
 }
 
 export async function getPersonaById(id) {
+  const local = INITIAL_PERSONAS.find(p => p.id === id) || null;
   try {
     if (supabase) {
       const { data, error } = await supabase.from('personas').select('*').eq('id', id).single();
-      if (!error && data) return data;
+      if (!error && data) {
+        const merged = { ...(local || {}), ...data };
+        if (local?.domicilios && !data.domicilios) merged.domicilios = local.domicilios;
+        if (local?.causas && !data.causas) merged.causas = local.causas;
+        if (local?.vehiculos && !data.vehiculos) merged.vehiculos = local.vehiculos;
+        if (local?.familiares && !data.familiares) merged.familiares = local.familiares;
+        if (local?.situacion_crediticia && !data.situacion_crediticia) merged.situacion_crediticia = local.situacion_crediticia;
+        if (local?.archivos_adjuntos && !data.archivos_adjuntos) merged.archivos_adjuntos = local.archivos_adjuntos;
+        if (local?.banda_color && !data.banda_color) merged.banda_color = local.banda_color;
+        if (local?.orden_captura_datos && !data.orden_captura_datos) merged.orden_captura_datos = local.orden_captura_datos;
+        return merged;
+      }
     }
   } catch (e) { }
 
-  return INITIAL_PERSONAS.find(p => p.id === id) || null;
+  return local;
 }
 
 export async function buscarPersonaFuzzy(termino) {

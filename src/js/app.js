@@ -655,13 +655,14 @@ function setupForms() {
         cuij_asociados: causas.map(c => c.cuij).filter(c => c && c !== 'S/N')
       };
 
+      let savedPersona = null;
       if (editId) {
-        await updatePersona(editId, personaPayload);
+        savedPersona = await updatePersona(editId, personaPayload);
         await logAction('UPDATE', 'personas', editId);
         showToast('Dossier y perfil institucional actualizados correctamente', 'success');
       } else {
-        const result = await insertPersona(personaPayload);
-        await logAction('INSERT', 'personas', result.id);
+        savedPersona = await insertPersona(personaPayload);
+        await logAction('INSERT', 'personas', savedPersona.id);
         showToast('Perfil y dossier digital registrado correctamente', 'success');
       }
 
@@ -680,6 +681,12 @@ function setupForms() {
 
       if (document.getElementById('view-personas')?.classList.contains('active')) {
         await renderPersonasView();
+      }
+
+      // Si el visor de dossier estaba abierto para esta persona, actualizarlo en vivo de inmediato
+      const refreshedId = editId || savedPersona?.id || currentViewingDossierId;
+      if (refreshedId && currentViewingDossierId === refreshedId) {
+        await window.abrirDossierDigital(refreshedId);
       }
     } catch (err) {
       console.error('Error guardando persona:', err);
@@ -1393,6 +1400,27 @@ window.enfocarPersonaEnGrafo = async function(personaId) {
 // ============================================================
 
 export function initDossierSystem() {
+  // Exponer helper para editar perfil navegando de inmediato a la sección correspondiente
+  window.editarPersonaDesdeDossier = function(personaId, forceTab) {
+    let targetTab = forceTab;
+    if (!targetTab) {
+      const actTab = document.querySelector('#dossier-view-tabs .dossier-tab-btn.active')?.dataset.dossierTab;
+      const tabMap = {
+        'dossier-tab-general': 'tab-f-identidad',
+        'dossier-tab-adjuntos': 'tab-f-adjuntos',
+        'dossier-tab-domicilios': 'tab-f-domicilios',
+        'dossier-tab-causas': 'tab-f-causas',
+        'dossier-tab-vehiculos': 'tab-f-vehiculos',
+        'dossier-tab-familia': 'tab-f-familia',
+        'dossier-tab-financiero': 'tab-f-credito',
+        'dossier-tab-inteligencia': 'tab-f-organizacion'
+      };
+      targetTab = tabMap[actTab] || 'tab-f-identidad';
+    }
+    closeModal('modal-dossier-digital');
+    window.abrirEdicionPersona(personaId, targetTab);
+  };
+
   // Navegación de pestañas en modal de edición de perfil
   document.querySelectorAll('#persona-form-nav .dossier-tab-btn').forEach(btn => {
     btn.addEventListener('click', (e) => {
@@ -1402,6 +1430,21 @@ export function initDossierSystem() {
       const target = btn.dataset.formTab;
       document.querySelectorAll('.persona-tab-pane').forEach(p => p.classList.add('hidden'));
       document.getElementById(target)?.classList.remove('hidden');
+
+      // Si el contenedor dinámico está vacío, agregar una fila automáticamente para facilitar la edición inmediata
+      if (target === 'tab-f-familia') {
+        const c = document.getElementById('persona-familia-container');
+        if (c && c.children.length === 0) addFamiliaRow();
+      } else if (target === 'tab-f-vehiculos') {
+        const c = document.getElementById('persona-vehiculos-container');
+        if (c && c.children.length === 0) addVehiculoRow();
+      } else if (target === 'tab-f-causas') {
+        const c = document.getElementById('persona-causas-container');
+        if (c && c.children.length === 0) addCausaRow();
+      } else if (target === 'tab-f-domicilios') {
+        const c = document.getElementById('persona-domicilios-container');
+        if (c && c.children.length === 0) addDomicilioRow({ tipo: 'REAL', direccion: '', barrio: '' });
+      }
     });
   });
 
@@ -1521,8 +1564,7 @@ export function initDossierSystem() {
 
   document.getElementById('btn-edit-dossier-direct')?.addEventListener('click', () => {
     if (currentViewingDossierId) {
-      closeModal('modal-dossier-digital');
-      window.abrirEdicionPersona(currentViewingDossierId);
+      window.editarPersonaDesdeDossier(currentViewingDossierId);
     }
   });
 
@@ -1823,31 +1865,40 @@ function addVehiculoRow(data = {}) {
   if (data.id) row.dataset.id = data.id;
 
   row.innerHTML = `
-    <div style="flex:1;display:grid;grid-template-columns:110px 110px 1.2fr 100px 1.2fr;gap:8px">
-      <div>
-        <label style="font-size:10px;color:var(--text-muted)">Dominio / Patente</label>
-        <input type="text" class="form-input veh-patente" value="${(data.patente || '').replace(/"/g, '&quot;')}" placeholder="AB123CD" style="padding:4px 8px;font-size:11px;text-transform:uppercase;font-weight:700">
+    <div style="flex:1;display:flex;flex-direction:column;gap:8px">
+      <div style="display:grid;grid-template-columns:110px 120px 1.4fr 110px;gap:8px">
+        <div>
+          <label style="font-size:10px;color:var(--text-muted)">Dominio / Patente</label>
+          <input type="text" class="form-input veh-patente" value="${(data.patente || '').replace(/"/g, '&quot;')}" placeholder="AB123CD" style="padding:4px 8px;font-size:11px;text-transform:uppercase;font-weight:700">
+        </div>
+        <div>
+          <label style="font-size:10px;color:var(--text-muted)">Tipo de Rodado</label>
+          <select class="form-input veh-tipo" style="padding:4px 8px;font-size:11px">
+            <option value="Automóvil" ${data.tipo === 'Automóvil' ? 'selected' : ''}>Automóvil</option>
+            <option value="Motovehículo" ${data.tipo === 'Motovehículo' ? 'selected' : ''}>Motovehículo</option>
+            <option value="Camioneta" ${data.tipo === 'Camioneta' ? 'selected' : ''}>Camioneta</option>
+            <option value="Utilitario" ${data.tipo === 'Utilitario' ? 'selected' : ''}>Utilitario</option>
+            <option value="Camión" ${data.tipo === 'Camión' ? 'selected' : ''}>Camión</option>
+          </select>
+        </div>
+        <div>
+          <label style="font-size:10px;color:var(--text-muted)">Marca y Modelo</label>
+          <input type="text" class="form-input veh-modelo" value="${(data.modelo || '').replace(/"/g, '&quot;')}" placeholder="VW Gol Trend 1.6" style="padding:4px 8px;font-size:11px">
+        </div>
+        <div>
+          <label style="font-size:10px;color:var(--text-muted)">Color</label>
+          <input type="text" class="form-input veh-color" value="${(data.color || '').replace(/"/g, '&quot;')}" placeholder="Negro / Gris" style="padding:4px 8px;font-size:11px">
+        </div>
       </div>
-      <div>
-        <label style="font-size:10px;color:var(--text-muted)">Tipo</label>
-        <select class="form-input veh-tipo" style="padding:4px 8px;font-size:11px">
-          <option value="Automóvil" ${data.tipo === 'Automóvil' ? 'selected' : ''}>Automóvil</option>
-          <option value="Motovehículo" ${data.tipo === 'Motovehículo' ? 'selected' : ''}>Motovehículo</option>
-          <option value="Camioneta" ${data.tipo === 'Camioneta' ? 'selected' : ''}>Camioneta</option>
-          <option value="Utilitario" ${data.tipo === 'Utilitario' ? 'selected' : ''}>Utilitario</option>
-        </select>
-      </div>
-      <div>
-        <label style="font-size:10px;color:var(--text-muted)">Marca y Modelo</label>
-        <input type="text" class="form-input veh-modelo" value="${(data.modelo || '').replace(/"/g, '&quot;')}" placeholder="VW Gol Trend" style="padding:4px 8px;font-size:11px">
-      </div>
-      <div>
-        <label style="font-size:10px;color:var(--text-muted)">Color</label>
-        <input type="text" class="form-input veh-color" value="${(data.color || '').replace(/"/g, '&quot;')}" placeholder="Negro / Gris" style="padding:4px 8px;font-size:11px">
-      </div>
-      <div>
-        <label style="font-size:10px;color:var(--text-muted)">Titular Registral</label>
-        <input type="text" class="form-input veh-titular" value="${(data.titular || '').replace(/"/g, '&quot;')}" placeholder="Titular o Tercero" style="padding:4px 8px;font-size:11px">
+      <div style="display:grid;grid-template-columns:1.2fr 1.2fr;gap:8px">
+        <div>
+          <label style="font-size:10px;color:var(--text-muted)">Titular Registral</label>
+          <input type="text" class="form-input veh-titular" value="${(data.titular || '').replace(/"/g, '&quot;')}" placeholder="Titular o Tercero" style="padding:4px 8px;font-size:11px">
+        </div>
+        <div>
+          <label style="font-size:10px;color:var(--text-muted)">Rol Operativo / Utilización en la Organización</label>
+          <input type="text" class="form-input veh-rol" value="${(data.rol || '').replace(/"/g, '&quot;')}" placeholder="Traslado de estupefacientes, vigía, vehículo de fuga..." style="padding:4px 8px;font-size:11px">
+        </div>
       </div>
     </div>
     <button type="button" class="btn btn-outline btn-xs btn-remove-row" title="Quitar vehículo" style="color:#EF4444;border-color:rgba(239,68,68,0.3);margin-top:16px">✕</button>
@@ -1866,7 +1917,7 @@ function addFamiliaRow(data = {}) {
   if (data.id) row.dataset.id = data.id;
 
   row.innerHTML = `
-    <div style="flex:1;display:grid;grid-template-columns:1.5fr 120px 110px 2fr;gap:8px">
+    <div style="flex:1;display:grid;grid-template-columns:1.4fr 130px 110px 1.8fr;gap:8px">
       <div>
         <label style="font-size:10px;color:var(--text-muted)">Nombre Completo</label>
         <input type="text" class="form-input fam-nombre" value="${(data.nombre || '').replace(/"/g, '&quot;')}" placeholder="Nombre y Apellido" style="padding:4px 8px;font-size:11px">
@@ -1881,6 +1932,11 @@ function addFamiliaRow(data = {}) {
           <option value="Hijo/a" ${data.parentesco === 'Hijo/a' ? 'selected' : ''}>Hijo/a</option>
           <option value="Cuñado/a" ${data.parentesco === 'Cuñado/a' ? 'selected' : ''}>Cuñado/a</option>
           <option value="Primo/a" ${data.parentesco === 'Primo/a' ? 'selected' : ''}>Primo/a</option>
+          <option value="Tío/a" ${data.parentesco === 'Tío/a' ? 'selected' : ''}>Tío/a</option>
+          <option value="Sobrino/a" ${data.parentesco === 'Sobrino/a' ? 'selected' : ''}>Sobrino/a</option>
+          <option value="Conviviente" ${data.parentesco === 'Conviviente' ? 'selected' : ''}>Conviviente</option>
+          <option value="Amigo/a" ${data.parentesco === 'Amigo/a' ? 'selected' : ''}>Amigo / Vínculo Cercano</option>
+          <option value="Coimputado/a" ${data.parentesco === 'Coimputado/a' ? 'selected' : ''}>Coimputado / Asociado</option>
           <option value="Otro" ${data.parentesco === 'Otro' ? 'selected' : ''}>Otro</option>
         </select>
       </div>
@@ -1890,7 +1946,7 @@ function addFamiliaRow(data = {}) {
       </div>
       <div>
         <label style="font-size:10px;color:var(--text-muted)">Observación / Vínculo Operativo</label>
-        <input type="text" class="form-input fam-obs" value="${(data.observacion || '').replace(/"/g, '&quot;')}" placeholder="Titular de rodados / Coimputado..." style="padding:4px 8px;font-size:11px">
+        <input type="text" class="form-input fam-obs" value="${(data.observacion || '').replace(/"/g, '&quot;')}" placeholder="Titular de rodados / Conviviente en búnker / Coimputado..." style="padding:4px 8px;font-size:11px">
       </div>
     </div>
     <button type="button" class="btn btn-outline btn-xs btn-remove-row" title="Quitar familiar" style="color:#EF4444;border-color:rgba(239,68,68,0.3);margin-top:16px">✕</button>
@@ -1901,7 +1957,7 @@ function addFamiliaRow(data = {}) {
 }
 
 // Global exposure for editing persona profile & dossier
-window.abrirEdicionPersona = async function(personaId) {
+window.abrirEdicionPersona = async function(personaId, targetTab = 'tab-f-identidad') {
   try {
     const p = await getPersonaById(personaId);
     if (!p) {
@@ -1994,6 +2050,8 @@ window.abrirEdicionPersona = async function(personaId) {
         p.causas.forEach(c => addCausaRow(c));
       } else if (Array.isArray(p.cuij_asociados) && p.cuij_asociados.length > 0) {
         p.cuij_asociados.forEach(c => addCausaRow({ cuij: c, caratula: p.delitos_asociados?.join(', ') || '' }));
+      } else if (targetTab === 'tab-f-causas') {
+        addCausaRow();
       }
     }
 
@@ -2001,8 +2059,10 @@ window.abrirEdicionPersona = async function(personaId) {
     const vehCont = document.getElementById('persona-vehiculos-container');
     if (vehCont) {
       vehCont.innerHTML = '';
-      if (Array.isArray(p.vehiculos)) {
+      if (Array.isArray(p.vehiculos) && p.vehiculos.length > 0) {
         p.vehiculos.forEach(v => addVehiculoRow(v));
+      } else if (targetTab === 'tab-f-vehiculos') {
+        addVehiculoRow();
       }
     }
 
@@ -2010,8 +2070,10 @@ window.abrirEdicionPersona = async function(personaId) {
     const famCont = document.getElementById('persona-familia-container');
     if (famCont) {
       famCont.innerHTML = '';
-      if (Array.isArray(p.familiares)) {
+      if (Array.isArray(p.familiares) && p.familiares.length > 0) {
         p.familiares.forEach(f => addFamiliaRow(f));
+      } else if (targetTab === 'tab-f-familia') {
+        addFamiliaRow();
       }
     }
 
@@ -2039,11 +2101,12 @@ window.abrirEdicionPersona = async function(personaId) {
     const dosEl = document.getElementById('persona-dossier');
     if (dosEl) dosEl.value = p.link_dossier || '';
 
-    // Switch to tab 1
+    // Switch to targetTab
+    const finalTab = targetTab || 'tab-f-identidad';
     document.querySelectorAll('#persona-form-nav .dossier-tab-btn').forEach(b => b.classList.remove('active'));
-    document.querySelector('#persona-form-nav [data-form-tab="tab-f-identidad"]')?.classList.add('active');
+    document.querySelector(`#persona-form-nav [data-form-tab="${finalTab}"]`)?.classList.add('active');
     document.querySelectorAll('.persona-tab-pane').forEach(pane => pane.classList.add('hidden'));
-    document.getElementById('tab-f-identidad')?.classList.remove('hidden');
+    document.getElementById(finalTab)?.classList.remove('hidden');
 
     openModal('modal-persona');
   } catch (err) {
@@ -2205,7 +2268,7 @@ function renderDossierDigitalBody(p) {
         </div>
 
         <div style="display:flex;gap:8px;flex-direction:column;flex-shrink:0" class="dossier-actions-bar">
-          <button class="btn btn-primary btn-sm" onclick="closeModal('modal-dossier-digital'); window.abrirEdicionPersona('${p.id}');" style="display:flex;align-items:center;gap:6px;padding:6px 12px;font-size:11px;font-weight:700;background:#0284c7;border:1px solid #38bdf8;">
+          <button class="btn btn-primary btn-sm" onclick="window.editarPersonaDesdeDossier('${p.id}');" style="display:flex;align-items:center;gap:6px;padding:6px 12px;font-size:11px;font-weight:700;background:#0284c7;border:1px solid #38bdf8;">
             ✏️ Editar Perfil Completo
           </button>
           <button class="btn btn-secondary btn-sm" onclick="window.centrarPersonaEnMapa('${p.id}'); closeModal('modal-dossier-digital');" style="display:flex;align-items:center;gap:6px;padding:6px 12px;font-size:11px;font-weight:600">
@@ -2222,7 +2285,12 @@ function renderDossierDigitalBody(p) {
     <div class="dossier-content-section" id="dossier-tab-general">
       <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(320px, 1fr));gap:14px;margin-bottom:16px">
         <div style="background:var(--bg-tertiary);border:1px solid var(--border-default);border-radius:8px;padding:14px">
-          <div class="dossier-section-title">Datos Personales y Registro</div>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+            <div class="dossier-section-title" style="margin-bottom:0">Datos Personales y Registro</div>
+            <button type="button" class="btn btn-outline btn-xs" onclick="window.editarPersonaDesdeDossier('${p.id}', 'tab-f-identidad');" style="font-size:10px;padding:2px 7px">
+              ✏️ Editar
+            </button>
+          </div>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;font-size:12px">
             <div><span style="color:var(--text-muted);display:block;font-size:10px">NOMBRES Y APELLIDOS</span><strong>${p.nombre || '—'} ${p.apellido || ''}</strong></div>
             <div><span style="color:var(--text-muted);display:block;font-size:10px">DOCUMENTO NACIONAL</span><strong>${p.dni || '—'}</strong></div>
@@ -2234,7 +2302,12 @@ function renderDossierDigitalBody(p) {
         </div>
 
         <div style="background:var(--bg-tertiary);border:1px solid var(--border-default);border-radius:8px;padding:14px">
-          <div class="dossier-section-title">Síntesis Operativa y Territorial</div>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+            <div class="dossier-section-title" style="margin-bottom:0">Síntesis Operativa y Territorial</div>
+            <button type="button" class="btn btn-outline btn-xs" onclick="window.editarPersonaDesdeDossier('${p.id}', 'tab-f-organizacion');" style="font-size:10px;padding:2px 7px">
+              ✏️ Editar
+            </button>
+          </div>
           <div style="display:flex;flex-direction:column;gap:8px;font-size:12px">
             <div>
               <span style="color:var(--text-muted);display:block;font-size:10px">DOMICILIO PRINCIPAL DE RESIDENCIA</span>
@@ -2253,7 +2326,12 @@ function renderDossierDigitalBody(p) {
       </div>
 
       <div style="background:var(--bg-tertiary);border:1px solid var(--border-default);border-radius:8px;padding:14px;margin-bottom:14px">
-        <div class="dossier-section-title">Resumen de Inteligencia Criminal</div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+          <div class="dossier-section-title" style="margin-bottom:0">Resumen de Inteligencia Criminal</div>
+          <button type="button" class="btn btn-outline btn-xs" onclick="window.editarPersonaDesdeDossier('${p.id}', 'tab-f-organizacion');" style="font-size:10px;padding:2px 7px">
+            ✏️ Editar
+          </button>
+        </div>
         <div style="font-size:12px;color:var(--text-secondary);line-height:1.5;white-space:pre-wrap">
           ${p.antecedentes_texto || 'No se registraron observaciones de antecedentes para este perfil.'}
         </div>
@@ -2262,10 +2340,10 @@ function renderDossierDigitalBody(p) {
 
     <!-- SECCIÓN 2: DOCUMENTOS Y ADJUNTOS (.pdf, .doc, .docx, imágenes) -->
     <div class="dossier-content-section hidden" id="dossier-tab-adjuntos">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:12px;flex-wrap:wrap">
         <div style="font-size:13px;font-weight:700;color:#fff">Documentación, Actas y Peritajes Incorporados al Dossier (${archivos.length})</div>
-        <button type="button" class="btn btn-secondary btn-xs" onclick="closeModal('modal-dossier-digital'); window.abrirEdicionPersona('${p.id}'); setTimeout(() => document.querySelector('[data-form-tab=tab-f-adjuntos]')?.click(), 150);">
-          + Adjuntar Archivos
+        <button type="button" class="btn btn-secondary btn-xs" onclick="window.editarPersonaDesdeDossier('${p.id}', 'tab-f-adjuntos');" style="display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:700">
+          ➕ Incorporar Archivos
         </button>
       </div>
 
@@ -2273,7 +2351,10 @@ function renderDossierDigitalBody(p) {
         <div style="text-align:center;padding:32px;background:rgba(255,255,255,0.015);border:1px dashed rgba(255,255,255,0.15);border-radius:8px">
           <div style="font-size:28px;margin-bottom:6px">📎</div>
           <div style="font-size:13px;font-weight:700;color:#fff">Sin archivos incorporados</div>
-          <div style="font-size:11px;color:var(--text-muted);margin-top:4px">Puede incorporar actas de allanamiento, informes periciales, oficios o fotografías en formato PDF, DOC, DOCX o imágenes.</div>
+          <div style="font-size:11px;color:var(--text-muted);margin:6px 0 14px">Puede incorporar actas de allanamiento, informes periciales, oficios o fotografías en formato PDF, DOC, DOCX o imágenes.</div>
+          <button type="button" class="btn btn-primary btn-sm" onclick="window.editarPersonaDesdeDossier('${p.id}', 'tab-f-adjuntos');" style="display:inline-flex;align-items:center;gap:6px;font-weight:700">
+            ➕ Incorporar Archivos
+          </button>
         </div>
       ` : `
         <div class="file-attachments-list">
@@ -2308,60 +2389,91 @@ function renderDossierDigitalBody(p) {
 
     <!-- SECCIÓN 3: DOMICILIOS GEORREFERENCIADOS -->
     <div class="dossier-content-section hidden" id="dossier-tab-domicilios">
-      <div style="font-size:13px;font-weight:700;color:#fff;margin-bottom:12px">
-        Inmuebles, Asentamientos y Puntos Territoriales Vinculados (${domicilios.length})
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:12px;flex-wrap:wrap">
+        <div style="font-size:13px;font-weight:700;color:#fff">
+          Inmuebles, Asentamientos y Puntos Territoriales Vinculados (${domicilios.length})
+        </div>
+        <button type="button" class="btn btn-secondary btn-xs" onclick="window.editarPersonaDesdeDossier('${p.id}', 'tab-f-domicilios');" style="display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:700">
+          ➕ Agregar / Editar Domicilios
+        </button>
       </div>
 
-      <div style="display:flex;flex-direction:column;gap:10px">
-        ${domicilios.map(d => {
-          let badgeColor = '#0EA5E9';
-          let badgeText = 'REAL / PRINCIPAL';
-          const t = (d.tipo || '').toUpperCase();
-          if (t === 'LEGAL') { badgeColor = '#8B5CF6'; badgeText = 'LEGAL / REGISTRADO'; }
-          else if (t === 'AGUANTADERO') { badgeColor = '#EF4444'; badgeText = 'AGUANTADERO / OCULTAMIENTO'; }
-          else if (t === 'DISTRIBUCION') { badgeColor = '#F59E0B'; badgeText = 'PUNTO DE DISTRIBUCIÓN / VENTA'; }
+      ${domicilios.length === 0 ? `
+        <div style="text-align:center;padding:32px 20px;background:rgba(255,255,255,0.015);border:1px dashed rgba(255,255,255,0.15);border-radius:8px">
+          <div style="font-size:28px;margin-bottom:6px">📍</div>
+          <div style="font-size:13px;font-weight:700;color:#fff">Sin domicilios territoriales vinculados</div>
+          <div style="font-size:11px;color:var(--text-muted);margin:6px 0 14px">Incorpore domicilios reales, legales, aguantaderos o bocas de expendio para georreferenciación cartográfica automática.</div>
+          <button type="button" class="btn btn-primary btn-sm" onclick="window.editarPersonaDesdeDossier('${p.id}', 'tab-f-domicilios');" style="display:inline-flex;align-items:center;gap:6px;font-weight:700">
+            ➕ Agregar Domicilio
+          </button>
+        </div>
+      ` : `
+        <div style="display:flex;flex-direction:column;gap:10px">
+          ${domicilios.map(d => {
+            let badgeColor = '#0EA5E9';
+            let badgeText = 'REAL / PRINCIPAL';
+            const t = (d.tipo || '').toUpperCase();
+            if (t === 'LEGAL') { badgeColor = '#8B5CF6'; badgeText = 'LEGAL / REGISTRADO'; }
+            else if (t === 'AGUANTADERO') { badgeColor = '#EF4444'; badgeText = 'AGUANTADERO / OCULTAMIENTO'; }
+            else if (t === 'DISTRIBUCION') { badgeColor = '#F59E0B'; badgeText = 'PUNTO DE DISTRIBUCIÓN / VENTA'; }
 
-          const coords = parseGeom(d.geom);
+            const coords = parseGeom(d.geom);
 
-          return `
-            <div style="background:var(--bg-tertiary);border:1px solid var(--border-default);border-radius:8px;padding:12px 14px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
-              <div style="display:flex;align-items:flex-start;gap:12px">
-                <span style="font-size:22px">📍</span>
-                <div>
-                  <div style="display:flex;align-items:center;gap:8px;margin-bottom:2px">
-                    <span style="background:${badgeColor}22;border:1px solid ${badgeColor}66;color:${badgeColor};font-size:10px;font-weight:800;padding:1px 6px;border-radius:4px">
-                      ${badgeText}
-                    </span>
-                    <strong style="color:#fff;font-size:13px">${d.direccion || 'Sin dirección especificada'}</strong>
-                  </div>
-                  <div style="font-size:11px;color:var(--text-secondary)">
-                    ${d.barrio ? `Barrio: ${d.barrio} | ` : ''} Santa Fe ${d.detalle ? `• ${d.detalle}` : ''}
+            return `
+              <div style="background:var(--bg-tertiary);border:1px solid var(--border-default);border-radius:8px;padding:12px 14px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
+                <div style="display:flex;align-items:flex-start;gap:12px">
+                  <span style="font-size:22px">📍</span>
+                  <div>
+                    <div style="display:flex;align-items:center;gap:8px;margin-bottom:2px">
+                      <span style="background:${badgeColor}22;border:1px solid ${badgeColor}66;color:${badgeColor};font-size:10px;font-weight:800;padding:1px 6px;border-radius:4px">
+                        ${badgeText}
+                      </span>
+                      <strong style="color:#fff;font-size:13px">${d.direccion || 'Sin dirección especificada'}</strong>
+                    </div>
+                    <div style="font-size:11px;color:var(--text-secondary)">
+                      ${d.barrio ? `Barrio: ${d.barrio} | ` : ''} Santa Fe ${d.detalle ? `• ${d.detalle}` : ''}
+                    </div>
                   </div>
                 </div>
-              </div>
 
-              ${coords ? `
-                <button type="button" class="btn btn-secondary btn-xs" onclick="window.centrarCoordenadasMapa(${coords.lng}, ${coords.lat}, '${(d.direccion || '').replace(/'/g, "\\'")}'); closeModal('modal-dossier-digital');" style="font-size:10px;padding:4px 8px;white-space:nowrap">
-                  🗺️ Ver en Mapa
-                </button>
-              ` : `
-                <span style="font-size:10px;color:var(--text-muted)">Pendiente geocodificación</span>
-              `}
-            </div>
-          `;
-        }).join('')}
-      </div>
+                <div style="display:flex;align-items:center;gap:6px">
+                  ${coords ? `
+                    <button type="button" class="btn btn-secondary btn-xs" onclick="window.centrarCoordenadasMapa(${coords.lng}, ${coords.lat}, '${(d.direccion || '').replace(/'/g, "\\'")}'); closeModal('modal-dossier-digital');" style="font-size:10px;padding:4px 8px;white-space:nowrap">
+                      🗺️ Ver en Mapa
+                    </button>
+                  ` : `
+                    <span style="font-size:10px;color:var(--text-muted);margin-right:4px">Sin coordenadas</span>
+                  `}
+                  <button type="button" class="btn btn-outline btn-xs" onclick="window.editarPersonaDesdeDossier('${p.id}', 'tab-f-domicilios');" style="font-size:10px;padding:4px 8px;white-space:nowrap" title="Editar domicilios de este legajo">
+                    ✏️ Editar
+                  </button>
+                </div>
+              </div>
+            `;
+          }).join('')}
+        </div>
+      `}
     </div>
 
     <!-- SECCIÓN 4: CAUSAS Y PROCESOS CUIJ -->
     <div class="dossier-content-section hidden" id="dossier-tab-causas">
-      <div style="font-size:13px;font-weight:700;color:#fff;margin-bottom:12px">
-        Investigaciones Penales Preparatorias y Causas CUIJ (${causas.length})
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:12px;flex-wrap:wrap">
+        <div style="font-size:13px;font-weight:700;color:#fff">
+          Investigaciones Penales Preparatorias y Causas CUIJ (${causas.length})
+        </div>
+        <button type="button" class="btn btn-secondary btn-xs" onclick="window.editarPersonaDesdeDossier('${p.id}', 'tab-f-causas');" style="display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:700">
+          ➕ Agregar / Editar Causas CUIJ
+        </button>
       </div>
 
       ${causas.length === 0 ? `
-        <div style="text-align:center;padding:24px;background:rgba(255,255,255,0.015);border:1px dashed rgba(255,255,255,0.15);border-radius:8px;color:var(--text-muted);font-size:12px">
-          No registra causas CUIJ vinculadas en el sistema.
+        <div style="text-align:center;padding:32px 20px;background:rgba(255,255,255,0.015);border:1px dashed rgba(255,255,255,0.15);border-radius:8px">
+          <div style="font-size:28px;margin-bottom:6px">⚖️</div>
+          <div style="font-size:13px;font-weight:700;color:#fff">No registra causas CUIJ vinculadas en el sistema</div>
+          <div style="font-size:11px;color:var(--text-muted);margin:6px 0 14px">Asocie legajos del MPA, números de CUIJ, carátulas y unidades fiscales de investigación.</div>
+          <button type="button" class="btn btn-primary btn-sm" onclick="window.editarPersonaDesdeDossier('${p.id}', 'tab-f-causas');" style="display:inline-flex;align-items:center;gap:6px;font-weight:700">
+            ➕ Agregar Causa CUIJ
+          </button>
         </div>
       ` : `
         <div style="display:flex;flex-direction:column;gap:10px">
@@ -2371,9 +2483,14 @@ function renderDossierDigitalBody(p) {
                 <span style="font-family:var(--font-mono);color:var(--accent-primary);font-weight:800;font-size:12px">
                   ⚖️ CUIJ: ${c.cuij}
                 </span>
-                <span style="background:rgba(255,255,255,0.06);border:1px solid var(--border-subtle);color:#fff;font-size:10px;font-weight:700;padding:2px 8px;border-radius:4px">
-                  ${c.estado || 'En trámite'}
-                </span>
+                <div style="display:flex;align-items:center;gap:6px">
+                  <span style="background:rgba(255,255,255,0.06);border:1px solid var(--border-subtle);color:#fff;font-size:10px;font-weight:700;padding:2px 8px;border-radius:4px">
+                    ${c.estado || 'En trámite'}
+                  </span>
+                  <button type="button" class="btn btn-outline btn-xs" onclick="window.editarPersonaDesdeDossier('${p.id}', 'tab-f-causas');" style="font-size:10px;padding:2px 6px" title="Editar causas del perfil">
+                    ✏️ Editar
+                  </button>
+                </div>
               </div>
               <div style="font-size:13px;font-weight:700;color:#fff;margin-bottom:4px">
                 ${c.caratula}
@@ -2389,13 +2506,23 @@ function renderDossierDigitalBody(p) {
 
     <!-- SECCIÓN 5: PARQUE AUTOMOTOR / VEHÍCULOS -->
     <div class="dossier-content-section hidden" id="dossier-tab-vehiculos">
-      <div style="font-size:13px;font-weight:700;color:#fff;margin-bottom:12px">
-        Parque Automotor y Rodados Detectados (${vehiculos.length})
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:12px;flex-wrap:wrap">
+        <div style="font-size:13px;font-weight:700;color:#fff">
+          Parque Automotor y Rodados Detectados (${vehiculos.length})
+        </div>
+        <button type="button" class="btn btn-secondary btn-xs" onclick="window.editarPersonaDesdeDossier('${p.id}', 'tab-f-vehiculos');" style="display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:700">
+          ➕ Agregar / Editar Vehículos
+        </button>
       </div>
 
       ${vehiculos.length === 0 ? `
-        <div style="text-align:center;padding:24px;background:rgba(255,255,255,0.015);border:1px dashed rgba(255,255,255,0.15);border-radius:8px;color:var(--text-muted);font-size:12px">
-          No registra vehículos asociados en este legajo.
+        <div style="text-align:center;padding:32px 20px;background:rgba(255,255,255,0.015);border:1px dashed rgba(255,255,255,0.15);border-radius:8px">
+          <div style="font-size:28px;margin-bottom:6px">🚗</div>
+          <div style="font-size:13px;font-weight:700;color:#fff">No registra vehículos asociados en este legajo</div>
+          <div style="font-size:11px;color:var(--text-muted);margin:6px 0 14px">Registre patentes, automóviles, motovehículos o utilitarios vinculados a la logística o titularidad.</div>
+          <button type="button" class="btn btn-primary btn-sm" onclick="window.editarPersonaDesdeDossier('${p.id}', 'tab-f-vehiculos');" style="display:inline-flex;align-items:center;gap:6px;font-weight:700">
+            ➕ Agregar Vehículo
+          </button>
         </div>
       ` : `
         <div style="display:grid;grid-template-columns:repeat(auto-fill, minmax(280px, 1fr));gap:12px">
@@ -2405,7 +2532,12 @@ function renderDossierDigitalBody(p) {
                 <span style="font-family:var(--font-mono);font-size:13px;font-weight:900;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.2);padding:2px 8px;border-radius:4px;color:#fff">
                   ${v.patente}
                 </span>
-                <span style="font-size:11px;color:var(--text-muted)">${v.tipo || 'Rodado'}</span>
+                <div style="display:flex;align-items:center;gap:6px">
+                  <span style="font-size:11px;color:var(--text-muted)">${v.tipo || 'Rodado'}</span>
+                  <button type="button" class="btn btn-outline btn-xs" onclick="window.editarPersonaDesdeDossier('${p.id}', 'tab-f-vehiculos');" style="font-size:10px;padding:2px 6px" title="Editar vehículos">
+                    ✏️
+                  </button>
+                </div>
               </div>
               <div style="font-size:13px;font-weight:700;color:#fff;margin-bottom:2px">
                 ${v.modelo}
@@ -2426,13 +2558,23 @@ function renderDossierDigitalBody(p) {
 
     <!-- SECCIÓN 6: RED FAMILIAR Y VÍNCULOS DIRECTOS -->
     <div class="dossier-content-section hidden" id="dossier-tab-familia">
-      <div style="font-size:13px;font-weight:700;color:#fff;margin-bottom:12px">
-        Red de Parentesco y Convivencia (${familiares.length})
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:12px;flex-wrap:wrap">
+        <div style="font-size:13px;font-weight:700;color:#fff">
+          Red de Parentesco y Convivencia (${familiares.length})
+        </div>
+        <button type="button" class="btn btn-secondary btn-xs" onclick="window.editarPersonaDesdeDossier('${p.id}', 'tab-f-familia');" style="display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:700">
+          ➕ Agregar / Editar Familiares
+        </button>
       </div>
 
       ${familiares.length === 0 ? `
-        <div style="text-align:center;padding:24px;background:rgba(255,255,255,0.015);border:1px dashed rgba(255,255,255,0.15);border-radius:8px;color:var(--text-muted);font-size:12px">
-          No se registraron vínculos familiares directos en este perfil.
+        <div style="text-align:center;padding:32px 20px;background:rgba(255,255,255,0.015);border:1px dashed rgba(255,255,255,0.15);border-radius:8px">
+          <div style="font-size:28px;margin-bottom:6px">👥</div>
+          <div style="font-size:13px;font-weight:700;color:#fff">No se registraron vínculos familiares directos en este perfil</div>
+          <div style="font-size:11px;color:var(--text-muted);margin:6px 0 14px">Incorpore padres, parejas, hermanos, convivientes o vínculos directos para el análisis relacional y patrimonial.</div>
+          <button type="button" class="btn btn-primary btn-sm" onclick="window.editarPersonaDesdeDossier('${p.id}', 'tab-f-familia');" style="display:inline-flex;align-items:center;gap:6px;font-weight:700">
+            ➕ Agregar Vínculo Familiar
+          </button>
         </div>
       ` : `
         <div style="display:grid;grid-template-columns:repeat(auto-fill, minmax(280px, 1fr));gap:12px">
@@ -2440,9 +2582,14 @@ function renderDossierDigitalBody(p) {
             <div style="background:var(--bg-tertiary);border:1px solid var(--border-default);border-radius:8px;padding:12px">
               <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
                 <strong style="color:#fff;font-size:13px">${fam.nombre}</strong>
-                <span style="background:rgba(245,158,11,0.15);border:1px solid rgba(245,158,11,0.3);color:#FDE68A;font-size:10px;font-weight:700;padding:1px 6px;border-radius:4px">
-                  ${fam.parentesco}
-                </span>
+                <div style="display:flex;align-items:center;gap:6px">
+                  <span style="background:rgba(245,158,11,0.15);border:1px solid rgba(245,158,11,0.3);color:#FDE68A;font-size:10px;font-weight:700;padding:1px 6px;border-radius:4px">
+                    ${fam.parentesco}
+                  </span>
+                  <button type="button" class="btn btn-outline btn-xs" onclick="window.editarPersonaDesdeDossier('${p.id}', 'tab-f-familia');" style="font-size:10px;padding:2px 6px" title="Editar vínculos familiares">
+                    ✏️
+                  </button>
+                </div>
               </div>
               ${fam.dni ? `<div style="font-size:11px;color:var(--text-secondary);margin-bottom:4px">DNI: ${fam.dni}</div>` : ''}
               ${fam.observacion ? `
@@ -2458,6 +2605,13 @@ function renderDossierDigitalBody(p) {
 
     <!-- SECCIÓN 7: PERFIL FINANCIERO Y SITUACIÓN CREDITICIA -->
     <div class="dossier-content-section hidden" id="dossier-tab-financiero">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:12px;flex-wrap:wrap">
+        <div style="font-size:13px;font-weight:700;color:#fff">Evaluación Financiera, Bancaria y Condición Fiscal</div>
+        <button type="button" class="btn btn-secondary btn-xs" onclick="window.editarPersonaDesdeDossier('${p.id}', 'tab-f-credito');" style="display:inline-flex;align-items:center;gap:4px;font-weight:700">
+          ✏️ Editar Perfil Financiero
+        </button>
+      </div>
+
       <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(320px, 1fr));gap:14px;margin-bottom:14px">
         <div style="background:var(--bg-tertiary);border:1px solid var(--border-default);border-radius:8px;padding:14px">
           <div class="dossier-section-title">Central de Deudores BCRA</div>
@@ -2495,8 +2649,14 @@ function renderDossierDigitalBody(p) {
 
     <!-- SECCIÓN 8: INTELIGENCIA CRIMINAL -->
     <div class="dossier-content-section hidden" id="dossier-tab-inteligencia">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:12px;flex-wrap:wrap">
+        <div style="font-size:13px;font-weight:700;color:#fff">Perfilación Territorial e Inteligencia Criminal</div>
+        <button type="button" class="btn btn-secondary btn-xs" onclick="window.editarPersonaDesdeDossier('${p.id}', 'tab-f-organizacion');" style="display:inline-flex;align-items:center;gap:4px;font-weight:700">
+          ✏️ Editar Inteligencia y Organización
+        </button>
+      </div>
+
       <div style="background:var(--bg-tertiary);border:1px solid var(--border-default);border-radius:8px;padding:14px;margin-bottom:14px">
-        <div class="dossier-section-title">Perfilación Territorial e Inteligencia Criminal</div>
         <div style="font-size:12px;color:var(--text-secondary);line-height:1.6;white-space:pre-wrap">
           ${p.antecedentes_texto || 'Sin notas de inteligencia operativa adicionales.'}
         </div>
