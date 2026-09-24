@@ -3278,11 +3278,12 @@ async function setupGrafoView() {
       `;
     });
 
-    // 2. Generar Chips Rápidos por Banda en Toolbar
+    // 2. Generar Chips Rápidos por Banda en Toolbar (solo organizaciones con integrantes)
     if (dynamicChips) {
       dynamicChips.innerHTML = '';
-      bandas.forEach(b => {
-        const stats = statsPorBanda[b.id] || { total: 0, profugos: 0 };
+      const bandasConIntegrantes = bandas.filter(b => (statsPorBanda[b.id]?.total || 0) > 0);
+      bandasConIntegrantes.forEach(b => {
+        const stats = statsPorBanda[b.id];
         const bColor = b.color_hex || '#0EA5E9';
         const chip = document.createElement('button');
         chip.type = 'button';
@@ -3380,6 +3381,34 @@ async function setupGrafoView() {
       currentGrafoOptions.personaId = pId;
       currentGrafoOptions.filterMode = bId === 'CONFLICT_NEGRADA_SIEMPRE' ? 'conflicto' : (bId ? 'banda' : 'general');
       await renderGrafoIntelligence({ focusPersonaId: pId });
+    });
+
+    // Botón para reordenar la red y volver a congelarla
+    const btnReorganizar = document.getElementById('btn-grafo-reorganizar');
+    btnReorganizar?.addEventListener('click', async () => {
+      const statusEl = document.getElementById('grafo-physics-status');
+      if (statusEl) {
+        statusEl.innerHTML = '⚡ Reordenando...';
+        statusEl.style.color = '#F59E0B';
+        statusEl.style.background = 'rgba(245,158,11,0.1)';
+        statusEl.style.borderColor = 'rgba(245,158,11,0.25)';
+      }
+      if (currentGrafoNetwork) {
+        currentGrafoNetwork.setOptions({ physics: { enabled: true } });
+        currentGrafoNetwork.stabilize(100);
+        setTimeout(() => {
+          if (currentGrafoNetwork) {
+            currentGrafoNetwork.setOptions({ physics: { enabled: false } });
+            currentGrafoNetwork.fit({ animation: { duration: 400, easingFunction: 'easeInOutQuad' } });
+            if (statusEl) {
+              statusEl.innerHTML = '🔒 Red Fija';
+              statusEl.style.color = '#10B981';
+              statusEl.style.background = 'rgba(16,185,129,0.1)';
+              statusEl.style.borderColor = 'rgba(16,185,129,0.25)';
+            }
+          }
+        }, 700);
+      }
     });
 
     btnGeneral?.addEventListener('click', async () => {
@@ -3787,7 +3816,7 @@ async function renderGrafoIntelligence(customOverrides = {}) {
           highlight: { background: '#F59E0B', border: '#FFFFFF' }
         },
         borderWidth: borderWidth,
-        font: { color: fontColor, size: isCaptura || isLeader ? 12 : 10, face: 'Inter' },
+        font: { color: fontColor, size: isCaptura || isLeader ? 13 : 11, face: 'Inter', strokeWidth: 3, strokeColor: '#030712' },
         type: 'persona',
         data: p,
         shadow: isCaptura ? { enabled: true, color: '#EF4444', size: 12 } : false
@@ -3969,26 +3998,64 @@ async function renderGrafoIntelligence(customOverrides = {}) {
 
     if (currentGrafoNetwork) currentGrafoNetwork.destroy();
 
-    currentGrafoNetwork = new Network(container, { nodes: nodesDataSet, edges: edgesDataSet }, {
-      physics: {
-        solver: 'barnesHut',
-        barnesHut: {
-          gravitationalConstant: -4000,
-          centralGravity: 0.25,
-          springLength: 175,
-          springConstant: 0.04,
-          damping: 0.09,
-          avoidOverlap: 0.5
-        },
-        stabilization: { iterations: 140 }
+    const physicsConfig = {
+      solver: 'barnesHut',
+      barnesHut: {
+        gravitationalConstant: -2800,
+        centralGravity: 0.35,
+        springLength: 140,
+        springConstant: 0.05,
+        damping: 0.85, // Damping muy alto para anular oscilaciones de inmediato
+        avoidOverlap: 0.5
       },
+      stabilization: {
+        enabled: true,
+        iterations: 120,
+        updateInterval: 25,
+        fit: true
+      },
+      minVelocity: 0.75
+    };
+
+    currentGrafoNetwork = new Network(container, { nodes: nodesDataSet, edges: edgesDataSet }, {
+      physics: physicsConfig,
       interaction: {
         hover: true,
-        tooltipDelay: 120,
+        tooltipDelay: 100,
         navigationButtons: true,
-        keyboard: true
+        keyboard: true,
+        dragNodes: true,
+        dragView: true,
+        zoomView: true
       }
     });
+
+    // CONGELAR FÍSICA INMEDIATAMENTE AL ESTABILIZARSE
+    // Esto garantiza que los nodos queden fijos y no haya que "atraparlos" o perseguirlos
+    const freezePhysics = () => {
+      if (currentGrafoNetwork) {
+        currentGrafoNetwork.setOptions({ physics: { enabled: false } });
+        const statusEl = document.getElementById('grafo-physics-status');
+        if (statusEl) {
+          statusEl.innerHTML = '🔒 Red Fija';
+          statusEl.style.color = '#10B981';
+          statusEl.style.background = 'rgba(16,185,129,0.1)';
+          statusEl.style.borderColor = 'rgba(16,185,129,0.25)';
+        }
+      }
+    };
+
+    currentGrafoNetwork.once('stabilizationIterationsDone', () => {
+      freezePhysics();
+      currentGrafoNetwork.fit({ animation: { duration: 400, easingFunction: 'easeInOutQuad' } });
+    });
+
+    currentGrafoNetwork.once('stabilized', () => {
+      freezePhysics();
+    });
+
+    // Temporizador de seguridad: asegurar detención absoluta en máximo 1 segundo
+    setTimeout(freezePhysics, 1000);
 
     // Evento Click: Abrir Detalle Táctico de Inteligencia
     currentGrafoNetwork.on('click', (params) => {

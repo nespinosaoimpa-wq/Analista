@@ -596,6 +596,14 @@
                 🔍 Enfocar
               </button>
 
+              <button class="btn btn-secondary btn-sm" id="btn-grafo-reorganizar" style="font-weight:700;padding:6px 12px;background:rgba(255,255,255,0.06);border:1px solid var(--border-default);color:var(--text-secondary);cursor:pointer;display:inline-flex;align-items:center;gap:5px;" title="Reacomodar nodos y volver a dejarlos completamente fijos">
+                🔄 Reordenar
+              </button>
+
+              <span id="grafo-physics-status" style="display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:700;color:#10B981;background:rgba(16,185,129,0.1);padding:5px 9px;border-radius:6px;border:1px solid rgba(16,185,129,0.25);" title="El gráfico se fija automáticamente tras el ordenamiento para que los nodos no floten ni se muevan al hacer clic">
+                🔒 Red Fija
+              </span>
+
               <!-- Checkbox para eliminar nodos huérfanos aislados -->
               <label style="display:inline-flex;align-items:center;gap:6px;font-size:11px;color:var(--text-secondary);cursor:pointer;background:rgba(255,255,255,0.04);padding:5px 9px;border-radius:6px;border:1px solid var(--border-subtle);margin-left:4px;" title="Ocultar personas individuales sin vínculos para limpiar el gráfico y evitar ruido">
                 <input type="checkbox" id="grafo-toggle-unlinked" checked style="cursor:pointer;accent-color:var(--accent-primary);">
