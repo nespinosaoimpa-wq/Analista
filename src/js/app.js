@@ -23,6 +23,7 @@ import { Network } from 'vis-network';
 import { DataSet } from 'vis-data';
 import { initMapPicker, openMapPicker } from './map-picker.js';
 import { renderPrecisionBadge, parseCoordsOrUrl, reverseGeocode } from './geocoder.js';
+import { searchEngine } from './search-engine.js';
 
 // Estado global de dossier y perfilación criminal
 let currentPersonaFiles = [];
@@ -70,6 +71,17 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     updateHeaderStats();
   }, 1200);
+
+  // Construir índice centralizado de búsqueda y compulsa automática
+  setTimeout(async () => {
+    try {
+      await searchEngine.build(getPersonas, getHechos, getBandas, getAllanamientos, getAllVinculos);
+      const stats = searchEngine.getStats();
+      console.log(`[CRIMINT] Motor de búsqueda listo: ${stats.totalEntries} entidades, ${stats.wordsIndexed} palabras indexadas en ${stats.buildTimeMs.toFixed(0)}ms`);
+    } catch (e) {
+      console.warn('[CRIMINT] Error construyendo índice de búsqueda:', e);
+    }
+  }, 2000);
 
   showToast('CRIMINT iniciado — Inteligencia Criminal Operativa', 'info');
 });
@@ -185,7 +197,20 @@ function setupSearch() {
         return;
       }
 
-      const results = await globalSearch(term);
+      // Usar motor de búsqueda centralizado si está listo, sino fallback
+      let results;
+      if (searchEngine.built) {
+        results = searchEngine.search(term, { limit: 20 }).map(r => {
+          // Extraer coordenadas si hay
+          let coords = null;
+          if (r.data?.geom) coords = parseGeom(r.data.geom);
+          else if (r.data?.domicilio_principal_geom) coords = parseGeom(r.data.domicilio_principal_geom);
+          return { ...r, coords };
+        });
+      } else {
+        results = await globalSearch(term);
+      }
+
       const direct = parseCoordsOrUrl(term);
 
       let geoOption = '';
@@ -205,24 +230,34 @@ function setupSearch() {
             <span class="search-result-type" style="background:#059669;color:#FFF">🗺️ MAPA</span>
             <div>
               <div style="font-weight:600;font-size:13px;color:#34D399">Ubicar dirección "${term}" en el mapa</div>
-              <div style="font-size:11px;color:var(--text-muted)">Geocodificar quirúrgicamente y centrar visor</div>
+              <div style="font-size:11px;color:var(--text-muted)">Geocodificar y centrar visor</div>
             </div>
           </div>
         `;
       }
 
       if (results.length === 0 && !geoOption) {
-        dropdown.innerHTML = '<div class="search-result-item" style="color:var(--text-muted)">Sin resultados</div>';
+        dropdown.innerHTML = '<div class="search-result-item" style="color:var(--text-muted)">Sin resultados para "' + term + '"</div>';
       } else {
+        const typeColors = { persona: '#0EA5E9', hecho: '#EF4444', allanamiento: '#F59E0B', banda: '#8B5CF6' };
+        const typeLabels = { persona: 'PER', hecho: 'HEC', allanamiento: 'ALL', banda: 'BAN' };
         const resultsHtml = results.map(r => {
-          const typeLabel = r.type === 'persona' ? 'PER' : r.type === 'hecho' ? 'HEC' : r.type === 'allanamiento' ? 'ALL' : 'BAN';
+          const typeLabel = typeLabels[r.type] || r.type.toUpperCase().slice(0,3);
           const coordsAttr = r.coords ? `data-lng="${r.coords.lng}" data-lat="${r.coords.lat}"` : '';
+          const matchTags = (r.matchReasons || []).slice(0, 3).map(reason =>
+            `<span style="background:rgba(245,158,11,0.15);border:1px solid rgba(245,158,11,0.3);color:#FDE68A;font-size:9px;font-weight:700;padding:1px 5px;border-radius:3px;white-space:nowrap">${reason}</span>`
+          ).join('');
+          const scoreBar = r.score ? `<span style="font-size:9px;color:${r.score >= 0.8 ? '#22C55E' : r.score >= 0.5 ? '#F59E0B' : '#94A3B8'};font-weight:700;margin-left:auto;white-space:nowrap">${Math.round(r.score * 100)}%</span>` : '';
           return `
-            <div class="search-result-item" data-type="${r.type}" data-id="${r.id}" ${coordsAttr}>
-              <span class="search-result-type ${r.type}">${typeLabel}</span>
-              <div>
-                <div style="font-weight:500;font-size:13px">${r.title}</div>
-                <div style="font-size:11px;color:var(--text-muted)">${r.subtitle}</div>
+            <div class="search-result-item" data-type="${r.type}" data-id="${r.id}" ${coordsAttr} style="align-items:flex-start">
+              <span class="search-result-type ${r.type}" style="background:${typeColors[r.type] || '#64748B'}22;color:${typeColors[r.type] || '#94A3B8'};border:1px solid ${typeColors[r.type] || '#64748B'}44;font-weight:800">${typeLabel}</span>
+              <div style="flex:1;min-width:0">
+                <div style="display:flex;align-items:center;gap:6px">
+                  <span style="font-weight:600;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${r.title}</span>
+                  ${scoreBar}
+                </div>
+                <div style="font-size:11px;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${r.subtitle}</div>
+                ${matchTags ? `<div style="display:flex;gap:3px;flex-wrap:wrap;margin-top:3px">${matchTags}</div>` : ''}
               </div>
             </div>
           `;
@@ -230,7 +265,7 @@ function setupSearch() {
         dropdown.innerHTML = geoOption + resultsHtml;
       }
       dropdown.classList.add('visible');
-    }, 300);
+    }, 250);
   });
 
   dropdown?.addEventListener('click', async (e) => {
@@ -3199,6 +3234,19 @@ function renderDossierDigitalBody(p) {
       </div>
     </div>
 
+    <!-- SECCIÓN 9: COMPULSA AUTOMÁTICA — CRUCES DETECTADOS -->
+    <div class="dossier-content-section hidden" id="dossier-tab-compulsa">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:12px;flex-wrap:wrap">
+        <div class="dossier-section-title" style="margin-bottom:0">🔍 Compulsa Automática — Cruces y Coincidencias Detectadas</div>
+        <button type="button" class="btn btn-primary btn-xs btn-rebuild-compulsa" style="display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:700;background:#F59E0B;border-color:#FBBF24;color:#0F172A" title="Recalcular compulsa">
+          🔄 Recalcular Compulsa
+        </button>
+      </div>
+      <div id="dossier-compulsa-results" style="display:flex;flex-direction:column;gap:10px">
+        <div style="text-align:center;padding:24px"><div class="spinner"></div><div style="font-size:12px;color:var(--text-muted);margin-top:8px">Ejecutando compulsa automática...</div></div>
+      </div>
+    </div>
+
     <!-- PIE INSTITUCIONAL EXCLUSIVO DE IMPRESIÓN CON CONSTANCIA Y FIRMAS -->
     <div class="dossier-print-only-footer" style="margin-top: 36px; padding-top: 20px; border-top: 2px solid #0F172A; page-break-inside: avoid; break-inside: avoid;">
       <div style="font-size: 8pt; color: #475569; margin-bottom: 28px; text-align: justify; line-height: 1.35;">
@@ -3239,6 +3287,156 @@ function renderDossierDigitalBody(p) {
           a.download = file.nombre;
           a.click();
         }
+      }
+    });
+  });
+
+  // COMPULSA AUTOMÁTICA: ejecutar cruce de datos para esta persona
+  renderCompulsaAutomatica(p.id);
+
+  // Botón de recalcular compulsa
+  container.querySelector('.btn-rebuild-compulsa')?.addEventListener('click', async () => {
+    // Reconstruir índice y volver a ejecutar
+    await searchEngine.build(getPersonas, getHechos, getBandas, getAllanamientos, getAllVinculos);
+    renderCompulsaAutomatica(p.id);
+    showToast('Compulsa recalculada con datos actualizados', 'success');
+  });
+}
+
+/**
+ * Ejecuta y renderiza la compulsa automática para una persona
+ */
+function renderCompulsaAutomatica(personaId) {
+  const resultsContainer = document.getElementById('dossier-compulsa-results');
+  const badge = document.getElementById('dossier-tab-compulsa-badge');
+  if (!resultsContainer) return;
+
+  if (!searchEngine.built) {
+    resultsContainer.innerHTML = `
+      <div style="text-align:center;padding:24px;background:rgba(255,255,255,0.015);border:1px dashed rgba(255,255,255,0.15);border-radius:8px">
+        <div style="font-size:24px;margin-bottom:4px">⏳</div>
+        <div style="font-size:12px;font-weight:700;color:#fff">Motor de búsqueda inicializando...</div>
+        <div style="font-size:11px;color:var(--text-muted);margin-top:4px">La compulsa se ejecutará automáticamente cuando el índice esté construido.</div>
+      </div>
+    `;
+    if (badge) badge.textContent = '…';
+    // Reintentar en 3s
+    setTimeout(() => renderCompulsaAutomatica(personaId), 3000);
+    return;
+  }
+
+  const compulsa = searchEngine.compulsaPersona(personaId);
+  if (badge) badge.textContent = compulsa.total;
+
+  if (compulsa.total === 0) {
+    resultsContainer.innerHTML = `
+      <div style="text-align:center;padding:24px;background:rgba(255,255,255,0.015);border:1px dashed rgba(255,255,255,0.15);border-radius:8px">
+        <div style="font-size:24px;margin-bottom:4px">✅</div>
+        <div style="font-size:12px;font-weight:700;color:#22C55E">Sin cruces detectados en la base de datos</div>
+        <div style="font-size:11px;color:var(--text-muted);margin-top:4px">No se encontraron coincidencias cruzadas de direcciones, causas CUIJ, familiares, vehículos u organizaciones con otros registros del sistema.</div>
+      </div>
+    `;
+    return;
+  }
+
+  // Categorías de matches
+  const categories = compulsa.categories;
+  const categoryOrder = [
+    { key: 'familiares', icon: '👨‍👩‍👧', label: 'Familiares en el Sistema', color: '#F59E0B' },
+    { key: 'causas', icon: '📋', label: 'Causas CUIJ Compartidas', color: '#EF4444' },
+    { key: 'direcciones', icon: '📍', label: 'Direcciones Coincidentes', color: '#0EA5E9' },
+    { key: 'vehiculos', icon: '🚗', label: 'Vehículos Compartidos', color: '#8B5CF6' },
+    { key: 'banda', icon: '🔗', label: 'Misma Organización Criminal', color: '#10B981' }
+  ];
+
+  // Summary bar
+  const summaryHtml = categoryOrder
+    .filter(cat => categories[cat.key] > 0)
+    .map(cat => `
+      <span style="background:${cat.color}18;border:1px solid ${cat.color}44;color:${cat.color};font-size:11px;font-weight:800;padding:4px 10px;border-radius:6px;display:inline-flex;align-items:center;gap:4px">
+        ${cat.icon} ${categories[cat.key]} ${cat.label}
+      </span>
+    `).join('');
+
+  // Match type icons and colors
+  const matchIcons = {
+    familiar: { icon: '👨‍👩‍👧', color: '#F59E0B', label: 'FAMILIAR' },
+    familiar_dni: { icon: '🆔', color: '#F59E0B', label: 'FAMILIAR DNI' },
+    cuij: { icon: '📋', color: '#EF4444', label: 'CAUSA CUIJ' },
+    direccion: { icon: '📍', color: '#0EA5E9', label: 'DIRECCIÓN' },
+    vehiculo: { icon: '🚗', color: '#8B5CF6', label: 'VEHÍCULO' },
+    banda: { icon: '🔗', color: '#10B981', label: 'ORGANIZACIÓN' }
+  };
+
+  const matchesHtml = compulsa.matches.map(m => {
+    const mi = matchIcons[m.matchType] || { icon: '🔍', color: '#94A3B8', label: 'CRUCE' };
+    const typeLabels = { persona: 'PERSONA', hecho: 'HECHO', allanamiento: 'ALLANAMIENTO', banda: 'BANDA' };
+    const typeColors = { persona: '#0EA5E9', hecho: '#EF4444', allanamiento: '#F59E0B', banda: '#8B5CF6' };
+    const tColor = typeColors[m.type] || '#94A3B8';
+
+    return `
+      <div class="compulsa-match-card" style="background:var(--bg-tertiary);border:1px solid var(--border-default);border-left:3px solid ${mi.color};border-radius:8px;padding:12px 14px;display:flex;align-items:flex-start;gap:12px;cursor:pointer" data-compulsa-type="${m.type}" data-compulsa-id="${m.id}">
+        <div style="flex-shrink:0;width:36px;height:36px;background:${mi.color}18;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:18px">
+          ${mi.icon}
+        </div>
+        <div style="flex:1;min-width:0">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:3px;flex-wrap:wrap">
+            <span style="background:${mi.color}22;border:1px solid ${mi.color}55;color:${mi.color};font-size:9px;font-weight:900;padding:1px 6px;border-radius:3px;letter-spacing:0.5px">${mi.label}</span>
+            <span style="background:${tColor}15;border:1px solid ${tColor}33;color:${tColor};font-size:9px;font-weight:800;padding:1px 5px;border-radius:3px">${typeLabels[m.type] || m.type}</span>
+          </div>
+          <div style="font-size:13px;font-weight:700;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${m.title}</div>
+          <div style="font-size:11px;color:var(--text-secondary);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${m.subtitle || ''}</div>
+          <div style="font-size:10px;color:${mi.color};margin-top:4px;font-weight:600">
+            ${m.matchDetail}
+          </div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:4px;flex-shrink:0">
+          <button type="button" class="btn btn-secondary btn-xs btn-compulsa-open" data-c-type="${m.type}" data-c-id="${m.id}" style="font-size:10px;padding:4px 8px;white-space:nowrap">
+            ${m.type === 'persona' ? '📂 Abrir Dossier' : '🔎 Ver Detalle'}
+          </button>
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  resultsContainer.innerHTML = `
+    <div style="background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.25);border-radius:8px;padding:10px 14px;margin-bottom:12px">
+      <div style="font-size:12px;font-weight:800;color:#FDE68A;margin-bottom:6px">
+        ⚡ ${compulsa.total} cruces detectados automáticamente en la base de datos
+      </div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap">
+        ${summaryHtml}
+      </div>
+    </div>
+    ${matchesHtml}
+  `;
+
+  // Eventos de los botones de compulsa
+  resultsContainer.querySelectorAll('.btn-compulsa-open').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const type = btn.dataset.cType;
+      const id = btn.dataset.cId;
+      if (type === 'persona') {
+        window.abrirDossierDigital(id);
+      } else {
+        closeModal('modal-dossier-digital');
+        showEntityDetail(type, id);
+      }
+    });
+  });
+
+  // Click en toda la card de compulsa
+  resultsContainer.querySelectorAll('.compulsa-match-card').forEach(card => {
+    card.addEventListener('click', (e) => {
+      if (e.target.closest('.btn-compulsa-open')) return;
+      const type = card.dataset.compulsaType;
+      const id = card.dataset.compulsaId;
+      if (type === 'persona') {
+        window.abrirDossierDigital(id);
+      } else {
+        closeModal('modal-dossier-digital');
+        showEntityDetail(type, id);
       }
     });
   });
