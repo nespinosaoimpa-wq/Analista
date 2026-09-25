@@ -4,7 +4,8 @@
 import {
   initMap, loadMapData, toggleLayer, flyTo, loadTacticalGeoJSON, applyMapFilters, resetMapFilters,
   inspectLocation, updateInspectionRadius, clearInspection, getActiveInspection, getAllMasterFeatures,
-  loadPersonasMapData, toggle3DMode, toggleSatelliteMode, exportMapSnapshot
+  loadPersonasMapData, toggle3DMode, toggleSatelliteMode, exportMapSnapshot,
+  highlightMapPoint, clearHighlightMapPoint, filterMapBySearchQuery, filterMapByPointType
 } from './map.js';
 import { initDashboard, refreshDashboard } from './dashboard.js';
 import { initTacticalHUD, initTacticalTimeline } from './tactical-hud.js';
@@ -43,6 +44,8 @@ document.addEventListener('DOMContentLoaded', () => {
   setupFilters();
   setupLayerToggles();
   setupMapToolbarControls();
+  setupMapQuickTypeFilter();
+  setupTacticalMapLegend();
   setupModals();
   setupForms();
   setupIngestion();
@@ -200,11 +203,11 @@ function setupSearch() {
       // Usar motor de búsqueda centralizado si está listo, sino fallback
       let results;
       if (searchEngine.built) {
-        results = searchEngine.search(term, { limit: 20 }).map(r => {
-          // Extraer coordenadas si hay
-          let coords = null;
-          if (r.data?.geom) coords = parseGeom(r.data.geom);
-          else if (r.data?.domicilio_principal_geom) coords = parseGeom(r.data.domicilio_principal_geom);
+        results = searchEngine.search(term, { limit: 25 }).map(r => {
+          let coords = r.coords;
+          if (!coords && r.data?.geom) coords = parseGeom(r.data.geom);
+          if (!coords && r.data?.domicilio_principal_geom) coords = parseGeom(r.data.domicilio_principal_geom);
+          if (!coords && r.data?.geometry?.coordinates) coords = { lng: r.data.geometry.coordinates[0], lat: r.data.geometry.coordinates[1] };
           return { ...r, coords };
         });
       } else {
@@ -230,7 +233,7 @@ function setupSearch() {
             <span class="search-result-type" style="background:#059669;color:#FFF">🗺️ MAPA</span>
             <div>
               <div style="font-weight:600;font-size:13px;color:#34D399">Ubicar dirección "${term}" en el mapa</div>
-              <div style="font-size:11px;color:var(--text-muted)">Geocodificar y centrar visor</div>
+              <div style="font-size:11px;color:var(--text-muted)">Geocodificar quirúrgicamente y centrar visor</div>
             </div>
           </div>
         `;
@@ -239,17 +242,18 @@ function setupSearch() {
       if (results.length === 0 && !geoOption) {
         dropdown.innerHTML = '<div class="search-result-item" style="color:var(--text-muted)">Sin resultados para "' + term + '"</div>';
       } else {
-        const typeColors = { persona: '#0EA5E9', hecho: '#EF4444', allanamiento: '#F59E0B', banda: '#8B5CF6' };
+        const typeColors = { persona: '#0EA5E9', hecho: '#EF4444', allanamiento: '#10B981', banda: '#8B5CF6' };
         const typeLabels = { persona: 'PER', hecho: 'HEC', allanamiento: 'ALL', banda: 'BAN' };
-        const resultsHtml = results.map(r => {
+        const resultsHtml = results.map((r, rIdx) => {
           const typeLabel = typeLabels[r.type] || r.type.toUpperCase().slice(0,3);
           const coordsAttr = r.coords ? `data-lng="${r.coords.lng}" data-lat="${r.coords.lat}"` : '';
           const matchTags = (r.matchReasons || []).slice(0, 3).map(reason =>
             `<span style="background:rgba(245,158,11,0.15);border:1px solid rgba(245,158,11,0.3);color:#FDE68A;font-size:9px;font-weight:700;padding:1px 5px;border-radius:3px;white-space:nowrap">${reason}</span>`
           ).join('');
           const scoreBar = r.score ? `<span style="font-size:9px;color:${r.score >= 0.8 ? '#22C55E' : r.score >= 0.5 ? '#F59E0B' : '#94A3B8'};font-weight:700;margin-left:auto;white-space:nowrap">${Math.round(r.score * 100)}%</span>` : '';
+          
           return `
-            <div class="search-result-item" data-type="${r.type}" data-id="${r.id}" ${coordsAttr} style="align-items:flex-start">
+            <div class="search-result-item" data-type="${r.type}" data-id="${r.id}" data-ridx="${rIdx}" data-title="${(r.title || '').replace(/"/g, '&quot;')}" data-subtitle="${(r.subtitle || '').replace(/"/g, '&quot;')}" ${coordsAttr} style="align-items:flex-start">
               <span class="search-result-type ${r.type}" style="background:${typeColors[r.type] || '#64748B'}22;color:${typeColors[r.type] || '#94A3B8'};border:1px solid ${typeColors[r.type] || '#64748B'}44;font-weight:800">${typeLabel}</span>
               <div style="flex:1;min-width:0">
                 <div style="display:flex;align-items:center;gap:6px">
@@ -258,19 +262,64 @@ function setupSearch() {
                 </div>
                 <div style="font-size:11px;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${r.subtitle}</div>
                 ${matchTags ? `<div style="display:flex;gap:3px;flex-wrap:wrap;margin-top:3px">${matchTags}</div>` : ''}
+                
+                ${r.coords ? `
+                  <div style="display:flex;align-items:center;gap:6px;margin-top:5px">
+                    <button type="button" class="btn btn-primary btn-xs btn-jump-map" style="font-size:10px;padding:3px 8px;display:inline-flex;align-items:center;gap:3px;background:linear-gradient(135deg,#0284c7,#0369a1);border:1px solid #38bdf8;color:#fff;border-radius:4px" data-lng="${r.coords.lng}" data-lat="${r.coords.lat}" data-title="${(r.title || '').replace(/"/g, '&quot;')}" data-type="${r.type}">
+                      🗺️ Ver en Mapa
+                    </button>
+                    <button type="button" class="btn btn-secondary btn-xs btn-open-detail" style="font-size:10px;padding:3px 7px;border-radius:4px" data-type="${r.type}" data-id="${r.id}">
+                      ${r.type === 'persona' ? '📋 Dossier' : '🔎 Ficha'}
+                    </button>
+                  </div>
+                ` : ''}
               </div>
             </div>
           `;
         }).join('');
-        dropdown.innerHTML = geoOption + resultsHtml;
+        
+        // Botón superior para filtrar todo el mapa por este término
+        const mapFilterHeader = `
+          <div class="search-result-item search-filter-all-item" data-type="filter-map-all" data-query="${term.replace(/"/g, '&quot;')}" style="background:rgba(2,132,199,0.12);border-bottom:1px solid rgba(2,132,199,0.3)">
+            <span class="search-result-type" style="background:#0284C7;color:#FFF">⚡ FILTRO</span>
+            <div style="flex:1">
+              <div style="font-weight:700;font-size:12px;color:#38BDF8">Filtrar y aislar en el mapa todas las coincidencias de "${term}"</div>
+              <div style="font-size:10px;color:var(--text-muted)">Presione Enter o haga click para activar en el mapa</div>
+            </div>
+          </div>
+        `;
+
+        dropdown.innerHTML = mapFilterHeader + geoOption + resultsHtml;
       }
       dropdown.classList.add('visible');
     }, 250);
   });
 
+  // Evento ENTER en la barra de búsqueda para filtrar el mapa
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      const q = input.value.trim();
+      if (q.length >= 2) {
+        dropdown.classList.remove('visible');
+        document.querySelector('[data-view="mapa"]')?.click();
+        const count = filterMapBySearchQuery(q);
+        showToast(`Mapa filtrado: ${count} puntos coinciden con "${q}"`, count > 0 ? 'success' : 'warning');
+      }
+    }
+  });
+
   dropdown?.addEventListener('click', async (e) => {
     const item = e.target.closest('.search-result-item');
     if (!item) return;
+
+    if (item.dataset.type === 'filter-map-all') {
+      dropdown.classList.remove('visible');
+      const q = item.dataset.query;
+      document.querySelector('[data-view="mapa"]')?.click();
+      const count = filterMapBySearchQuery(q);
+      showToast(`Mapa filtrado: ${count} puntos coinciden con "${q}"`, count > 0 ? 'success' : 'warning');
+      return;
+    }
 
     if (item.dataset.type === 'coord-direct') {
       dropdown.classList.remove('visible');
@@ -278,7 +327,7 @@ function setupSearch() {
       document.querySelector('[data-view="mapa"]')?.click();
       const lng = parseFloat(item.dataset.lng);
       const lat = parseFloat(item.dataset.lat);
-      flyTo(lng, lat, 17);
+      highlightMapPoint({ lng, lat, title: `GPS ${lat.toFixed(5)}, ${lng.toFixed(5)}`, type: 'hecho' });
       showToast(`Centrado en coordenadas GPS: ${lat.toFixed(5)}, ${lng.toFixed(5)}`, 'info');
       return;
     }
@@ -292,7 +341,7 @@ function setupSearch() {
       hideLoading();
       if (geo && geo.lat && geo.lng) {
         document.querySelector('[data-view="mapa"]')?.click();
-        flyTo(geo.lng, geo.lat, 17);
+        highlightMapPoint({ lng: geo.lng, lat: geo.lat, title: geo.display_name || t, type: 'hecho' });
         showToast(`Ubicado: ${geo.display_name}`, 'success');
       } else {
         showToast(`No se pudo ubicar "${t}" en Santa Fe`, 'warning');
@@ -302,20 +351,33 @@ function setupSearch() {
 
     if (!item.dataset.id) return;
 
-    dropdown.classList.remove('visible');
-    input.value = '';
-
     const type = item.dataset.type;
     const id = item.dataset.id;
+    const title = item.dataset.title || '';
+    const subtitle = item.dataset.subtitle || '';
     const lng = item.dataset.lng ? parseFloat(item.dataset.lng) : null;
     const lat = item.dataset.lat ? parseFloat(item.dataset.lat) : null;
 
-    if (lng && lat) {
+    // Si hizo click en "Ver en Mapa" o hizo click en el item y tiene coordenadas
+    const clickedOpenDetail = Boolean(e.target.closest('.btn-open-detail'));
+    
+    if (lng && lat && !clickedOpenDetail) {
+      dropdown.classList.remove('visible');
       document.querySelector('[data-view="mapa"]')?.click();
-      flyTo(lng, lat, 16);
+      highlightMapPoint({ lng, lat, title, subtitle, type, data: { id, nombre_completo: title, direccion: subtitle } });
+      showToast(`Ubicado en el mapa: ${title}`, 'success');
+      return;
     }
 
-    showEntityDetail(type, id);
+    // Si no tiene coordenadas o explícitamente pidió abrir ficha/dossier
+    dropdown.classList.remove('visible');
+    input.value = '';
+
+    if (type === 'persona') {
+      window.abrirDossierDigital(id);
+    } else {
+      showEntityDetail(type, id);
+    }
   });
 
   // Close dropdown on outside click
@@ -435,6 +497,86 @@ function setupMapToolbarControls() {
     } else {
       showToast('No se pudo generar la captura del mapa', 'error');
     }
+  });
+}
+
+// ============================================================
+// MAP QUICK TYPE FILTER & TACTICAL LEGEND
+// ============================================================
+function setupMapQuickTypeFilter() {
+  const container = document.getElementById('map-quick-type-bar');
+  if (!container) return;
+
+  container.addEventListener('click', (e) => {
+    const btn = e.target.closest('.quick-chip');
+    if (!btn) return;
+
+    container.querySelectorAll('.quick-chip').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+
+    const pointType = btn.dataset.pointType;
+    filterMapByPointType(pointType);
+    showToast(`Filtro visual activado: ${btn.textContent.trim()}`, 'info');
+  });
+
+  // Clear search banner button
+  document.getElementById('btn-clear-map-search')?.addEventListener('click', () => {
+    clearHighlightMapPoint();
+    resetMapFilters();
+    const input = document.getElementById('search-input');
+    if (input) input.value = '';
+    const chipTodos = document.querySelector('.quick-chip[data-point-type="todos"]');
+    if (chipTodos) {
+      document.querySelectorAll('.quick-chip').forEach(b => b.classList.remove('active'));
+      chipTodos.classList.add('active');
+    }
+    showToast('Filtro de búsqueda restablecido', 'info');
+  });
+}
+
+function setupTacticalMapLegend() {
+  const legend = document.getElementById('tactical-map-legend');
+  const toggleBtn = document.getElementById('legend-toggle-btn');
+  const icon = document.getElementById('legend-collapse-icon');
+  const resetBtn = document.getElementById('btn-legend-reset');
+
+  if (!legend) return;
+
+  toggleBtn?.addEventListener('click', (e) => {
+    if (e.target.closest('#btn-legend-reset')) return;
+    legend.classList.toggle('collapsed');
+    if (icon) icon.textContent = legend.classList.contains('collapsed') ? '▸' : '▾';
+  });
+
+  legend.addEventListener('click', (e) => {
+    const item = e.target.closest('.legend-item');
+    if (!item) return;
+
+    legend.querySelectorAll('.legend-item').forEach(i => i.classList.remove('active'));
+    item.classList.add('active');
+
+    const type = item.dataset.legendType;
+    const thematic = item.dataset.legendThematic;
+
+    if (type) {
+      filterMapByPointType(type);
+      showToast(`Aislado en mapa: ${item.querySelector('.legend-label')?.textContent || type}`, 'info');
+    } else if (thematic) {
+      filterMapByPointType(thematic);
+      showToast(`Aislado en mapa: ${item.querySelector('.legend-label')?.textContent || thematic}`, 'info');
+    }
+  });
+
+  resetBtn?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    legend.querySelectorAll('.legend-item').forEach(i => i.classList.remove('active'));
+    filterMapByPointType('todos');
+    const chipTodos = document.querySelector('.quick-chip[data-point-type="todos"]');
+    if (chipTodos) {
+      document.querySelectorAll('.quick-chip').forEach(b => b.classList.remove('active'));
+      chipTodos.classList.add('active');
+    }
+    showToast('Mostrando todas las simbologías y georreferencias', 'info');
   });
 }
 

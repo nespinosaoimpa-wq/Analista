@@ -4,6 +4,8 @@
  * entre personas, hechos, allanamientos, bandas, vehículos, familiares y direcciones.
  */
 
+import { parseGeom } from './supabase-client.js';
+
 // ============================================================
 // 1. NORMALIZACIÓN DE TEXTO PARA BÚSQUEDA ESTRICTA
 // ============================================================
@@ -167,12 +169,23 @@ class SearchIndex {
           });
         }
 
+        let pCoords = parseGeom(p.domicilio_principal_geom);
+        if (!pCoords && Array.isArray(p.domicilios) && p.domicilios.length > 0) {
+          for (const d of p.domicilios) {
+            if (d.geom) {
+              const c = parseGeom(d.geom);
+              if (c) { pCoords = c; break; }
+            }
+          }
+        }
+
         const idx = this.entries.length;
         const entry = {
           type: 'persona',
           id: p.id,
           title: nombreCompleto || 'Sin nombre',
           subtitle: aliases.length ? `Alias: ${aliases.join(', ')}` : (p.dni ? `DNI: ${p.dni}` : ''),
+          coords: pCoords,
           data: p,
           searchText: searchableTexts.join(' '),
           score: 0,
@@ -231,12 +244,18 @@ class SearchIndex {
           h.fecha || ''
         ];
 
+        let hCoords = parseGeom(h.geom);
+        if (!hCoords && h.geometry?.coordinates) {
+          hCoords = { lng: h.geometry.coordinates[0], lat: h.geometry.coordinates[1] };
+        }
+
         const idx = this.entries.length;
         this.entries.push({
           type: 'hecho',
           id: h.id,
           title: h.tipo_penal || 'Hecho',
           subtitle: `${h.direccion || h.barrio || ''} ${h.cuij ? `(CUIJ: ${h.cuij})` : ''} ${h.fecha ? `— ${h.fecha.split('T')[0]}` : ''}`,
+          coords: hCoords,
           data: h,
           searchText: searchableTexts.join(' '),
           score: 0,
@@ -245,6 +264,7 @@ class SearchIndex {
 
         if (h.cuij) this._addToMap(this.cuijIndex, normalizeText(h.cuij), idx);
         if (h.direccion) this._addToMap(this.addressIndex, normalizeText(h.direccion), idx);
+        if (h.barrio) this._addToMap(this.addressIndex, normalizeText(h.barrio), idx);
         this._indexWords(searchableTexts.join(' '), idx);
       });
 
@@ -263,6 +283,7 @@ class SearchIndex {
           id: b.id,
           title: `Banda: ${b.nombre}`,
           subtitle: b.barrio_base ? `Base: ${b.barrio_base}` : '',
+          coords: null,
           data: b,
           searchText: searchableTexts.join(' '),
           score: 0,
@@ -284,12 +305,18 @@ class SearchIndex {
           a.fecha_operativo || ''
         ];
 
+        let aCoords = parseGeom(a.geom);
+        if (!aCoords && a.geometry?.coordinates) {
+          aCoords = { lng: a.geometry.coordinates[0], lat: a.geometry.coordinates[1] };
+        }
+
         const idx = this.entries.length;
         this.entries.push({
           type: 'allanamiento',
           id: a.id,
           title: `Allanamiento: ${a.cuij || a.direccion}`,
           subtitle: `${a.direccion || ''} ${a.barrio ? `(${a.barrio})` : ''} ${a.fecha_operativo ? `— ${a.fecha_operativo.split('T')[0]}` : ''}`,
+          coords: aCoords,
           data: a,
           searchText: searchableTexts.join(' '),
           score: 0,
@@ -298,6 +325,7 @@ class SearchIndex {
 
         if (a.cuij) this._addToMap(this.cuijIndex, normalizeText(a.cuij), idx);
         if (a.direccion) this._addToMap(this.addressIndex, normalizeText(a.direccion), idx);
+        if (a.barrio) this._addToMap(this.addressIndex, normalizeText(a.barrio), idx);
         this._indexWords(searchableTexts.join(' '), idx);
       });
 
@@ -307,6 +335,61 @@ class SearchIndex {
     } catch (err) {
       console.error('[CRIMINT Search] Error construyendo índice:', err);
     }
+  }
+
+  /**
+   * Indexa en caliente los puntos georreferenciados del mapa táctico (ej. 8.206 puntos de Santa Fe)
+   */
+  indexTacticalPoints(features = []) {
+    if (!features || !features.length) return;
+    const startTime = performance.now();
+    let count = 0;
+    features.forEach((f, fIdx) => {
+      if (!f || !f.geometry || f.geometry.type !== 'Point') return;
+      const p = f.properties || {};
+      const [lng, lat] = f.geometry.coordinates;
+      if (isNaN(lng) || isNaN(lat)) return;
+
+      const fId = p.id || `tactical-${fIdx}`;
+      if (this.entries.some(e => e.id === fId)) return;
+
+      const denunciados = Array.isArray(p.denunciados) ? p.denunciados : [];
+      const searchableTexts = [
+        p.nombre || '',
+        p.tematica_nombre || '',
+        p.tipo || p.tipo_penal || '',
+        p.cuij || '',
+        p.direccion || '',
+        p.barrio || '',
+        p.localidad || '',
+        p.resumen || '',
+        p.descripcion || '',
+        p.anio || '',
+        p.fecha || '',
+        ...denunciados
+      ];
+
+      const idx = this.entries.length;
+      this.entries.push({
+        type: 'hecho',
+        id: fId,
+        title: p.tematica_nombre || p.nombre || p.tipo || 'Incidencia Delictiva',
+        subtitle: `${p.direccion || p.barrio || 'Santa Fe'} ${p.cuij ? `(CUIJ: ${p.cuij})` : ''} ${p.fecha ? `— ${String(p.fecha).split('T')[0]}` : ''}`,
+        coords: { lng, lat },
+        data: p,
+        searchText: searchableTexts.join(' '),
+        score: 0,
+        matchReasons: []
+      });
+
+      if (p.cuij) this._addToMap(this.cuijIndex, normalizeText(p.cuij), idx);
+      if (p.direccion) this._addToMap(this.addressIndex, normalizeText(p.direccion), idx);
+      if (p.barrio) this._addToMap(this.addressIndex, normalizeText(p.barrio), idx);
+      denunciados.forEach(d => this._addToMap(this.nameIndex, normalizeText(d), idx));
+      this._indexWords(searchableTexts.join(' '), idx);
+      count++;
+    });
+    console.log(`[CRIMINT Search] ${count} puntos tácticos georreferenciados indexados en ${(performance.now() - startTime).toFixed(0)}ms`);
   }
 
   _addToMap(map, key, idx) {
@@ -453,13 +536,19 @@ class SearchIndex {
       if (!entry) return;
       if (types && !types.includes(entry.type)) return;
 
+      const reasonsList = [...new Set(reasons)];
+      if (entry.coords) {
+        reasonsList.unshift('📍 Georreferenciado');
+      }
+
       resultsList.push({
         type: entry.type,
         id: entry.id,
         title: entry.title,
         subtitle: entry.subtitle,
+        coords: entry.coords || null,
         score,
-        matchReasons: [...new Set(reasons)],
+        matchReasons: reasonsList,
         data: entry.data
       });
     });

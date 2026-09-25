@@ -2,6 +2,7 @@ import mapboxgl from 'mapbox-gl';
 import { CONFIG, getLesividadColor, formatDateTime, formatDate } from './config.js';
 import { getHechosGeoJSON, getZonas, getAllanamientos, parseGeom, parsePolygonGeom, getPersonasGeoJSON } from './supabase-client.js';
 import { enrichTacticalFeature, filterFeatures, CRIME_THEMATICS, createGeoJSONCircle } from './analytics-engine.js';
+import { searchEngine } from './search-engine.js';
 
 let map = null;
 let popup = null;
@@ -137,6 +138,12 @@ function setupSources() {
       max_peligrosidad: ['max', ['get', 'score_peligrosidad']],
       has_captura: ['any', ['get', 'pedido_captura']]
     }
+  });
+
+  // Fuente para destacado de búsqueda y beacon de localización
+  map.addSource('search-target', {
+    type: 'geojson',
+    data: { type: 'FeatureCollection', features: [] },
   });
 }
 
@@ -319,7 +326,7 @@ function setupLayers() {
     paint: { 'text-color': '#ffffff' },
   });
 
-  // --- Unclustered Points ---
+  // --- Unclustered Points (Delitos con Estilo Táctico Diferenciado) ---
   map.addLayer({
     id: 'unclustered-point',
     type: 'circle',
@@ -331,25 +338,94 @@ function setupLayers() {
         ['get', 'color'],
         '#0EA5E9'
       ],
-      'circle-radius': ['interpolate', ['linear'], ['get', 'lesividad'], 1, 5, 10, 11],
-      'circle-stroke-width': 1.5,
-      'circle-stroke-color': 'rgba(255,255,255,0.4)',
-      'circle-opacity': 0.9,
+      'circle-radius': [
+        'interpolate', ['linear'], ['zoom'],
+        10, ['interpolate', ['linear'], ['coalesce', ['get', 'lesividad'], 3], 1, 4.5, 5, 6, 10, 8.5],
+        14, ['interpolate', ['linear'], ['coalesce', ['get', 'lesividad'], 3], 1, 6.5, 5, 8.5, 10, 12],
+        17, ['interpolate', ['linear'], ['coalesce', ['get', 'lesividad'], 3], 1, 9, 5, 12, 10, 16]
+      ],
+      'circle-stroke-width': [
+        'interpolate', ['linear'], ['coalesce', ['get', 'lesividad'], 3],
+        1, 1.5,
+        6, 2.2,
+        8, 3.2,
+        10, 4
+      ],
+      'circle-stroke-color': [
+        'case',
+        ['>=', ['coalesce', ['get', 'lesividad'], 1], 8], '#FFFFFF',
+        'rgba(255,255,255,0.65)'
+      ],
+      'circle-opacity': 0.94,
     },
   });
 
-  // --- Allanamientos Layer ---
+  // Ícono temático del delito dentro del punto (Zoom >= 13.5)
+  map.addLayer({
+    id: 'hechos-icon',
+    type: 'symbol',
+    source: 'hechos',
+    filter: ['!', ['has', 'point_count']],
+    minzoom: 13.5,
+    layout: {
+      'text-field': ['coalesce', ['get', 'tematica_icon'], '📌'],
+      'text-size': [
+        'interpolate', ['linear'], ['zoom'],
+        13.5, 9,
+        15, 11.5,
+        17, 14
+      ],
+      'text-anchor': 'center',
+      'text-allow-overlap': false,
+      'text-ignore-placement': false,
+    }
+  });
+
+  // Rótulo textual del hecho (Zoom >= 14.5)
+  map.addLayer({
+    id: 'hechos-labels',
+    type: 'symbol',
+    source: 'hechos',
+    filter: ['!', ['has', 'point_count']],
+    minzoom: 14.5,
+    layout: {
+      'text-field': [
+        'case',
+        ['!=', ['coalesce', ['get', 'direccion'], ''], ''],
+        ['concat', ['coalesce', ['get', 'tematica_nombre'], ['get', 'tipo_penal'], 'Incidencia'], ' — ', ['get', 'direccion']],
+        ['concat', ['coalesce', ['get', 'tematica_nombre'], ['get', 'tipo_penal'], 'Incidencia'], ' — ', ['coalesce', ['get', 'barrio'], 'Santa Fe']]
+      ],
+      'text-font': ['DIN Pro Medium', 'Arial Unicode MS Regular'],
+      'text-size': 10.5,
+      'text-offset': [0, 1.4],
+      'text-anchor': 'top',
+      'text-allow-overlap': false,
+      'text-max-width': 12,
+    },
+    paint: {
+      'text-color': '#FFFFFF',
+      'text-halo-color': 'rgba(15, 23, 42, 0.95)',
+      'text-halo-width': 1.8,
+    }
+  });
+
+  // --- Allanamientos Layer (Tactical Raid Points) ---
   map.addLayer({
     id: 'allanamientos-points',
     type: 'circle',
     source: 'allanamientos',
-    layout: { visibility: 'none' },
+    layout: { visibility: 'visible' },
     paint: {
-      'circle-color': '#22C55E',
-      'circle-radius': 8,
+      'circle-color': '#10B981',
+      'circle-radius': [
+        'interpolate', ['linear'], ['zoom'],
+        10, 7,
+        14, 10,
+        17, 14
+      ],
       'circle-stroke-width': 3,
-      'circle-stroke-color': 'rgba(34,197,94,0.3)',
-      'circle-opacity': 0.9,
+      'circle-stroke-color': '#FFFFFF',
+      'circle-opacity': 0.95,
     },
   });
 
@@ -358,13 +434,39 @@ function setupLayers() {
     type: 'symbol',
     source: 'allanamientos',
     layout: {
-      visibility: 'none',
-      'text-field': '⊕',
-      'text-size': 14,
+      visibility: 'visible',
+      'text-field': '🛡️',
+      'text-size': [
+        'interpolate', ['linear'], ['zoom'],
+        10, 10,
+        14, 13,
+        17, 16
+      ],
       'text-anchor': 'center',
       'text-allow-overlap': true,
     },
-    paint: { 'text-color': '#ffffff' },
+  });
+
+  map.addLayer({
+    id: 'allanamientos-text',
+    type: 'symbol',
+    source: 'allanamientos',
+    minzoom: 14,
+    layout: {
+      visibility: 'visible',
+      'text-field': ['concat', '🛡️ Allanamiento: ', ['coalesce', ['get', 'direccion'], ['get', 'cuij'], 'Operativo']],
+      'text-font': ['DIN Pro Bold', 'Arial Unicode MS Bold'],
+      'text-size': 10.5,
+      'text-offset': [0, 1.4],
+      'text-anchor': 'top',
+      'text-allow-overlap': false,
+      'text-max-width': 12,
+    },
+    paint: {
+      'text-color': '#4ADE80',
+      'text-halo-color': 'rgba(15, 23, 42, 0.95)',
+      'text-halo-width': 1.8,
+    }
   });
 
   // --- Capas de Inspección de Entorno y Vínculos Espaciales ---
@@ -558,16 +660,16 @@ function setupLayers() {
     type: 'symbol',
     source: 'personas-bandas',
     filter: ['!', ['has', 'point_count']],
-    minzoom: 14,
+    minzoom: 13.5,
     layout: {
       visibility: 'visible',
       'text-field': [
         'case',
         ['!=', ['get', 'alias_texto'], ''],
-        ['concat', ['get', 'nombre_completo'], ' (', ['get', 'alias_texto'], ')'],
-        ['get', 'nombre_completo']
+        ['concat', '👤 ', ['get', 'nombre_completo'], ' (', ['get', 'alias_texto'], ')'],
+        ['concat', '👤 ', ['get', 'nombre_completo']]
       ],
-      'text-font': ['DIN Pro Medium', 'Arial Unicode MS Regular'],
+      'text-font': ['DIN Pro Bold', 'Arial Unicode MS Bold'],
       'text-size': 11,
       'text-offset': [0, 1.5],
       'text-anchor': 'top',
@@ -575,8 +677,59 @@ function setupLayers() {
     },
     paint: {
       'text-color': '#FFFFFF',
-      'text-halo-color': 'rgba(0,0,0,0.9)',
-      'text-halo-width': 1.5,
+      'text-halo-color': 'rgba(15, 23, 42, 0.95)',
+      'text-halo-width': 2,
+    },
+  });
+
+  // --- Capas de Destacado de Búsqueda y Beacon de Localización ---
+  map.addLayer({
+    id: 'search-target-pulse',
+    type: 'circle',
+    source: 'search-target',
+    paint: {
+      'circle-radius': [
+        'interpolate', ['linear'], ['zoom'],
+        10, 20,
+        14, 30,
+        17, 44
+      ],
+      'circle-color': 'rgba(245, 158, 11, 0.25)',
+      'circle-stroke-color': '#F59E0B',
+      'circle-stroke-width': 3,
+      'circle-stroke-opacity': 0.9,
+    },
+  });
+
+  map.addLayer({
+    id: 'search-target-pin',
+    type: 'circle',
+    source: 'search-target',
+    paint: {
+      'circle-radius': 7.5,
+      'circle-color': '#EF4444',
+      'circle-stroke-color': '#FFFFFF',
+      'circle-stroke-width': 2.5,
+      'circle-opacity': 1,
+    },
+  });
+
+  map.addLayer({
+    id: 'search-target-label',
+    type: 'symbol',
+    source: 'search-target',
+    layout: {
+      'text-field': ['concat', '🎯 ', ['coalesce', ['get', 'label'], 'Resultado Seleccionado']],
+      'text-font': ['DIN Pro Bold', 'Arial Unicode MS Bold'],
+      'text-size': 12,
+      'text-offset': [0, -1.8],
+      'text-anchor': 'bottom',
+      'text-allow-overlap': true,
+    },
+    paint: {
+      'text-color': '#FDE68A',
+      'text-halo-color': '#0F172A',
+      'text-halo-width': 2.2,
     },
   });
 }
@@ -827,6 +980,100 @@ function setupInteractions() {
     }, 50);
   });
 
+  // --- Micro-Tooltip Flotante Instantáneo al Pasar el Mouse (Hover Card) ---
+  const hoverPopup = new mapboxgl.Popup({
+    closeButton: false,
+    closeOnClick: false,
+    className: 'crimint-hover-popup',
+    offset: 12
+  });
+
+  // 1. Hover sobre Hecho / Delito
+  map.on('mouseenter', 'unclustered-point', (e) => {
+    map.getCanvas().style.cursor = 'pointer';
+    if (!e.features?.length) return;
+    const p = e.features[0].properties;
+    const coords = e.features[0].geometry.coordinates.slice();
+    const icon = p.tematica_icon || '📌';
+    const name = p.tematica_nombre || p.tipo_penal || 'Hecho Delictivo';
+    const color = p.color || '#0EA5E9';
+    let denunciadosList = [];
+    if (p.denunciados) {
+      try { denunciadosList = typeof p.denunciados === 'string' ? JSON.parse(p.denunciados) : p.denunciados; } catch { denunciadosList = [p.denunciados]; }
+    }
+
+    const html = `
+      <div class="hover-tip-card" style="border-left: 3px solid ${color}">
+        <div class="hover-tip-header">
+          <span class="hover-badge" style="background:${color}25;color:${color};border:1px solid ${color}55">${icon} ${name}</span>
+          <span class="hover-chip" style="background:${getLesividadColor(p.lesividad)}">L${p.lesividad || 3}</span>
+        </div>
+        <div class="hover-tip-title">${p.direccion || p.barrio || 'Santa Fe Capital'}</div>
+        ${denunciadosList.length ? `<div class="hover-tip-sub" style="color:#FCA5A5">👤 Denunciado: <strong>${denunciadosList[0]}</strong></div>` : ''}
+        ${p.fecha ? `<div class="hover-tip-sub" style="color:#94A3B8">📅 ${formatDateTime(p.fecha)}</div>` : ''}
+        ${p.cuij ? `<div class="hover-tip-sub" style="color:#FDE68A;font-family:monospace">⚖️ CUIJ: ${p.cuij}</div>` : ''}
+      </div>
+    `;
+    hoverPopup.setLngLat(coords).setHTML(html).addTo(map);
+  });
+  map.on('mouseleave', 'unclustered-point', () => {
+    map.getCanvas().style.cursor = '';
+    hoverPopup.remove();
+  });
+
+  // 2. Hover sobre Integrante de Banda / Imputado
+  const handlePersonaHover = (e) => {
+    map.getCanvas().style.cursor = 'pointer';
+    if (!e.features?.length) return;
+    const p = e.features[0].properties;
+    const coords = e.features[0].geometry.coordinates.slice();
+    const bandaColor = p.banda_color || '#0EA5E9';
+    const isCaptura = p.pedido_captura === true || p.pedido_captura === 'true';
+
+    const html = `
+      <div class="hover-tip-card" style="border-left: 3px solid ${bandaColor}">
+        <div class="hover-tip-header">
+          <span class="hover-badge" style="background:${bandaColor}25;color:${bandaColor};border:1px solid ${bandaColor}55">👤 ${p.banda_nombre || 'Individual'}</span>
+          ${isCaptura ? `<span class="hover-chip" style="background:#EF4444;font-weight:900">🚨 CAPTURA</span>` : `<span class="hover-chip" style="background:${p.score_peligrosidad >= 8 ? '#EF4444' : '#F59E0B'}">P${p.score_peligrosidad || 5}/10</span>`}
+        </div>
+        <div class="hover-tip-title">${p.nombre_completo || 'Imputado'} ${p.alias_texto ? `("${p.alias_texto}")` : ''}</div>
+        ${p.domicilio_principal ? `<div class="hover-tip-sub" style="color:#CBD5E1">🏠 ${p.domicilio_principal}</div>` : ''}
+        ${p.dni ? `<div class="hover-tip-sub" style="color:#94A3B8">🆔 DNI: ${p.dni}</div>` : ''}
+      </div>
+    `;
+    hoverPopup.setLngLat(coords).setHTML(html).addTo(map);
+  };
+
+  map.on('mouseenter', 'personas-bandas-points', handlePersonaHover);
+  map.on('mouseenter', 'personas-bandas-icon', handlePersonaHover);
+  map.on('mouseleave', 'personas-bandas-points', () => { map.getCanvas().style.cursor = ''; hoverPopup.remove(); });
+  map.on('mouseleave', 'personas-bandas-icon', () => { map.getCanvas().style.cursor = ''; hoverPopup.remove(); });
+
+  // 3. Hover sobre Allanamiento
+  map.on('mouseenter', 'allanamientos-points', (e) => {
+    map.getCanvas().style.cursor = 'pointer';
+    if (!e.features?.length) return;
+    const p = e.features[0].properties;
+    const coords = e.features[0].geometry.coordinates.slice();
+
+    const html = `
+      <div class="hover-tip-card" style="border-left: 3px solid #10B981">
+        <div class="hover-tip-header">
+          <span class="hover-badge" style="background:rgba(16,185,129,0.2);color:#34D399;border:1px solid rgba(16,185,129,0.5)">🛡️ ALLANAMIENTO JUDICIAL</span>
+        </div>
+        <div class="hover-tip-title">${p.direccion || 'Objetivo Judicial'}</div>
+        ${p.cuij ? `<div class="hover-tip-sub" style="color:#FDE68A;font-family:monospace">⚖️ CUIJ: ${p.cuij}</div>` : ''}
+        ${p.resultado ? `<div class="hover-tip-sub" style="color:#86EFAC">Resultado: ${p.resultado}</div>` : ''}
+        ${p.fecha ? `<div class="hover-tip-sub" style="color:#94A3B8">📅 ${formatDateTime(p.fecha)}</div>` : ''}
+      </div>
+    `;
+    hoverPopup.setLngLat(coords).setHTML(html).addTo(map);
+  });
+  map.on('mouseleave', 'allanamientos-points', () => {
+    map.getCanvas().style.cursor = '';
+    hoverPopup.remove();
+  });
+
   // Cursor styles
   ['unclustered-point', 'clusters', 'allanamientos-points', 'zonas-fill', 'personas-bandas-points', 'personas-bandas-icon', 'personas-bandas-clusters'].forEach(layer => {
     map.on('mouseenter', layer, () => { map.getCanvas().style.cursor = 'pointer'; });
@@ -953,6 +1200,15 @@ export function loadTacticalGeoJSON(geoJSON, { fitBounds = true } = {}) {
   const polysGeoJSON = { type: 'FeatureCollection', features: polys };
   map.getSource('zonas')?.setData(polysGeoJSON);
   window.dispatchEvent(new CustomEvent('crimint:data-loaded'));
+
+  // Indexar puntos georreferenciados en el motor de búsqueda centralizado
+  try {
+    if (searchEngine && typeof searchEngine.indexTacticalPoints === 'function') {
+      searchEngine.indexTacticalPoints(points);
+    }
+  } catch (err) {
+    console.warn('Error indexando puntos tácticos en searchEngine:', err);
+  }
 
   // Ensure polygon layers are visible
   try {
@@ -1107,6 +1363,8 @@ export function toggleLayer(layerId, visible) {
       map.setLayoutProperty('clusters', 'visibility', vis);
       map.setLayoutProperty('cluster-count', 'visibility', vis);
       map.setLayoutProperty('unclustered-point', 'visibility', vis);
+      if (map.getLayer('hechos-icon')) map.setLayoutProperty('hechos-icon', 'visibility', vis);
+      if (map.getLayer('hechos-labels')) map.setLayoutProperty('hechos-labels', 'visibility', vis);
       break;
     case 'zonas':
       map.setLayoutProperty('zonas-fill', 'visibility', vis);
@@ -1116,6 +1374,7 @@ export function toggleLayer(layerId, visible) {
     case 'allanamientos':
       map.setLayoutProperty('allanamientos-points', 'visibility', vis);
       map.setLayoutProperty('allanamientos-label', 'visibility', vis);
+      if (map.getLayer('allanamientos-text')) map.setLayoutProperty('allanamientos-text', 'visibility', vis);
       break;
     case 'personas-bandas':
       map.setLayoutProperty('personas-bandas-captura-halo', 'visibility', vis);
@@ -1131,6 +1390,254 @@ export function toggleLayer(layerId, visible) {
 export function flyTo(lng, lat, zoom = 16, pitch = 0) {
   if (map) {
     map.flyTo({ center: [lng, lat], zoom, pitch, essential: true, duration: 1500 });
+  }
+}
+
+/**
+ * Resalta y enfoca un punto georreferenciado exacto con beacon pulsante y popup de detalle
+ */
+export function highlightMapPoint({ lng, lat, title, subtitle, type, data = {} }) {
+  if (!map || isNaN(lng) || isNaN(lat)) return;
+
+  // 1. Asegurar visibilidad de la capa según el tipo
+  if (type === 'persona') {
+    const cb = document.getElementById('layer-personas-bandas');
+    if (cb && !cb.checked) { cb.checked = true; toggleLayer('personas-bandas', true); }
+  } else if (type === 'allanamiento') {
+    const cb = document.getElementById('layer-allanamientos');
+    if (cb && !cb.checked) { cb.checked = true; toggleLayer('allanamientos', true); }
+  } else {
+    const cb = document.getElementById('layer-clusters');
+    if (cb && !cb.checked) { cb.checked = true; toggleLayer('clusters', true); }
+  }
+
+  // 2. Establecer el beacon de destacado de búsqueda
+  const targetGeoJSON = {
+    type: 'FeatureCollection',
+    features: [
+      {
+        type: 'Feature',
+        geometry: { type: 'Point', coordinates: [lng, lat] },
+        properties: { label: title || 'Resultado Seleccionado', type }
+      }
+    ]
+  };
+  map.getSource('search-target')?.setData(targetGeoJSON);
+
+  // 3. Vuelo suave y preciso al objetivo
+  map.flyTo({
+    center: [lng, lat],
+    zoom: 16.8,
+    pitch: 0,
+    essential: true,
+    duration: 1300
+  });
+
+  // 4. Apertura del Popup Táctico Detallado
+  let popupHtml = '';
+  if (type === 'persona') {
+    const bandaColor = data.banda_color || '#0EA5E9';
+    const isCaptura = data.pedido_captura === true || data.pedido_captura === 'true';
+    popupHtml = `
+      <div style="min-width: 270px; max-width: 340px; font-family: var(--font-sans, sans-serif);">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px">
+          <span style="background:${bandaColor}22;border:1px solid ${bandaColor}66;color:${bandaColor};padding:3px 8px;border-radius:12px;font-size:11px;font-weight:800">
+            👤 ${data.banda_nombre || 'Individual'}
+          </span>
+          <span style="background:${data.score_peligrosidad >= 8 ? '#EF4444' : '#F59E0B'};color:#fff;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:700">P${data.score_peligrosidad || 5}/10</span>
+        </div>
+        ${isCaptura ? `
+          <div style="background:rgba(239,68,68,0.2);border:1px solid #EF4444;border-radius:6px;padding:4px 8px;color:#FCA5A5;font-size:10px;font-weight:800;margin-bottom:6px">
+            🚨 REQUERIMIENTO DE CAPTURA ACTIVA
+          </div>
+        ` : ''}
+        <strong style="font-size:14px;color:#fff;display:block;margin-bottom:2px">
+          ${title || data.nombre_completo || 'Imputado'}
+        </strong>
+        ${data.alias_texto ? `<div style="font-size:11px;color:#FDE68A;font-weight:600;margin-bottom:6px">Alias: "${data.alias_texto}"</div>` : ''}
+        <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:6px;padding:6px 8px;margin-bottom:8px;font-size:11px">
+          ${data.domicilio_principal ? `<div style="color:#cbd5e1;margin-bottom:2px">📍 <strong>Domicilio:</strong> ${data.domicilio_principal}</div>` : ''}
+          ${data.dni ? `<div style="color:#cbd5e1;margin-bottom:2px">🆔 <strong>DNI:</strong> ${data.dni}</div>` : ''}
+        </div>
+        <button class="btn btn-primary btn-sm btn-open-dossier-direct" data-id="${data.id}" style="width:100%;font-size:11px;font-weight:800;display:flex;align-items:center;justify-content:center;gap:6px;padding:8px 10px;margin-bottom:6px;background:linear-gradient(135deg, #0284c7 0%, #0369a1 100%);border:1px solid #38bdf8;border-radius:6px;color:#fff;cursor:pointer">
+          📋 ABRIR DOSSIER DIGITAL
+        </button>
+        <button class="btn btn-secondary btn-xs btn-inspect-this-point" data-lng="${lng}" data-lat="${lat}" data-label="${(title || 'Punto de Interés').replace(/"/g, '&quot;')}" style="width:100%;font-size:10px;padding:5px">
+          📍 Analizar Entorno (300m)
+        </button>
+      </div>
+    `;
+  } else if (type === 'allanamiento') {
+    popupHtml = `
+      <div style="min-width: 240px; font-family: var(--font-sans, sans-serif);">
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px">
+          <span style="background:rgba(16,185,129,0.2);color:#34D399;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:800">🛡️ ALLANAMIENTO JUDICIAL</span>
+        </div>
+        <strong style="font-size:13px;color:#fff;display:block;margin-bottom:4px">${title || data.direccion || 'Operativo'}</strong>
+        ${data.cuij ? `<div style="font-size:11px;color:#FDE68A;font-family:monospace;margin-bottom:4px">⚖️ CUIJ: ${data.cuij}</div>` : ''}
+        ${data.resultado ? `<div style="font-size:11px;color:#86EFAC;margin-bottom:4px">Resultado: ${data.resultado}</div>` : ''}
+        ${data.fecha ? `<div style="font-size:11px;color:#94A3B8;margin-bottom:8px">📅 ${formatDateTime(data.fecha)}</div>` : ''}
+        <button class="btn btn-secondary btn-xs btn-inspect-this-point" data-lng="${lng}" data-lat="${lat}" data-label="${(data.direccion || 'Allanamiento').replace(/"/g, '&quot;')}" style="width:100%;font-size:10px;padding:5px">
+          📍 Analizar Entorno (300m)
+        </button>
+      </div>
+    `;
+  } else {
+    const icon = data.tematica_icon || '📌';
+    const name = data.tematica_nombre || title || 'Hecho Delictivo';
+    const color = data.color || '#0EA5E9';
+    let denunciadosList = [];
+    if (data.denunciados) {
+      try { denunciadosList = typeof data.denunciados === 'string' ? JSON.parse(data.denunciados) : data.denunciados; } catch { denunciadosList = [data.denunciados]; }
+    }
+    popupHtml = `
+      <div style="min-width: 250px; max-width: 320px; font-family: var(--font-sans, sans-serif);">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px">
+          <span style="background:${color}22;border:1px solid ${color}66;color:${color};padding:3px 8px;border-radius:12px;font-size:11px;font-weight:700">
+            ${icon} ${name}
+          </span>
+          <span style="background:${getLesividadColor(data.lesividad || 3)};color:#fff;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:700">L${data.lesividad || 3}</span>
+        </div>
+        ${denunciadosList.length > 0 ? `
+          <div style="margin:4px 0 6px;padding:4px 8px;background:rgba(239,68,68,0.15);border:1px solid rgba(239,68,68,0.3);border-radius:6px;font-size:11px;color:#FCA5A5">
+            👤 Denunciado: <strong>${denunciadosList[0]}</strong>
+          </div>
+        ` : ''}
+        ${data.direccion ? `<div style="font-size:11px;color:#cbd5e1;margin-bottom:3px">📍 <strong>Ubicación:</strong> ${data.direccion}</div>` : ''}
+        ${data.barrio ? `<div style="font-size:11px;color:#94a3b8;margin-bottom:3px">🏘️ <strong>Barrio:</strong> ${data.barrio}</div>` : ''}
+        ${data.cuij ? `<div style="font-size:11px;color:#FDE68A;font-family:monospace;margin-bottom:3px">⚖️ CUIJ: ${data.cuij}</div>` : ''}
+        ${data.resumen ? `<div style="font-size:11px;color:#94a3b8;margin-top:4px;border-top:1px solid rgba(255,255,255,0.08);padding-top:4px;max-height:80px;overflow-y:auto">${data.resumen}</div>` : ''}
+        <button class="btn btn-primary btn-sm btn-inspect-this-point" data-lng="${lng}" data-lat="${lat}" data-label="${(data.direccion || data.nombre || 'Ubicación seleccionada').replace(/"/g, '&quot;')}" style="width:100%;margin-top:8px;font-size:10px;padding:6px">
+          📍 Analizar Entorno de esta Ubicación
+        </button>
+      </div>
+    `;
+  }
+
+  popup.setLngLat([lng, lat]).setHTML(popupHtml).addTo(map);
+
+  setTimeout(() => {
+    document.querySelector('.btn-open-dossier-direct')?.addEventListener('click', (ev) => {
+      const id = ev.currentTarget.dataset.id;
+      if (id && window.abrirDossierDigital) window.abrirDossierDigital(id);
+    });
+    document.querySelector('.btn-inspect-this-point')?.addEventListener('click', (ev) => {
+      const btn = ev.currentTarget;
+      const l = parseFloat(btn.dataset.lng);
+      const lt = parseFloat(btn.dataset.lat);
+      const lbl = btn.dataset.label;
+      if (!isNaN(l) && !isNaN(lt)) {
+        window.dispatchEvent(new CustomEvent('crimint:request-inspection', { detail: { coords: [l, lt], label: lbl } }));
+      }
+    });
+  }, 50);
+}
+
+export function clearHighlightMapPoint() {
+  if (!map) return;
+  map.getSource('search-target')?.setData({ type: 'FeatureCollection', features: [] });
+  const banner = document.getElementById('map-search-banner');
+  if (banner) banner.classList.add('hidden');
+}
+
+export function filterMapBySearchQuery(query) {
+  if (!map) return 0;
+  if (!query || query.trim().length < 2) {
+    resetMapFilters();
+    clearHighlightMapPoint();
+    return allMasterFeatures.length;
+  }
+
+  const qNorm = query.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+
+  const matched = allMasterFeatures.filter(f => {
+    const p = f.properties || {};
+    const text = [
+      p.nombre, p.resumen, p.descripcion, p.direccion, p.barrio, p.cuij,
+      p.tematica_nombre, p.tipo, p.tipo_penal,
+      ...(Array.isArray(p.denunciados) ? p.denunciados : [])
+    ].join(' ').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+
+    return text.includes(qNorm);
+  });
+
+  activeMapFeatures = matched;
+  const fc = { type: 'FeatureCollection', features: matched };
+  map.getSource('hechos')?.setData(fc);
+  map.getSource('hechos-heat')?.setData(fc);
+
+  if (matched.length > 0) {
+    let minLng = Infinity, minLat = Infinity, maxLng = -Infinity, maxLat = -Infinity;
+    matched.forEach(p => {
+      const [lng, lat] = p.geometry.coordinates;
+      minLng = Math.min(minLng, lng);
+      maxLng = Math.max(maxLng, lng);
+      minLat = Math.min(minLat, lat);
+      maxLat = Math.max(maxLat, lat);
+    });
+
+    if (matched.length === 1 || (minLng === maxLng && minLat === maxLat)) {
+      highlightMapPoint({
+        lng: minLng,
+        lat: minLat,
+        title: matched[0].properties.nombre || 'Coincidencia',
+        type: 'hecho',
+        data: matched[0].properties
+      });
+    } else {
+      map.fitBounds([[minLng, minLat], [maxLng, maxLat]], { padding: 60, maxZoom: 15.5, duration: 1200 });
+    }
+  }
+
+  const banner = document.getElementById('map-search-banner');
+  const bannerText = document.getElementById('map-search-banner-text');
+  if (banner && bannerText) {
+    bannerText.innerHTML = `🔍 Coincidencias para <strong>"${query}"</strong>: <strong>${matched.length}</strong> puntos`;
+    banner.classList.remove('hidden');
+  }
+
+  window.dispatchEvent(new CustomEvent('crimint:data-loaded'));
+  return matched.length;
+}
+
+export function filterMapByPointType(category) {
+  if (!map) return;
+  if (!category || category === 'todos') {
+    resetMapFilters();
+    ['clusters', 'allanamientos', 'personas-bandas'].forEach(l => toggleLayer(l, true));
+    const cbAll = document.getElementById('layer-allanamientos');
+    const cbPer = document.getElementById('layer-personas-bandas');
+    const cbClu = document.getElementById('layer-clusters');
+    if (cbAll) cbAll.checked = true;
+    if (cbPer) cbPer.checked = true;
+    if (cbClu) cbClu.checked = true;
+    return;
+  }
+
+  if (category === 'persona') {
+    toggleLayer('clusters', false);
+    toggleLayer('allanamientos', false);
+    toggleLayer('personas-bandas', true);
+    const cbPer = document.getElementById('layer-personas-bandas');
+    if (cbPer) cbPer.checked = true;
+    const cbClu = document.getElementById('layer-clusters');
+    if (cbClu) cbClu.checked = false;
+  } else if (category === 'allanamiento') {
+    toggleLayer('clusters', false);
+    toggleLayer('personas-bandas', false);
+    toggleLayer('allanamientos', true);
+    const cbAll = document.getElementById('layer-allanamientos');
+    if (cbAll) cbAll.checked = true;
+    const cbClu = document.getElementById('layer-clusters');
+    if (cbClu) cbClu.checked = false;
+  } else {
+    // Delito temático
+    toggleLayer('personas-bandas', false);
+    toggleLayer('allanamientos', false);
+    toggleLayer('clusters', true);
+    const cbClu = document.getElementById('layer-clusters');
+    if (cbClu) cbClu.checked = true;
+    applyMapFilters({ tematica: category });
   }
 }
 

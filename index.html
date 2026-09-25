@@ -182,13 +182,102 @@
             <span class="layer-dot" style="background:#8b5cf6"></span>Zonas/Territorios
           </label>
           <label class="layer-toggle">
-            <input type="checkbox" id="layer-allanamientos"> 
+            <input type="checkbox" id="layer-allanamientos" checked> 
             <span class="layer-dot" style="background:#22c55e"></span>Allanamientos
           </label>
           <label class="layer-toggle">
             <input type="checkbox" id="layer-personas-bandas" checked> 
             <span class="layer-dot" style="background:#0ea5e9;border:1.5px solid #fff;display:inline-flex;align-items:center;justify-content:center;font-size:9px;color:#fff;width:16px;height:16px;border-radius:50%">👤</span>Integrantes de Bandas
           </label>
+        </div>
+      </div>
+
+      <!-- Barra de Filtros Rápidos de Simbología Táctica -->
+      <div class="map-quick-type-bar" id="map-quick-type-bar">
+        <span class="quick-type-lbl">Filtro rápido:</span>
+        <button class="quick-chip active" data-point-type="todos">Todos</button>
+        <button class="quick-chip chip-persona" data-point-type="persona">👤 Personas</button>
+        <button class="quick-chip chip-balacera" data-point-type="armas">💥 Balaceras</button>
+        <button class="quick-chip chip-homicidio" data-point-type="homicidios">🩸 Homicidios</button>
+        <button class="quick-chip chip-droga" data-point-type="microtrafico">💊 Drogas</button>
+        <button class="quick-chip chip-allanamiento" data-point-type="allanamiento">🛡️ Allanamientos</button>
+      </div>
+
+      <!-- Banner de Filtro de Búsqueda Activo en Mapa -->
+      <div class="map-search-banner hidden" id="map-search-banner">
+        <span id="map-search-banner-text">🔍 Coincidencias de búsqueda</span>
+        <button class="btn btn-ghost btn-xs" id="btn-clear-map-search" title="Restablecer vista completa">✕ Quitar filtro</button>
+      </div>
+
+      <!-- Leyenda Cartográfica Táctica Flotante e Interactiva -->
+      <div class="tactical-map-legend" id="tactical-map-legend">
+        <div class="legend-header" id="legend-toggle-btn" title="Click para colapsar o desplegar leyenda">
+          <div style="display:flex;align-items:center;gap:6px">
+            <span style="font-size:13px">🗺️</span>
+            <span class="legend-title">Simbología & Referencias</span>
+          </div>
+          <button class="legend-toggle-icon" id="legend-collapse-icon" type="button">▾</button>
+        </div>
+        <div class="legend-body" id="legend-body">
+          <div class="legend-item" data-legend-type="persona" title="Click para aislar Personas / Imputados">
+            <span class="legend-symbol" style="background:#0EA5E9;border:1.5px solid #fff;color:#fff">👤</span>
+            <div class="legend-text-col">
+              <span class="legend-label">Imputados / Bandas</span>
+              <span class="legend-sub">Color = Banda • Halo Rojo = Captura</span>
+            </div>
+          </div>
+          <div class="legend-item" data-legend-thematic="homicidios" title="Click para aislar Homicidios">
+            <span class="legend-symbol" style="background:#EF4444;color:#fff">🩸</span>
+            <div class="legend-text-col">
+              <span class="legend-label">Homicidios y Tentativas</span>
+              <span class="legend-sub">Gravedad Crítica (L10)</span>
+            </div>
+            <span class="legend-chip" style="background:#EF4444">L10</span>
+          </div>
+          <div class="legend-item" data-legend-thematic="armas" title="Click para aislar Armas y Balaceras">
+            <span class="legend-symbol" style="background:#F97316;color:#fff">💥</span>
+            <div class="legend-text-col">
+              <span class="legend-label">Armas y Balaceras</span>
+              <span class="legend-sub">Disparos y abuso de armas (L8)</span>
+            </div>
+            <span class="legend-chip" style="background:#F97316">L8</span>
+          </div>
+          <div class="legend-item" data-legend-thematic="microtrafico" title="Click para aislar Microtráfico">
+            <span class="legend-symbol" style="background:#10B981;color:#fff">💊</span>
+            <div class="legend-text-col">
+              <span class="legend-label">Microtráfico / Estupefacientes</span>
+              <span class="legend-sub">Puntos de venta y fraccionamiento</span>
+            </div>
+            <span class="legend-chip" style="background:#10B981">L4</span>
+          </div>
+          <div class="legend-item" data-legend-thematic="robos" title="Click para aislar Robos">
+            <span class="legend-symbol" style="background:#EC4899;color:#fff">🚨</span>
+            <div class="legend-text-col">
+              <span class="legend-label">Robos y Asaltos</span>
+              <span class="legend-sub">Robo calificado y arrebatos</span>
+            </div>
+            <span class="legend-chip" style="background:#EC4899">L6</span>
+          </div>
+          <div class="legend-item" data-legend-thematic="violencia" title="Click para aislar Violencia">
+            <span class="legend-symbol" style="background:#F59E0B;color:#fff">⚠️</span>
+            <div class="legend-text-col">
+              <span class="legend-label">Violencia y Conflictos</span>
+              <span class="legend-sub">Amenazas y grescas armadas</span>
+            </div>
+            <span class="legend-chip" style="background:#F59E0B">L5</span>
+          </div>
+          <div class="legend-item" data-legend-type="allanamiento" title="Click para aislar Allanamientos">
+            <span class="legend-symbol" style="background:#10B981;border:1.5px solid #fff;color:#fff">🛡️</span>
+            <div class="legend-text-col">
+              <span class="legend-label">Allanamientos Judiciales</span>
+              <span class="legend-sub">Operativos de fuerzas de seguridad</span>
+            </div>
+          </div>
+          <div class="legend-footer">
+            <button type="button" class="btn btn-ghost btn-xs" id="btn-legend-reset" style="width:100%;font-size:10px;padding:4px 6px">
+              ↺ Ver Todas las Referencias
+            </button>
+          </div>
         </div>
       </div>
 
