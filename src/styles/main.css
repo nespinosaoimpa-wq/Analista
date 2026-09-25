@@ -3599,5 +3599,70 @@ body.printing-dossier .loading-overlay {
   background: rgba(255, 255, 255, 0.2);
 }
 
+/* ============================================================
+   BANNER DE TRAZADO TÁCTICO DE BANDA EN MAPA
+   ============================================================ */
+.map-banda-trace-banner {
+  position: absolute;
+  top: 70px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 25;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 18px;
+  background: rgba(15, 23, 42, 0.95);
+  border: 1.5px solid #F59E0B;
+  border-radius: 30px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6), 0 0 16px rgba(245, 158, 11, 0.35);
+  font-size: 12px;
+  font-weight: 700;
+  color: #FEF3C7;
+  backdrop-filter: blur(10px);
+  animation: fadeInDown 0.25s ease-out;
+  pointer-events: auto;
+}
 
+.map-banda-trace-banner.hidden {
+  display: none !important;
+}
 
+.map-banda-trace-banner #map-banda-trace-text strong {
+  color: #FBBF24;
+}
+
+.map-banda-trace-banner #btn-clear-banda-trace {
+  color: #F87171;
+  background: rgba(239, 68, 68, 0.15);
+  border: 1px solid rgba(239, 68, 68, 0.35);
+  border-radius: 12px;
+  padding: 3px 10px;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.map-banda-trace-banner #btn-clear-banda-trace:hover {
+  background: rgba(239, 68, 68, 0.35);
+  color: #FFFFFF;
+}
+
+/* ============================================================
+   MODO IBM i2 ANALYST'S NOTEBOOK (LIENZO CLARO FORENSE)
+   ============================================================ */
+.grafo-canvas.i2-light-mode {
+  background-color: #F8FAFC !important;
+  background-image: 
+    radial-gradient(#CBD5E1 1.2px, transparent 1.2px) !important;
+  background-size: 24px 24px !important;
+}
+
+.grafo-canvas.i2-light-mode div.vis-network {
+  background-color: transparent !important;
+}
+
+.grafo-canvas.i2-light-mode .vis-navigation {
+  filter: invert(0.85);
+}

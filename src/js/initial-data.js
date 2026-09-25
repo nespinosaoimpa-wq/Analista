@@ -224,6 +224,27 @@ export const INITIAL_ZONAS = [
 
 export const INITIAL_BANDAS = [
   {
+    "id": "banda-causa-pastor",
+    "nombre": "Causa Pastor (Clan Díaz - Pastor)",
+    "barrio_base": "Av. Gorriti y Menchaca / Loyola",
+    "color_hex": "#D97706",
+    "actividad_principal": "Comercialización de estupefacientes (Ley 23.737), lavado y violencia armada",
+    "descripcion": "Estructura investigada en causa federal y provincial con nodo neurálgico en Av. Gorriti y Menchaca. Conducción operativa bajo Juan Marcelo Díaz y Delia Ruggenini, con ramificaciones logísticas en templo religioso operado por el pastor Daniel Castro, brazo armado conducido por Uriel Trejo e intermediación de estupefacientes.",
+    "nivel_amenaza": 9,
+    "cabecilla_principal": "Juan Marcelo Díaz y Pastor Daniel José Castro",
+    "zonas_operacion": [
+      "Loyola",
+      "Santa Marta",
+      "Cabaña Leiva",
+      "San Agustín"
+    ],
+    "rivales": [
+      "Facciones de San Agustín"
+    ],
+    "delitos_alta_lesividad": "Homicidio doloso en grado de tentativa (CUIJ 21-09654547-6), tráfico agravado de estupefacientes (Ley 23.737) y balaceras territoriales.",
+    "activa": true
+  },
+  {
     "id": "banda-la-negrada",
     "nombre": "La Negrada",
     "barrio_base": "San Lorenzo / Chalet",
@@ -352,6 +373,545 @@ export const INITIAL_BANDAS = [
 ];
 
 export const INITIAL_PERSONAS = [
+  {
+    "id": "p-diaz-juan-marcelo",
+    "nombre": "Juan Marcelo",
+    "apellido": "Díaz",
+    "alias": [
+      "Pitu",
+      "Marcelo"
+    ],
+    "dni": "29664228",
+    "cuit": "20-29664228-3",
+    "fecha_nacimiento": "1982-11-14",
+    "sexo": "M",
+    "roles": [
+      "Líder",
+      "Fundador Célula",
+      "Organizador"
+    ],
+    "score_peligrosidad": 9,
+    "banda_id": "banda-causa-pastor",
+    "banda_nombre": "Causa Pastor (Clan Díaz - Pastor)",
+    "banda_color": "#D97706",
+    "pedido_captura": false,
+    "estado_procesal": "INVESTIGADO - IMPUTADO PRINCIPAL",
+    "domicilio_principal": "Gobernador Menchaca 6683 y 6380, Santa Fe",
+    "domicilio_principal_geom": "SRID=4326;POINT(-60.7182 -31.6051)",
+    "domicilios": [
+      {
+        "id": "dom-diaz-1",
+        "tipo": "PRINCIPAL",
+        "direccion": "Gobernador Menchaca 6683 y 6380 (Esq. Av. Gorriti)",
+        "barrio": "Loyola",
+        "localidad": "Santa Fe",
+        "detalle": "Domicilio principal de Juan Marcelo Díaz y Delia Ruggenini",
+        "geom": "SRID=4326;POINT(-60.7182 -31.6051)"
+      }
+    ],
+    "causas": [
+      {
+        "id": "causa-pastor-1",
+        "cuij": "21-09654547-6",
+        "caratula": "Homicidio Doloso Simple - tentativa (20/08/2023 Larrea y Zuviría)",
+        "organo": "MPA - Unidad Fiscal Especial de Homicidios",
+        "estado": "Imputado Co-autor"
+      },
+      {
+        "id": "causa-pastor-2",
+        "cuij": "FRO-8256/2023",
+        "caratula": "Infracción Ley 23.737 (Comercialización Agravada de Estupefacientes)",
+        "organo": "Juzgado Federal N° 2 de Santa Fe",
+        "estado": "Procesado con Prisión Preventiva"
+      }
+    ],
+    "vehiculos": [
+      {
+        "id": "veh-diaz-1",
+        "patente": "AC148ND",
+        "tipo": "Automóvil",
+        "marca": "Toyota",
+        "modelo": "Corolla 2.0 XEi",
+        "color": "Blanco",
+        "titular": "Juan Marcelo Díaz",
+        "rol": "Vehículo de desplazamiento del cabecilla"
+      }
+    ],
+    "familiares": [
+      {
+        "familiar_id": "p-ruggenini-delia",
+        "parentesco": "Pareja / Conviviente",
+        "observaciones": "Co-operadora patrimonial y logística"
+      },
+      {
+        "familiar_id": "p-diaz-juan-manuel",
+        "parentesco": "Hermano",
+        "observaciones": "Operador de logística"
+      },
+      {
+        "familiar_id": "p-diaz-jonatan",
+        "parentesco": "Hijo",
+        "observaciones": "Operativo territorial"
+      }
+    ],
+    "contactos": [
+      {
+        "tipo": "TELEFONO",
+        "valor": "+54 9 342 511-9988",
+        "detalle": "Línea interceptada en causa federal"
+      }
+    ]
+  },
+  {
+    "id": "p-ruggenini-delia",
+    "nombre": "Delia Adriana",
+    "apellido": "Ruggenini",
+    "alias": [
+      "Delia"
+    ],
+    "dni": "31628385",
+    "cuit": "27-31628385-4",
+    "fecha_nacimiento": "1985-04-18",
+    "sexo": "F",
+    "roles": [
+      "Co-organizadora",
+      "Logística y Finanzas",
+      "Pareja Líder"
+    ],
+    "score_peligrosidad": 7,
+    "banda_id": "banda-causa-pastor",
+    "banda_nombre": "Causa Pastor (Clan Díaz - Pastor)",
+    "banda_color": "#D97706",
+    "pedido_captura": false,
+    "estado_procesal": "INVESTIGADA - PROCESADA",
+    "domicilio_principal": "Gobernador Menchaca 6683 y 6380, Santa Fe",
+    "domicilio_principal_geom": "SRID=4326;POINT(-60.7182 -31.6051)",
+    "domicilios": [
+      {
+        "id": "dom-ruggenini-1",
+        "tipo": "PRINCIPAL",
+        "direccion": "Gobernador Menchaca 6683 y 6380 (Esq. Av. Gorriti)",
+        "barrio": "Loyola",
+        "localidad": "Santa Fe",
+        "detalle": "Domicilio principal de Juan Marcelo Díaz y Delia Ruggenini",
+        "geom": "SRID=4326;POINT(-60.7182 -31.6051)"
+      }
+    ],
+    "causas": [
+      {
+        "id": "causa-pastor-2",
+        "cuij": "FRO-8256/2023",
+        "caratula": "Infracción Ley 23.737 (Comercialización Agravada y Lavado)",
+        "organo": "Juzgado Federal N° 2",
+        "estado": "Procesada"
+      }
+    ],
+    "vehiculos": [],
+    "familiares": [
+      {
+        "familiar_id": "p-diaz-juan-marcelo",
+        "parentesco": "Pareja",
+        "observaciones": "Conviviente en Gobernador Menchaca"
+      }
+    ],
+    "contactos": []
+  },
+  {
+    "id": "p-castro-daniel",
+    "nombre": "Daniel José",
+    "apellido": "Castro",
+    "alias": [
+      "Pastor Castro",
+      "Pastor Daniel"
+    ],
+    "dni": "13890790",
+    "cuit": "20-13890790-2",
+    "fecha_nacimiento": "1960-08-12",
+    "sexo": "M",
+    "roles": [
+      "Operador Logístico",
+      "Coordinador Inmueble Templo",
+      "Lavado"
+    ],
+    "score_peligrosidad": 7,
+    "banda_id": "banda-causa-pastor",
+    "banda_nombre": "Causa Pastor (Clan Díaz - Pastor)",
+    "banda_color": "#D97706",
+    "pedido_captura": false,
+    "estado_procesal": "INVESTIGADO",
+    "domicilio_principal": "Av. Gorriti 5630, Santa Fe",
+    "domicilio_principal_geom": "SRID=4326;POINT(-60.7153 -31.6042)",
+    "domicilios": [
+      {
+        "id": "dom-castro-1",
+        "tipo": "TEMPLO",
+        "direccion": "Iglesia Evangélica 'RES X FE' (Av. Gorriti 5630)",
+        "barrio": "Loyola",
+        "localidad": "Santa Fe",
+        "detalle": "Inmueble operado como templo religioso bajo la dirección del pastor Daniel José Castro",
+        "geom": "SRID=4326;POINT(-60.7153 -31.6042)"
+      }
+    ],
+    "causas": [
+      {
+        "id": "causa-pastor-2",
+        "cuij": "FRO-8256/2023",
+        "caratula": "Infracción Ley 23.737 (Lavado de Activos)",
+        "organo": "Juzgado Federal N° 2",
+        "estado": "Indagatoria celebrada"
+      }
+    ],
+    "vehiculos": [],
+    "familiares": [],
+    "contactos": []
+  },
+  {
+    "id": "p-trejo-uriel",
+    "nombre": "Uriel Nicolás",
+    "apellido": "Trejo",
+    "alias": [
+      "Urielito",
+      "Tirador"
+    ],
+    "dni": "46440998",
+    "cuit": "20-46440998-1",
+    "fecha_nacimiento": "2005-02-14",
+    "sexo": "M",
+    "roles": [
+      "Sicario",
+      "Brazo Armado",
+      "Distribuidor"
+    ],
+    "score_peligrosidad": 10,
+    "banda_id": "banda-causa-pastor",
+    "banda_nombre": "Causa Pastor (Clan Díaz - Pastor)",
+    "banda_color": "#D97706",
+    "pedido_captura": true,
+    "estado_procesal": "REBELDE - PEDIDO DE CAPTURA ACTIVO",
+    "domicilio_principal": "Salta 4465, Santa Fe",
+    "domicilio_principal_geom": "SRID=4326;POINT(-60.7224 -31.6421)",
+    "domicilios": [
+      {
+        "id": "dom-trejo-1",
+        "tipo": "DISTRIBUCION",
+        "direccion": "Salta 4465, Santa Fe",
+        "barrio": "Santa Rosa de Lima",
+        "localidad": "Santa Fe",
+        "detalle": "Punto de acopio y fraccionamiento de dosis",
+        "geom": "SRID=4326;POINT(-60.7224 -31.6421)"
+      }
+    ],
+    "causas": [
+      {
+        "id": "causa-pastor-1",
+        "cuij": "21-09654547-6",
+        "caratula": "Homicidio Doloso Simple - tentativa (20/08/2023 Larrea y Zuviría)",
+        "organo": "MPA - Homicidios",
+        "estado": "Captura solicitada"
+      }
+    ],
+    "vehiculos": [],
+    "familiares": [
+      {
+        "familiar_id": "p-trejo-manuel-noemi",
+        "parentesco": "Madre",
+        "observaciones": "Administradora punto de venta"
+      }
+    ],
+    "contactos": []
+  },
+  {
+    "id": "p-quinteros-jose-luis",
+    "nombre": "José Luis",
+    "apellido": "Quinteros",
+    "alias": [
+      "Moluco"
+    ],
+    "dni": "36730024",
+    "cuit": "20-36730024-8",
+    "fecha_nacimiento": "1992-07-29",
+    "sexo": "M",
+    "roles": [
+      "Operador Territorial",
+      "Distribuidor",
+      "Logística"
+    ],
+    "score_peligrosidad": 8,
+    "banda_id": "banda-causa-pastor",
+    "banda_nombre": "Causa Pastor (Clan Díaz - Pastor)",
+    "banda_color": "#D97706",
+    "pedido_captura": false,
+    "estado_procesal": "IMPUTADO",
+    "domicilio_principal": "Islas Malvinas 1661, Santa Fe",
+    "domicilio_principal_geom": "SRID=4326;POINT(-60.7092 -31.6384)",
+    "domicilios": [
+      {
+        "id": "dom-quinteros-1",
+        "tipo": "RESIDENCIAL",
+        "direccion": "Islas Malvinas 1661, Santa Fe",
+        "barrio": "San Lorenzo",
+        "localidad": "Santa Fe",
+        "detalle": "Residencia de Quinteros y Rocío Prieto",
+        "geom": "SRID=4326;POINT(-60.7092 -31.6384)"
+      }
+    ],
+    "causas": [
+      {
+        "id": "causa-pastor-2",
+        "cuij": "FRO-8256/2023",
+        "caratula": "Ley 23.737 (Tenencia con Fines de Comercialización)",
+        "organo": "Juzgado Federal",
+        "estado": "Imputado"
+      }
+    ],
+    "vehiculos": [
+      {
+        "id": "veh-quinteros-1",
+        "patente": "AF789GH",
+        "tipo": "SUV / Automóvil",
+        "marca": "Chevrolet",
+        "modelo": "Tracker Premier",
+        "color": "Gris Oscuro",
+        "titular": "José Luis Quinteros",
+        "rol": "Vehículo de traslado interjurisdiccional"
+      }
+    ],
+    "familiares": [
+      {
+        "familiar_id": "p-prieto-rocio",
+        "parentesco": "Pareja",
+        "observaciones": "Conviviente en Islas Malvinas"
+      }
+    ],
+    "contactos": []
+  },
+  {
+    "id": "p-prieto-rocio",
+    "nombre": "Rocío Belén",
+    "apellido": "Prieto",
+    "alias": [
+      "Rocío"
+    ],
+    "dni": "37331000",
+    "cuit": "27-37331000-4",
+    "fecha_nacimiento": "1993-09-15",
+    "sexo": "F",
+    "roles": [
+      "Logística",
+      "Pareja Moluco"
+    ],
+    "score_peligrosidad": 6,
+    "banda_id": "banda-causa-pastor",
+    "banda_nombre": "Causa Pastor (Clan Díaz - Pastor)",
+    "banda_color": "#D97706",
+    "pedido_captura": false,
+    "estado_procesal": "INVESTIGADA",
+    "domicilio_principal": "Islas Malvinas 1661, Santa Fe",
+    "domicilio_principal_geom": "SRID=4326;POINT(-60.7092 -31.6384)",
+    "domicilios": [
+      {
+        "id": "dom-prieto-1",
+        "tipo": "RESIDENCIAL",
+        "direccion": "Islas Malvinas 1661, Santa Fe",
+        "barrio": "San Lorenzo",
+        "localidad": "Santa Fe",
+        "detalle": "Domicilio compartido con José Luis Quinteros",
+        "geom": "SRID=4326;POINT(-60.7092 -31.6384)"
+      }
+    ],
+    "causas": [],
+    "vehiculos": [],
+    "familiares": [
+      {
+        "familiar_id": "p-quinteros-jose-luis",
+        "parentesco": "Pareja",
+        "observaciones": "Conviviente"
+      }
+    ],
+    "contactos": []
+  },
+  {
+    "id": "p-neri-israel",
+    "nombre": "Israel Nicolás",
+    "apellido": "Neri",
+    "alias": [
+      "Neri"
+    ],
+    "dni": "47659361",
+    "cuit": "20-47659361-9",
+    "fecha_nacimiento": "2006-05-10",
+    "sexo": "M",
+    "roles": [
+      "Soldadito",
+      "Venta Minorista",
+      "Distribución"
+    ],
+    "score_peligrosidad": 7,
+    "banda_id": "banda-causa-pastor",
+    "banda_nombre": "Causa Pastor (Clan Díaz - Pastor)",
+    "banda_color": "#D97706",
+    "pedido_captura": false,
+    "estado_procesal": "INVESTIGADO",
+    "domicilio_principal": "Salta 4465, Santa Fe",
+    "domicilio_principal_geom": "SRID=4326;POINT(-60.7224 -31.6421)",
+    "domicilios": [
+      {
+        "id": "dom-neri-1",
+        "tipo": "DISTRIBUCION",
+        "direccion": "Salta 4465, Santa Fe",
+        "barrio": "Santa Rosa de Lima",
+        "localidad": "Santa Fe",
+        "detalle": "Punto de acopio secundario",
+        "geom": "SRID=4326;POINT(-60.7224 -31.6421)"
+      }
+    ],
+    "causas": [
+      {
+        "id": "causa-pastor-2",
+        "cuij": "FRO-8256/2023",
+        "caratula": "Ley 23.737",
+        "organo": "Juzgado Federal",
+        "estado": "Investigado"
+      }
+    ],
+    "vehiculos": [],
+    "familiares": [],
+    "contactos": []
+  },
+  {
+    "id": "p-diaz-juan-manuel",
+    "nombre": "Juan Manuel",
+    "apellido": "Díaz",
+    "alias": [
+      "Manuel"
+    ],
+    "dni": "31628586",
+    "cuit": "20-31628586-7",
+    "fecha_nacimiento": "1985-06-22",
+    "sexo": "M",
+    "roles": [
+      "Logística",
+      "Hermano de Líder"
+    ],
+    "score_peligrosidad": 6,
+    "banda_id": "banda-causa-pastor",
+    "banda_nombre": "Causa Pastor (Clan Díaz - Pastor)",
+    "banda_color": "#D97706",
+    "pedido_captura": false,
+    "estado_procesal": "INVESTIGADO",
+    "domicilio_principal": "Gobernador Menchaca 6683, Santa Fe",
+    "domicilio_principal_geom": "SRID=4326;POINT(-60.7182 -31.6051)",
+    "domicilios": [],
+    "causas": [],
+    "vehiculos": [],
+    "familiares": [
+      {
+        "familiar_id": "p-diaz-juan-marcelo",
+        "parentesco": "Hermano",
+        "observaciones": "Hermano del cabecilla"
+      }
+    ],
+    "contactos": []
+  },
+  {
+    "id": "p-vera-ricardo",
+    "nombre": "Ricardo Manuel",
+    "apellido": "Vera",
+    "alias": [
+      "Vera"
+    ],
+    "dni": "40781177",
+    "cuit": "20-40781177-3",
+    "fecha_nacimiento": "1997-12-05",
+    "sexo": "M",
+    "roles": [
+      "Asociado",
+      "Seguridad"
+    ],
+    "score_peligrosidad": 6,
+    "banda_id": "banda-causa-pastor",
+    "banda_nombre": "Causa Pastor (Clan Díaz - Pastor)",
+    "banda_color": "#D97706",
+    "pedido_captura": false,
+    "estado_procesal": "INVESTIGADO",
+    "domicilio_principal": "Av. Gorriti 5600, Santa Fe",
+    "domicilio_principal_geom": "SRID=4326;POINT(-60.7160 -31.6045)",
+    "domicilios": [],
+    "causas": [],
+    "vehiculos": [],
+    "familiares": [],
+    "contactos": []
+  },
+  {
+    "id": "p-trejo-manuel-noemi",
+    "nombre": "Manuel Noemí",
+    "apellido": "Trejo",
+    "alias": [
+      "Noemí"
+    ],
+    "dni": "25556450",
+    "cuit": "27-25556450-2",
+    "fecha_nacimiento": "1976-10-30",
+    "sexo": "F",
+    "roles": [
+      "Acopio Familiar",
+      "Madre de Trejo"
+    ],
+    "score_peligrosidad": 5,
+    "banda_id": "banda-causa-pastor",
+    "banda_nombre": "Causa Pastor (Clan Díaz - Pastor)",
+    "banda_color": "#D97706",
+    "pedido_captura": false,
+    "estado_procesal": "INVESTIGADA",
+    "domicilio_principal": "Salta 4465, Santa Fe",
+    "domicilio_principal_geom": "SRID=4326;POINT(-60.7224 -31.6421)",
+    "domicilios": [],
+    "causas": [],
+    "vehiculos": [],
+    "familiares": [
+      {
+        "familiar_id": "p-trejo-uriel",
+        "parentesco": "Hijo",
+        "observaciones": "Madre de Uriel Trejo"
+      }
+    ],
+    "contactos": []
+  },
+  {
+    "id": "p-diaz-jonatan",
+    "nombre": "Jonatan David",
+    "apellido": "Díaz",
+    "alias": [
+      "Jona"
+    ],
+    "dni": "46529740",
+    "cuit": "20-46529740-5",
+    "fecha_nacimiento": "2005-09-08",
+    "sexo": "M",
+    "roles": [
+      "Operador Territorial",
+      "Hijo de Líder"
+    ],
+    "score_peligrosidad": 7,
+    "banda_id": "banda-causa-pastor",
+    "banda_nombre": "Causa Pastor (Clan Díaz - Pastor)",
+    "banda_color": "#D97706",
+    "pedido_captura": false,
+    "estado_procesal": "INVESTIGADO",
+    "domicilio_principal": "Gobernador Menchaca 6683, Santa Fe",
+    "domicilio_principal_geom": "SRID=4326;POINT(-60.7182 -31.6051)",
+    "domicilios": [],
+    "causas": [],
+    "vehiculos": [],
+    "familiares": [
+      {
+        "familiar_id": "p-diaz-juan-marcelo",
+        "parentesco": "Padre",
+        "observaciones": "Hijo de Juan Marcelo Díaz"
+      }
+    ],
+    "contactos": []
+  },
   {
     "id": "p-celer-gabriel",
     "nombre": "Gabriel Nicolás",
@@ -8723,6 +9283,127 @@ export const INITIAL_PERSONAS = [
 ];
 
 export const INITIAL_VINCULOS = [
+  {
+    "id": "v-pastor-1",
+    "persona_origen_id": "p-diaz-juan-marcelo",
+    "persona_destino_id": "p-ruggenini-delia",
+    "tipo_relacion": "PAREJA_CONVIVIENTE",
+    "origen_nombre": "Juan Marcelo Díaz",
+    "destino_nombre": "Delia Adriana Ruggenini",
+    "certeza": "CONFIRMADO",
+    "tipo": "PAREJA_CONVIVIENTE",
+    "origen_informacion": "Causa Pastor - IBM i2: Pareja y administración patrimonial conjunta"
+  },
+  {
+    "id": "v-pastor-2",
+    "persona_origen_id": "p-diaz-juan-marcelo",
+    "persona_destino_id": "p-castro-daniel",
+    "tipo_relacion": "ASOCIADO_LOGISTICA",
+    "origen_nombre": "Juan Marcelo Díaz",
+    "destino_nombre": "Daniel José Castro (Pastor)",
+    "certeza": "CONFIRMADO",
+    "tipo": "ASOCIADO_LOGISTICA",
+    "origen_informacion": "Causa Pastor - IBM i2: Vínculo con templo evangélico 'RES X FE'"
+  },
+  {
+    "id": "v-pastor-3",
+    "persona_origen_id": "p-diaz-juan-marcelo",
+    "persona_destino_id": "p-diaz-jonatan",
+    "tipo_relacion": "FAMILIAR_HIJO",
+    "origen_nombre": "Juan Marcelo Díaz",
+    "destino_nombre": "Jonatan David Díaz",
+    "certeza": "CONFIRMADO",
+    "tipo": "FAMILIAR_HIJO",
+    "origen_informacion": "Causa Pastor - IBM i2: Vínculo filial y operatividad"
+  },
+  {
+    "id": "v-pastor-4",
+    "persona_origen_id": "p-diaz-juan-marcelo",
+    "persona_destino_id": "p-diaz-juan-manuel",
+    "tipo_relacion": "FAMILIAR_HERMANO",
+    "origen_nombre": "Juan Marcelo Díaz",
+    "destino_nombre": "Juan Manuel Díaz",
+    "certeza": "CONFIRMADO",
+    "tipo": "FAMILIAR_HERMANO",
+    "origen_informacion": "Causa Pastor - IBM i2: Hermano y logística"
+  },
+  {
+    "id": "v-pastor-5",
+    "persona_origen_id": "p-diaz-juan-marcelo",
+    "persona_destino_id": "p-vera-ricardo",
+    "tipo_relacion": "ASOCIADO",
+    "origen_nombre": "Juan Marcelo Díaz",
+    "destino_nombre": "Ricardo Manuel Vera",
+    "certeza": "CONFIRMADO",
+    "tipo": "ASOCIADO",
+    "origen_informacion": "Causa Pastor - IBM i2: Asociado"
+  },
+  {
+    "id": "v-pastor-6",
+    "persona_origen_id": "p-diaz-jonatan",
+    "persona_destino_id": "p-trejo-uriel",
+    "tipo_relacion": "ASOCIADO_OPERATIVO",
+    "origen_nombre": "Jonatan David Díaz",
+    "destino_nombre": "Uriel Nicolás Trejo",
+    "certeza": "CONFIRMADO",
+    "tipo": "ASOCIADO_OPERATIVO",
+    "origen_informacion": "Causa Pastor - IBM i2: Nexo operativo y distribución"
+  },
+  {
+    "id": "v-pastor-7",
+    "persona_origen_id": "p-trejo-uriel",
+    "persona_destino_id": "p-trejo-manuel-noemi",
+    "tipo_relacion": "FAMILIAR_MADRE",
+    "origen_nombre": "Uriel Nicolás Trejo",
+    "destino_nombre": "Manuel Noemí Trejo",
+    "certeza": "CONFIRMADO",
+    "tipo": "FAMILIAR_MADRE",
+    "origen_informacion": "Causa Pastor - IBM i2: Vínculo familiar y acopio"
+  },
+  {
+    "id": "v-pastor-8",
+    "persona_origen_id": "p-trejo-uriel",
+    "persona_destino_id": "p-neri-israel",
+    "tipo_relacion": "TRANSACCIONES_VENTA",
+    "origen_nombre": "Uriel Nicolás Trejo",
+    "destino_nombre": "Israel Nicolás Neri",
+    "certeza": "CONFIRMADO",
+    "tipo": "TRANSACCIONES_VENTA",
+    "origen_informacion": "Causa Pastor - IBM i2: Transacciones y soldaditos"
+  },
+  {
+    "id": "v-pastor-9",
+    "persona_origen_id": "p-trejo-uriel",
+    "persona_destino_id": "p-quinteros-jose-luis",
+    "tipo_relacion": "TRANSACCIONES_DROGAS",
+    "origen_nombre": "Uriel Nicolás Trejo",
+    "destino_nombre": "José Luis Quinteros (Moluco)",
+    "certeza": "CONFIRMADO",
+    "tipo": "TRANSACCIONES_DROGAS",
+    "origen_informacion": "Causa Pastor - IBM i2: Vínculo comercial y suministro"
+  },
+  {
+    "id": "v-pastor-10",
+    "persona_origen_id": "p-quinteros-jose-luis",
+    "persona_destino_id": "p-prieto-rocio",
+    "tipo_relacion": "PAREJA_CONVIVIENTE",
+    "origen_nombre": "José Luis Quinteros",
+    "destino_nombre": "Rocío Belén Prieto",
+    "certeza": "CONFIRMADO",
+    "tipo": "PAREJA_CONVIVIENTE",
+    "origen_informacion": "Causa Pastor - IBM i2: Pareja en Islas Malvinas"
+  },
+  {
+    "id": "v-pastor-11",
+    "persona_origen_id": "p-diaz-juan-manuel",
+    "persona_destino_id": "p-vera-ricardo",
+    "tipo_relacion": "ASOCIADO",
+    "origen_nombre": "Juan Manuel Díaz",
+    "destino_nombre": "Ricardo Manuel Vera",
+    "certeza": "CONFIRMADO",
+    "tipo": "ASOCIADO",
+    "origen_informacion": "Causa Pastor - IBM i2: Asociado"
+  },
   {
     "id": "v-disputa-1",
     "persona_origen_id": "p-zabala-jon",

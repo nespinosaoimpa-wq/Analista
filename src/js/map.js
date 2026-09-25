@@ -1,6 +1,6 @@
 import mapboxgl from 'mapbox-gl';
 import { CONFIG, getLesividadColor, formatDateTime, formatDate } from './config.js';
-import { getHechosGeoJSON, getZonas, getAllanamientos, parseGeom, parsePolygonGeom, getPersonasGeoJSON } from './supabase-client.js';
+import { getHechosGeoJSON, getZonas, getAllanamientos, parseGeom, parsePolygonGeom, getPersonasGeoJSON, getBandas, getPersonas } from './supabase-client.js';
 import { enrichTacticalFeature, filterFeatures, CRIME_THEMATICS, createGeoJSONCircle } from './analytics-engine.js';
 import { searchEngine } from './search-engine.js';
 
@@ -142,6 +142,17 @@ function setupSources() {
 
   // Fuente para destacado de búsqueda y beacon de localización
   map.addSource('search-target', {
+    type: 'geojson',
+    data: { type: 'FeatureCollection', features: [] },
+  });
+
+  // Fuentes para el trazado táctico de bandas (direcciones, delitos y vínculos territoriales)
+  map.addSource('banda-tracing-links', {
+    type: 'geojson',
+    data: { type: 'FeatureCollection', features: [] },
+  });
+
+  map.addSource('banda-tracing-nodes', {
     type: 'geojson',
     data: { type: 'FeatureCollection', features: [] },
   });
@@ -731,6 +742,100 @@ function setupLayers() {
       'text-halo-color': '#0F172A',
       'text-halo-width': 2.2,
     },
+  });
+
+  // --- Trazado Táctico de Banda: Líneas de Enlace y Operaciones ---
+  map.addLayer({
+    id: 'banda-tracing-links-glow',
+    type: 'line',
+    source: 'banda-tracing-links',
+    paint: {
+      'line-color': ['coalesce', ['get', 'color'], '#0EA5E9'],
+      'line-width': ['case', ['==', ['get', 'type'], 'DELITO'], 7, 5],
+      'line-opacity': 0.35,
+      'line-blur': 3.5,
+    },
+  });
+
+  map.addLayer({
+    id: 'banda-tracing-links-line',
+    type: 'line',
+    source: 'banda-tracing-links',
+    paint: {
+      'line-color': ['coalesce', ['get', 'color'], '#0EA5E9'],
+      'line-width': ['case', ['==', ['get', 'type'], 'DELITO'], 3, 2.2],
+      'line-dasharray': ['case', ['==', ['get', 'type'], 'DELITO'], ['literal', [4, 3]], ['literal', [6, 2]]],
+      'line-opacity': 0.95,
+    },
+  });
+
+  map.addLayer({
+    id: 'banda-tracing-links-labels',
+    type: 'symbol',
+    source: 'banda-tracing-links',
+    minzoom: 13,
+    layout: {
+      'text-field': ['get', 'label'],
+      'symbol-placement': 'center',
+      'text-font': ['DIN Pro Bold', 'Arial Unicode MS Bold'],
+      'text-size': 10,
+      'text-allow-overlap': false,
+    },
+    paint: {
+      'text-color': '#FFFFFF',
+      'text-halo-color': 'rgba(15, 23, 42, 0.95)',
+      'text-halo-width': 1.8,
+    },
+  });
+
+  map.addLayer({
+    id: 'banda-tracing-nodes-circle',
+    type: 'circle',
+    source: 'banda-tracing-nodes',
+    paint: {
+      'circle-radius': [
+        'case',
+        ['==', ['get', 'node_type'], 'BASE'], 13,
+        ['==', ['get', 'node_type'], 'DELITO'], 9,
+        8
+      ],
+      'circle-color': ['coalesce', ['get', 'color'], '#0EA5E9'],
+      'circle-stroke-width': 2.5,
+      'circle-stroke-color': '#FFFFFF',
+      'circle-opacity': 0.95,
+    },
+  });
+
+  map.addLayer({
+    id: 'banda-tracing-nodes-symbol',
+    type: 'symbol',
+    source: 'banda-tracing-nodes',
+    layout: {
+      'text-field': ['get', 'icon'],
+      'text-size': 12,
+      'text-allow-overlap': true,
+      'text-ignore-placement': true,
+    },
+    paint: { 'text-color': '#FFFFFF' }
+  });
+
+  map.addLayer({
+    id: 'banda-tracing-nodes-label',
+    type: 'symbol',
+    source: 'banda-tracing-nodes',
+    minzoom: 13.5,
+    layout: {
+      'text-field': ['get', 'label'],
+      'text-font': ['DIN Pro Medium', 'Arial Unicode MS Regular'],
+      'text-size': 10.5,
+      'text-offset': [0, 1.4],
+      'text-anchor': 'top',
+    },
+    paint: {
+      'text-color': '#F8FAFC',
+      'text-halo-color': 'rgba(15, 23, 42, 0.95)',
+      'text-halo-width': 1.8,
+    }
   });
 }
 
@@ -1908,4 +2013,242 @@ export function exportMapSnapshot(customFilename = null) {
     return false;
   }
 }
+
+/**
+ * Traza en el mapa la red espacial de una organización criminal:
+ * Conecta la base/líder con los domicilios de todos sus integrantes,
+ * y desde allí traza los vectores hacia los hechos delictivos y causas vinculadas.
+ */
+export async function trazarBandaEnMapa(bandaId) {
+  if (!map) return null;
+  try {
+    const [bandas, personas] = await Promise.all([
+      getBandas({ limit: 100 }),
+      getPersonas({ limit: 1000 })
+    ]);
+
+    const banda = bandas.find(b => b.id === bandaId || b.nombre.toLowerCase().includes(bandaId.toLowerCase()));
+    if (!banda) {
+      console.warn('Banda no encontrada para trazado:', bandaId);
+      return null;
+    }
+
+    const bColor = banda.color_hex || '#0EA5E9';
+    const miembros = personas.filter(p => p.banda_id === banda.id || (p.banda_nombre && p.banda_nombre.toLowerCase() === banda.nombre.toLowerCase()));
+
+    // 1. Identificar nodo central o líder
+    const leader = miembros.find(p => p.roles?.some(r => /l[íi]der|cabecilla|jefe|conducci[óo]n/i.test(r))) || miembros[0];
+    let baseCoords = null;
+    if (leader) {
+      baseCoords = parseGeom(leader.domicilio_principal_geom) || (leader.domicilios?.[0] ? parseGeom(leader.domicilios[0].geom) : null);
+    }
+    if (!baseCoords && banda.geom) {
+      baseCoords = parseGeom(banda.geom);
+    }
+    if (!baseCoords) {
+      // Coordenadas base Santa Fe
+      baseCoords = { lng: -60.7182, lat: -31.6051 };
+    }
+
+    const lineFeatures = [];
+    const nodeFeatures = [];
+    const allCoords = [];
+
+    // Agregar nodo base / líder
+    allCoords.push([baseCoords.lng, baseCoords.lat]);
+    nodeFeatures.push({
+      type: 'Feature',
+      geometry: { type: 'Point', coordinates: [baseCoords.lng, baseCoords.lat] },
+      properties: {
+        node_type: 'BASE',
+        icon: '👑',
+        label: `BASE / MANDO: ${banda.nombre}`,
+        color: bColor
+      }
+    });
+
+    // 2. Domicilios de los miembros
+    const memberDomCoords = new Map();
+    miembros.forEach(m => {
+      const name = `${m.nombre || ''} ${m.apellido || ''}`.trim() || 'Integrante';
+      const doms = (m.domicilios && m.domicilios.length > 0)
+        ? m.domicilios
+        : (m.domicilio_principal ? [{ direccion: m.domicilio_principal, geom: m.domicilio_principal_geom, tipo: 'PRINCIPAL' }] : []);
+
+      doms.forEach(dom => {
+        const coords = parseGeom(dom.geom);
+        if (coords && coords.lng && coords.lat) {
+          allCoords.push([coords.lng, coords.lat]);
+          memberDomCoords.set(m.id, [coords.lng, coords.lat]);
+
+          // Nodo domicilio
+          nodeFeatures.push({
+            type: 'Feature',
+            geometry: { type: 'Point', coordinates: [coords.lng, coords.lat] },
+            properties: {
+              node_type: 'DOMICILIO',
+              icon: dom.tipo === 'TEMPLO' ? '⛪' : (dom.tipo === 'DISTRIBUCION' ? '💊' : '🏠'),
+              label: `🏠 ${name}: ${dom.direccion || dom.barrio || 'Domicilio'}`,
+              color: bColor
+            }
+          });
+
+          // Línea desde Base -> Domicilio
+          lineFeatures.push({
+            type: 'Feature',
+            geometry: {
+              type: 'LineString',
+              coordinates: [[baseCoords.lng, baseCoords.lat], [coords.lng, coords.lat]]
+            },
+            properties: {
+              type: 'DOMICILIO',
+              color: bColor,
+              label: `🏠 Residencia: ${m.alias?.[0] || m.apellido || 'Miembro'}`
+            }
+          });
+        }
+      });
+    });
+
+    // 3. Delitos y Causas vinculadas
+    const cuijsSet = new Set();
+    miembros.forEach(m => {
+      m.causas?.forEach(c => {
+        if (c.cuij) cuijsSet.add(c.cuij.trim());
+      });
+    });
+
+    const linkedCrimes = [];
+    if (activeMapFeatures && activeMapFeatures.length > 0) {
+      activeMapFeatures.forEach(f => {
+        const props = f.properties || {};
+        const fCuij = (props.cuij || '').trim();
+        const fDenunciados = (props.denunciados || '').toLowerCase();
+        const fBarrio = (props.barrio || '').toLowerCase();
+
+        let isLinked = false;
+        let linkedMemberId = null;
+
+        if (fCuij && cuijsSet.has(fCuij)) {
+          isLinked = true;
+        } else if (fDenunciados) {
+          for (const m of miembros) {
+            const mName = `${m.nombre || ''} ${m.apellido || ''}`.trim().toLowerCase();
+            const mAlias = m.alias?.[0]?.toLowerCase();
+            if ((mName && fDenunciados.includes(mName)) || (mAlias && fDenunciados.includes(mAlias))) {
+              isLinked = true;
+              linkedMemberId = m.id;
+              break;
+            }
+          }
+        } else if (banda.zonas_operacion?.some(z => fBarrio.includes(z.toLowerCase())) && (props.lesividad >= 7 || props.tematica_key === 'armas' || props.tematica_key === 'homicidios')) {
+          if (linkedCrimes.length < 8) isLinked = true;
+        }
+
+        if (isLinked && f.geometry?.coordinates) {
+          linkedCrimes.push({ feature: f, memberId: linkedMemberId });
+        }
+      });
+    }
+
+    linkedCrimes.slice(0, 16).forEach(({ feature, memberId }) => {
+      const cCoords = feature.geometry.coordinates;
+      allCoords.push(cCoords);
+      const cProps = feature.properties || {};
+
+      // Nodo de delito
+      nodeFeatures.push({
+        type: 'Feature',
+        geometry: { type: 'Point', coordinates: cCoords },
+        properties: {
+          node_type: 'DELITO',
+          icon: cProps.tematica_key === 'homicidios' ? '🩸' : (cProps.tematica_key === 'armas' ? '💥' : '⚖️'),
+          label: `💥 ${cProps.tipo_penal || 'Hecho'}: ${cProps.direccion || cProps.barrio || ''}`,
+          color: '#EF4444'
+        }
+      });
+
+      // Línea desde Domicilio del Miembro (o Base) -> Lugar del Delito
+      const originCoord = (memberId && memberDomCoords.get(memberId)) || [baseCoords.lng, baseCoords.lat];
+      lineFeatures.push({
+        type: 'Feature',
+        geometry: {
+          type: 'LineString',
+          coordinates: [originCoord, cCoords]
+        },
+        properties: {
+          type: 'DELITO',
+          color: '#EF4444',
+          label: `💥 Delito: ${cProps.tipo_penal || 'Hecho Delictivo'}`
+        }
+      });
+    });
+
+    // Actualizar fuentes de Mapbox
+    map.getSource('banda-tracing-links')?.setData({
+      type: 'FeatureCollection',
+      features: lineFeatures
+    });
+
+    map.getSource('banda-tracing-nodes')?.setData({
+      type: 'FeatureCollection',
+      features: nodeFeatures
+    });
+
+    // Asegurar visibilidad de capas
+    ['layer-personas-bandas', 'layer-allanamientos'].forEach(id => {
+      const chk = document.getElementById(id);
+      if (chk && !chk.checked) {
+        chk.checked = true;
+        toggleLayer(id.replace('layer-', ''), true);
+      }
+    });
+
+    // Mostrar banner táctico de trazado en el mapa
+    const banner = document.getElementById('map-banda-trace-banner');
+    if (banner) {
+      banner.classList.remove('hidden');
+      const textEl = document.getElementById('map-banda-trace-text');
+      if (textEl) {
+        textEl.innerHTML = `<strong>🏴 Trazado Táctico: ${banda.nombre}</strong> — 👤 ${miembros.length} integrantes • 🏠 ${memberDomCoords.size} domicilios • 💥 ${linkedCrimes.length} delitos vinculados`;
+      }
+    }
+
+    // Encuadrar cámara
+    if (allCoords.length > 0) {
+      let minLng = Infinity, minLat = Infinity, maxLng = -Infinity, maxLat = -Infinity;
+      allCoords.forEach(([lng, lat]) => {
+        if (lng < minLng) minLng = lng;
+        if (lat < minLat) minLat = lat;
+        if (lng > maxLng) maxLng = lng;
+        if (lat > maxLat) maxLat = lat;
+      });
+
+      map.fitBounds([[minLng, minLat], [maxLng, maxLat]], {
+        padding: { top: 120, bottom: 60, left: 60, right: 60 },
+        duration: 1400,
+        maxZoom: 16
+      });
+    }
+
+    return {
+      banda,
+      miembrosCount: miembros.length,
+      domiciliosCount: memberDomCoords.size,
+      delitosCount: linkedCrimes.length
+    };
+  } catch (err) {
+    console.error('Error al trazar banda en el mapa:', err);
+    return null;
+  }
+}
+
+export function limpiarTrazadoBandaEnMapa() {
+  if (!map) return;
+  map.getSource('banda-tracing-links')?.setData({ type: 'FeatureCollection', features: [] });
+  map.getSource('banda-tracing-nodes')?.setData({ type: 'FeatureCollection', features: [] });
+  const banner = document.getElementById('map-banda-trace-banner');
+  if (banner) banner.classList.add('hidden');
+}
+
 

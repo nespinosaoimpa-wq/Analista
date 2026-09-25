@@ -201,12 +201,19 @@
         <button class="quick-chip chip-homicidio" data-point-type="homicidios">🩸 Homicidios</button>
         <button class="quick-chip chip-droga" data-point-type="microtrafico">💊 Drogas</button>
         <button class="quick-chip chip-allanamiento" data-point-type="allanamiento">🛡️ Allanamientos</button>
+        <button class="quick-chip chip-trazar-banda" id="btn-quick-trazar-banda" style="border-color:#F59E0B;color:#FCD34D;" title="Trazar red de domicilios y delitos de una banda">🏴 Trazar Banda...</button>
       </div>
 
       <!-- Banner de Filtro de Búsqueda Activo en Mapa -->
       <div class="map-search-banner hidden" id="map-search-banner">
         <span id="map-search-banner-text">🔍 Coincidencias de búsqueda</span>
         <button class="btn btn-ghost btn-xs" id="btn-clear-map-search" title="Restablecer vista completa">✕ Quitar filtro</button>
+      </div>
+
+      <!-- Banner de Trazado Táctico de Banda en Mapa -->
+      <div class="map-banda-trace-banner hidden" id="map-banda-trace-banner">
+        <span id="map-banda-trace-text">🏴 Trazado Táctico de Organización Criminal</span>
+        <button class="btn btn-ghost btn-xs" id="btn-clear-banda-trace" title="Limpiar trazado territorial">✕ Quitar trazado</button>
       </div>
 
       <!-- Leyenda Cartográfica Táctica Flotante e Interactiva -->
@@ -689,6 +696,14 @@
                 🔄 Reordenar
               </button>
 
+              <button class="btn btn-primary btn-sm" id="btn-trazar-banda-mapa" style="font-weight:700;padding:6px 14px;background:#D97706;border-color:#F59E0B;display:inline-flex;align-items:center;gap:6px;cursor:pointer;" title="Trazar en el mapa las vinculaciones territoriales, domicilios y delitos de esta banda">
+                🗺️ Trazar en Mapa
+              </button>
+
+              <button class="btn btn-secondary btn-sm" id="btn-grafo-theme" style="font-weight:700;padding:6px 12px;background:rgba(255,255,255,0.06);border:1px solid var(--border-default);color:var(--text-secondary);cursor:pointer;display:inline-flex;align-items:center;gap:5px;" title="Alternar entre estilo IBM i2 Analyst's Notebook (Lienzo Blanco) y Modo Táctico Oscuro">
+                📄 Modo i2 Claro
+              </button>
+
               <span id="grafo-physics-status" style="display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:700;color:#10B981;background:rgba(16,185,129,0.1);padding:5px 9px;border-radius:6px;border:1px solid rgba(16,185,129,0.25);" title="El gráfico se fija automáticamente tras el ordenamiento para que los nodos no floten ni se muevan al hacer clic">
                 🔒 Red Fija
               </span>
@@ -729,13 +744,16 @@
           </div>
         </div>
 
-        <div class="grafo-legend" style="padding:10px 18px;border-top:1px solid var(--border-default);background:var(--bg-secondary);flex-wrap:wrap;gap:14px;flex-shrink:0;font-size:11px;">
-          <span class="legend-item"><span class="legend-dot" style="background:#ef4444"></span>Disputa Armada / Tiroteo</span>
-          <span class="legend-item"><span class="legend-dot" style="background:#f59e0b"></span>Vínculo Familiar (Dossier)</span>
-          <span class="legend-item"><span class="legend-dot" style="background:#8b5cf6"></span>Subordinación / Mando</span>
-          <span class="legend-item"><span class="legend-dot" style="background:#38bdf8"></span>Vehículo Compartido (Dossier)</span>
-          <span class="legend-item"><span class="legend-dot" style="background:#c084fc"></span>Co-imputados CUIJ (Dossier)</span>
-          <span class="legend-item"><span class="legend-dot" style="background:#10b981"></span>Logística / Comercial</span>
+        <div class="grafo-legend" style="padding:10px 18px;border-top:1px solid var(--border-default);background:var(--bg-secondary);display:flex;flex-wrap:wrap;gap:14px;align-items:center;flex-shrink:0;font-size:11px;">
+          <span class="legend-item" style="display:inline-flex;align-items:center;gap:5px;"><span>👤</span><strong>Persona (Dossier)</strong></span>
+          <span class="legend-item" style="display:inline-flex;align-items:center;gap:5px;"><span>🏠</span><strong>Domicilio / Inmueble</strong></span>
+          <span class="legend-item" style="display:inline-flex;align-items:center;gap:5px;"><span>⚖️</span><strong>Causa / Delito (CUIJ)</strong></span>
+          <span class="legend-item" style="display:inline-flex;align-items:center;gap:5px;"><span>🚗</span><strong>Rodado / Vehículo</strong></span>
+          <span class="legend-item" style="display:inline-flex;align-items:center;gap:5px;"><span class="legend-dot" style="background:#EF4444;box-shadow:0 0 6px #EF4444;"></span>🚨 Prófugo</span>
+          <span class="legend-item" style="display:inline-flex;align-items:center;gap:5px;"><span class="legend-dot" style="background:#F59E0B"></span>👑 Liderazgo</span>
+          <span class="legend-item" style="display:inline-flex;align-items:center;gap:5px;"><span class="legend-dot" style="background:#EF4444"></span>Disputa Armada</span>
+          <span class="legend-item" style="display:inline-flex;align-items:center;gap:5px;"><span class="legend-dot" style="background:#F59E0B"></span>Vínculo Familiar</span>
+          <span class="legend-item" style="display:inline-flex;align-items:center;gap:5px;"><span class="legend-dot" style="background:#38BDF8"></span>Asociado / Transacción</span>
         </div>
       </div>
     </div>

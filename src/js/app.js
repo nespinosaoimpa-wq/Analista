@@ -5,7 +5,8 @@ import {
   initMap, loadMapData, toggleLayer, flyTo, loadTacticalGeoJSON, applyMapFilters, resetMapFilters,
   inspectLocation, updateInspectionRadius, clearInspection, getActiveInspection, getAllMasterFeatures,
   loadPersonasMapData, toggle3DMode, toggleSatelliteMode, exportMapSnapshot,
-  highlightMapPoint, clearHighlightMapPoint, filterMapBySearchQuery, filterMapByPointType
+  highlightMapPoint, clearHighlightMapPoint, filterMapBySearchQuery, filterMapByPointType,
+  trazarBandaEnMapa, limpiarTrazadoBandaEnMapa
 } from './map.js';
 import { initDashboard, refreshDashboard } from './dashboard.js';
 import { initTacticalHUD, initTacticalTimeline } from './tactical-hud.js';
@@ -3817,12 +3818,53 @@ async function renderAllanamientosView() {
 // Relaciones derivadas de Dossiers: Jerarquías, Rodados, CUIJs y Vínculos Familiares
 // ============================================================
 let currentGrafoNetwork = null;
+let currentGrafoTheme = 'dark';
+let lastRenderedNodesMap = new Map();
 let currentGrafoOptions = {
-  bandaId: '',
+  bandaId: 'banda-causa-pastor',
   personaId: '',
-  filterMode: 'general',
+  filterMode: 'banda',
   hideUnlinked: true
 };
+
+const defaultPersonaAvatarSvg = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(`
+<svg xmlns="http://www.w3.org/2000/svg" width="90" height="90" viewBox="0 0 90 90">
+  <circle cx="45" cy="45" r="43" fill="#1E293B" stroke="#475569" stroke-width="2"/>
+  <circle cx="45" cy="32" r="16" fill="#94A3B8"/>
+  <path d="M18 78 C18 56, 30 50, 45 50 C60 50, 72 56, 72 78 Z" fill="#94A3B8"/>
+  <path d="M45 50 L42 62 L45 74 L48 62 Z" fill="#0F172A"/>
+</svg>
+`);
+
+const defaultHouseSvg = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(`
+<svg xmlns="http://www.w3.org/2000/svg" width="90" height="90" viewBox="0 0 90 90">
+  <rect x="5" y="5" width="80" height="80" rx="14" fill="#FFFFFF" stroke="#CBD5E1" stroke-width="2"/>
+  <path d="M45 16 L18 38 L25 38 L25 70 L40 70 L40 52 L50 52 L50 70 L65 70 L65 38 L72 38 Z" fill="#D97706"/>
+  <rect x="30" y="38" width="10" height="10" fill="#FEF3C7" rx="2" stroke="#B45309" stroke-width="1.5"/>
+  <rect x="50" y="38" width="10" height="10" fill="#FEF3C7" rx="2" stroke="#B45309" stroke-width="1.5"/>
+</svg>
+`);
+
+const defaultDocumentSvg = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(`
+<svg xmlns="http://www.w3.org/2000/svg" width="90" height="90" viewBox="0 0 90 90">
+  <rect x="5" y="5" width="80" height="80" rx="14" fill="#FFFFFF" stroke="#CBD5E1" stroke-width="2"/>
+  <path d="M26 18 L52 18 L64 30 L64 72 C64 74 62 76 60 76 L26 76 C24 76 22 74 22 72 L22 22 C22 20 24 18 26 18 Z" fill="#DC2626"/>
+  <path d="M52 18 L52 30 L64 30 Z" fill="#991B1B"/>
+  <line x1="30" y1="38" x2="56" y2="38" stroke="#FFFFFF" stroke-width="3" stroke-linecap="round"/>
+  <line x1="30" y1="48" x2="56" y2="48" stroke="#FFFFFF" stroke-width="3" stroke-linecap="round"/>
+  <line x1="30" y1="58" x2="46" y2="58" stroke="#FFFFFF" stroke-width="3" stroke-linecap="round"/>
+  <circle cx="54" cy="62" r="5" fill="#FEF2F2" stroke="#B91C1C" stroke-width="1.5"/>
+</svg>
+`);
+
+const defaultCarSvg = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(`
+<svg xmlns="http://www.w3.org/2000/svg" width="90" height="90" viewBox="0 0 90 90">
+  <rect x="5" y="5" width="80" height="80" rx="14" fill="#FFFFFF" stroke="#CBD5E1" stroke-width="2"/>
+  <path d="M22 46 L28 32 C30 28 34 26 40 26 L50 26 C56 26 60 28 62 32 L68 46 L72 49 C74 50 75 52 75 54 L75 62 C75 64 73 66 71 66 L69 66 C69 70 65 73 61 73 C57 73 53 70 53 66 L37 66 C37 70 33 73 29 73 C25 73 21 70 21 66 L19 66 C17 66 15 64 15 62 L15 54 C15 52 16 50 18 49 Z" fill="#0284C7"/>
+  <circle cx="29" cy="66" r="4" fill="#0F172A"/>
+  <circle cx="61" cy="66" r="4" fill="#0F172A"/>
+</svg>
+`);
 
 async function setupGrafoView() {
   const bandaSelect = document.getElementById('grafo-banda-select');
@@ -3834,6 +3876,8 @@ async function setupGrafoView() {
   const btnConflicto = document.getElementById('btn-grafo-conflicto');
   const btnLoad = document.getElementById('btn-grafo-load');
   const btnCloseDossier = document.getElementById('btn-close-dossier');
+  const btnTrazar = document.getElementById('btn-trazar-banda-mapa');
+  const btnTheme = document.getElementById('btn-grafo-theme');
 
   if (!bandaSelect || !personaSelect) return;
 
@@ -3921,7 +3965,17 @@ async function setupGrafoView() {
       });
     }
 
-    populatePersonaSelect('');
+    // Seleccionar por defecto la banda Causa Pastor si existe (visualización por banda solicitada)
+    const defaultBandaId = 'banda-causa-pastor';
+    if (bandas.some(b => b.id === defaultBandaId)) {
+      bandaSelect.value = defaultBandaId;
+      populatePersonaSelect(defaultBandaId);
+      currentGrafoOptions.bandaId = defaultBandaId;
+      currentGrafoOptions.filterMode = 'banda';
+      updateActiveFilterButton(defaultBandaId);
+    } else {
+      populatePersonaSelect('');
+    }
 
     // Actualizar estilo visual del botón activo
     function updateActiveFilterButton(activeId) {
@@ -3971,6 +4025,34 @@ async function setupGrafoView() {
       currentGrafoOptions.personaId = pId;
       currentGrafoOptions.filterMode = bId === 'CONFLICT_NEGRADA_SIEMPRE' ? 'conflicto' : (bId ? 'banda' : 'general');
       await renderGrafoIntelligence({ focusPersonaId: pId });
+    });
+
+    // Botón para trazar la banda en el mapa
+    btnTrazar?.addEventListener('click', () => {
+      const bId = bandaSelect.value || currentGrafoOptions.bandaId;
+      if (bId && bId !== 'CONFLICT_NEGRADA_SIEMPRE') {
+        window.trazarBandaDesdeGrafo(bId);
+      } else {
+        showToast('Seleccione una organización específica para trazarla en el mapa', 'warning');
+      }
+    });
+
+    // Botón alternar estilo IBM i2 Analyst's Notebook (lienzo claro vs oscuro)
+    btnTheme?.addEventListener('click', async () => {
+      currentGrafoTheme = currentGrafoTheme === 'dark' ? 'i2-light' : 'dark';
+      const canvas = document.getElementById('grafo-canvas');
+      if (canvas) {
+        if (currentGrafoTheme === 'i2-light') {
+          canvas.classList.add('i2-light-mode');
+          btnTheme.innerHTML = '🌙 Modo Oscuro';
+          btnTheme.title = 'Cambiar a modo táctico oscuro';
+        } else {
+          canvas.classList.remove('i2-light-mode');
+          btnTheme.innerHTML = '📄 Modo i2 Claro';
+          btnTheme.title = 'Cambiar a modo IBM i2 Analyst\'s Notebook (lienzo blanco pericial)';
+        }
+      }
+      await renderGrafoIntelligence();
     });
 
     // Botón para reordenar la red y volver a congelarla
@@ -4035,6 +4117,16 @@ async function setupGrafoView() {
       document.getElementById('grafo-node-dossier')?.classList.add('hidden');
     });
 
+    // Botones de trazado en el mapa
+    document.getElementById('btn-clear-banda-trace')?.addEventListener('click', () => {
+      limpiarTrazadoBandaEnMapa();
+    });
+
+    document.getElementById('btn-quick-trazar-banda')?.addEventListener('click', () => {
+      const bId = currentGrafoOptions.bandaId || 'banda-causa-pastor';
+      trazarBandaEnMapa(bId);
+    });
+
     // Cargar visualización inicial de la red
     await renderGrafoIntelligence();
 
@@ -4044,7 +4136,7 @@ async function setupGrafoView() {
 }
 
 // ============================================================
-// CONSTRUCTOR CENTRAL DE INTELIGENCIA RELACIONAL
+// CONSTRUCTOR CENTRAL DE INTELIGENCIA RELACIONAL (ESTILO IBM i2 ANALYST'S NOTEBOOK)
 // ============================================================
 async function renderGrafoIntelligence(customOverrides = {}) {
   const container = document.getElementById('grafo-canvas');
@@ -4059,7 +4151,7 @@ async function renderGrafoIntelligence(customOverrides = {}) {
   container.innerHTML = `
     <div class="empty-state" style="height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;">
       <div class="spinner"></div>
-      <span style="font-weight:600;color:var(--text-secondary);">Procesando inteligencia de legajos y cruzamiento relacional...</span>
+      <span style="font-weight:600;color:var(--text-secondary);">Construyendo red relacional forense con dossiers y geolocalizaciones...</span>
     </div>
   `;
 
@@ -4072,6 +4164,9 @@ async function renderGrafoIntelligence(customOverrides = {}) {
 
     const personasMap = new Map(personas.map(p => [p.id, p]));
     const bandasMap = new Map(bandas.map(b => [b.id, b]));
+
+    // Limpiar mapa de cache para interacción de clics
+    lastRenderedNodesMap.clear();
 
     // ------------------------------------------------------------
     // 1. EXTRACCIÓN Y CRUZAMIENTO DE DATOS DE DOSSIERS
@@ -4142,7 +4237,7 @@ async function renderGrafoIntelligence(customOverrides = {}) {
     });
 
     // ------------------------------------------------------------
-    // 2. FILTRADO DE ENTIDADES RELEVANTES
+    // 2. FILTRADO DE ENTIDADES RELEVANTES (AISLAMIENTO POR BANDA)
     // ------------------------------------------------------------
     const activePersonaIds = new Set();
     const activeBandaIds = new Set();
@@ -4153,7 +4248,6 @@ async function renderGrafoIntelligence(customOverrides = {}) {
       activePersonaIds.add(focal.id);
       if (focal.banda_id) activeBandaIds.add(focal.banda_id);
 
-      // Contactos por vínculos directos
       vinculos.forEach(v => {
         const oId = v.persona_origen_id || v.origen_id;
         const dId = v.persona_destino_id || v.destino_id;
@@ -4161,21 +4255,18 @@ async function renderGrafoIntelligence(customOverrides = {}) {
         if (dId === focal.id && oId) activePersonaIds.add(oId);
       });
 
-      // Contactos por rodados compartidos
       vehiculosIndex.forEach((entries) => {
         if (entries.some(e => e.personaId === focal.id)) {
           entries.forEach(e => activePersonaIds.add(e.personaId));
         }
       });
 
-      // Contactos por CUIJ compartida
       cuijsIndex.forEach((pIds) => {
         if (pIds.has(focal.id)) {
           pIds.forEach(id => activePersonaIds.add(id));
         }
       });
 
-      // Familiares
       familyEdges.forEach(f => {
         if (f.from === focal.id) activePersonaIds.add(f.to);
         if (f.to === focal.id) activePersonaIds.add(f.from);
@@ -4195,7 +4286,7 @@ async function renderGrafoIntelligence(customOverrides = {}) {
       });
 
     } else if (opts.bandaId) {
-      // Filtrar por Banda Específica
+      // Filtrar estrictamente por Banda Específica (NO TODO JUNTO)
       const targetBanda = bandasMap.get(opts.bandaId);
       if (targetBanda) {
         activeBandaIds.add(targetBanda.id);
@@ -4233,7 +4324,6 @@ async function renderGrafoIntelligence(customOverrides = {}) {
           if (memberIds.has(f.to)) activePersonaIds.add(f.from);
         });
 
-        // Agregar bandas rivales mencionadas
         targetBanda.rivales?.forEach(rivName => {
           const riv = bandas.find(b => b.nombre.toLowerCase().includes(rivName.toLowerCase()));
           if (riv) activeBandaIds.add(riv.id);
@@ -4249,7 +4339,6 @@ async function renderGrafoIntelligence(customOverrides = {}) {
         }
       });
 
-      // Contactos de los prófugos
       const profugoIds = new Set(activePersonaIds);
       vinculos.forEach(v => {
         const oId = v.persona_origen_id || v.origen_id;
@@ -4276,24 +4365,23 @@ async function renderGrafoIntelligence(customOverrides = {}) {
       });
 
     } else {
-      // Modo General (Todas las bandas)
+      // Modo General
       bandas.forEach(b => activeBandaIds.add(b.id));
       personas.forEach(p => {
-        // Incluir miembros de bandas o sujetos con causas/vehículos/vínculos
         if (p.banda_id || p.pedido_captura || (p.score_peligrosidad || 0) >= 7) {
           activePersonaIds.add(p.id);
         }
       });
 
-      // Si no se ocultan los huérfanos, agregar todas las personas
       if (!opts.hideUnlinked) {
         personas.forEach(p => activePersonaIds.add(p.id));
       }
     }
 
     // ------------------------------------------------------------
-    // 3. CONSTRUCCIÓN DE NODOS Y ARISTAS VIS-NETWORK
+    // 3. CONSTRUCCIÓN DE NODOS Y ARISTAS (ESTILO IBM i2)
     // ------------------------------------------------------------
+    const isLight = currentGrafoTheme === 'i2-light';
     const nodesMap = new Map();
     const edgesList = [];
     const edgeKeySet = new Set();
@@ -4306,11 +4394,10 @@ async function renderGrafoIntelligence(customOverrides = {}) {
       edgesList.push({ from, to, ...edgeProps });
     }
 
-    // A. Agregar Nodos de Bandas
+    // A. Agregar Nodos de Bandas (Emblema de Organización)
     bandas.forEach(b => {
       if (!activeBandaIds.has(b.id) && opts.bandaId) return;
       if (!activeBandaIds.has(b.id) && !opts.bandaId) {
-        // En modo general, mostrar solo bandas activas con al menos 1 miembro
         const hasMembers = personas.some(p => p.banda_id === b.id);
         if (!hasMembers) return;
       }
@@ -4321,84 +4408,91 @@ async function renderGrafoIntelligence(customOverrides = {}) {
         label: `🏴 ${b.nombre}\n📍 ${b.barrio_base || 'Base Territorial'}`,
         shape: 'box',
         color: {
-          background: '#0B1120',
+          background: isLight ? '#FFFFFF' : '#0B1120',
           border: bColor,
           highlight: { background: bColor, border: '#FFFFFF' }
         },
-        font: { color: '#F8FAFC', size: 14, face: 'Inter', strokeWidth: 2, strokeColor: '#000' },
+        font: {
+          color: isLight ? '#0F172A' : '#F8FAFC',
+          size: 13,
+          face: 'Inter, system-ui',
+          strokeWidth: isLight ? 2 : 2,
+          strokeColor: isLight ? '#FFFFFF' : '#000000',
+          multi: true
+        },
         borderWidth: 3,
-        margin: 12,
+        margin: 10,
         type: 'banda',
         data: b,
-        shadow: { enabled: true, color: bColor, size: 10 }
+        shadow: { enabled: true, color: bColor, size: 8 }
       });
+      lastRenderedNodesMap.set(b.id, { type: 'banda', data: b });
     });
 
-    // B. Agregar Nodos de Personas
+    // B. Agregar Nodos de Personas (CON FOTOS DEL DOSSIER O AVATAR FORENSE)
+    const activePersonasObj = [];
     personas.forEach(p => {
       if (!activePersonaIds.has(p.id)) return;
+      activePersonasObj.push(p);
 
       const isCaptura = p.pedido_captura;
-      const dangerousness = p.score_peligrosidad || 0;
-      const isHigh = dangerousness >= 8;
       const isLeader = p.roles?.some(r => /l[íi]der|cabecilla|jefe|conducci[óo]n/i.test(r));
       const isSicario = p.roles?.some(r => /sicario|tirador|brazo armado/i.test(r));
       const isLogistica = p.roles?.some(r => /log[íi]stica|acopio|finanzas/i.test(r));
 
-      const name = `${p.nombre || ''} ${p.apellido || ''}`.trim() || 'Desconocido';
+      const fullName = `${p.nombre || ''} ${p.apellido || ''}`.trim() || 'Desconocido';
       const alias = p.alias?.length ? `"${p.alias[0]}"` : '';
-      const displayTitle = alias || name;
+      const dniText = p.dni ? `DNI ${p.dni}` : '';
+      const roleText = p.roles?.[0] ? `[${p.roles[0]}]` : '';
 
-      let iconPrefix = '';
-      if (isCaptura) iconPrefix = '🚨 ';
-      else if (isLeader) iconPrefix = '👑 ';
-      else if (isSicario) iconPrefix = '⚔️ ';
-      else if (isLogistica) iconPrefix = '💼 ';
+      // Formato IBM i2 Analyst's Notebook
+      let labelLines = [];
+      if (isCaptura) labelLines.push('🚨 [PRÓFUGO]');
+      labelLines.push(fullName);
+      if (alias) labelLines.push(alias);
+      if (dniText) labelLines.push(dniText);
+      if (roleText) labelLines.push(roleText);
+      const nodeLabel = labelLines.join('\n');
 
-      const label = `${iconPrefix}${displayTitle}\n${isCaptura ? '[PRÓFUGO]' : (p.roles?.[0] || 'Miembro')}`;
-
-      // Estilización táctica de nodos
-      let borderColor = '#38BDF8';
-      let bgColor = '#1E293B';
-      let fontColor = '#E2E8F0';
-      let nodeSize = 18;
-      let borderWidth = 2;
+      let borderColor = p.banda_color || '#38BDF8';
+      let bgColor = isLight ? '#F1F5F9' : '#1E293B';
+      let fontColor = isLight ? '#0F172A' : '#E2E8F0';
+      let strokeColor = isLight ? '#FFFFFF' : '#030712';
+      let nodeSize = 30;
+      let borderWidth = 3;
 
       if (isCaptura) {
         borderColor = '#EF4444';
-        bgColor = '#450A0A';
-        fontColor = '#FCA5A5';
-        nodeSize = 27;
-        borderWidth = 3.5;
+        bgColor = isLight ? '#FEE2E2' : '#450A0A';
+        fontColor = isLight ? '#991B1B' : '#FCA5A5';
+        nodeSize = 36;
+        borderWidth = 4;
       } else if (isLeader) {
         borderColor = '#F59E0B';
-        bgColor = '#451A03';
-        fontColor = '#FDE68A';
-        nodeSize = 25;
-        borderWidth = 3;
+        bgColor = isLight ? '#FEF3C7' : '#451A03';
+        fontColor = isLight ? '#92400E' : '#FDE68A';
+        nodeSize = 34;
+        borderWidth = 3.5;
       } else if (isSicario) {
         borderColor = '#DC2626';
-        bgColor = '#2A0B0B';
-        fontColor = '#FECACA';
-        nodeSize = 22;
-        borderWidth = 2.5;
+        bgColor = isLight ? '#FEE2E2' : '#2A0B0B';
+        fontColor = isLight ? '#991B1B' : '#FECACA';
+        nodeSize = 32;
+        borderWidth = 3;
       } else if (isLogistica) {
         borderColor = '#8B5CF6';
-        bgColor = '#2E1065';
-        fontColor = '#DDD6FE';
-        nodeSize = 20;
-        borderWidth = 2;
-      } else if (isHigh) {
-        borderColor = '#F97316';
-        bgColor = '#331606';
-        fontColor = '#FFEDD5';
-        nodeSize = 20;
+        bgColor = isLight ? '#EDE9FE' : '#2E1065';
+        fontColor = isLight ? '#5B21B6' : '#DDD6FE';
+        nodeSize = 30;
+        borderWidth = 2.5;
       }
 
       nodesMap.set(p.id, {
         id: p.id,
-        label: label,
-        shape: isLeader ? 'diamond' : 'dot',
+        label: nodeLabel,
+        shape: 'circularImage',
+        image: p.foto_url || defaultPersonaAvatarSvg,
+        brokenImage: defaultPersonaAvatarSvg,
         size: nodeSize,
         color: {
           background: bgColor,
@@ -4406,18 +4500,167 @@ async function renderGrafoIntelligence(customOverrides = {}) {
           highlight: { background: '#F59E0B', border: '#FFFFFF' }
         },
         borderWidth: borderWidth,
-        font: { color: fontColor, size: isCaptura || isLeader ? 13 : 11, face: 'Inter', strokeWidth: 3, strokeColor: '#030712' },
+        font: {
+          color: fontColor,
+          size: isCaptura || isLeader ? 12 : 11,
+          face: 'Inter, system-ui',
+          strokeWidth: 3,
+          strokeColor: strokeColor,
+          multi: true
+        },
         type: 'persona',
         data: p,
         shadow: isCaptura ? { enabled: true, color: '#EF4444', size: 12 } : false
       });
+      lastRenderedNodesMap.set(p.id, { type: 'persona', data: p });
+    });
+
+    // C. Agregar Nodos de Domicilios / Inmuebles Tácticos
+    activePersonasObj.forEach(p => {
+      const doms = (Array.isArray(p.domicilios) && p.domicilios.length > 0)
+        ? p.domicilios
+        : (p.domicilio_principal ? [{ direccion: p.domicilio_principal, geom: p.domicilio_principal_geom, tipo: 'PRINCIPAL' }] : []);
+
+      doms.forEach(dom => {
+        const addr = (dom.direccion || dom.calle || dom.barrio || '').trim();
+        if (!addr) return;
+
+        const domKey = 'dom_' + addr.toLowerCase().replace(/[^a-z0-9]/g, '_');
+        if (!nodesMap.has(domKey)) {
+          nodesMap.set(domKey, {
+            id: domKey,
+            label: `🏠 ${addr}${dom.barrio ? `\nB° ${dom.barrio}` : ''}${dom.observaciones ? `\n(${dom.observaciones})` : (dom.tipo ? `\n[${dom.tipo}]` : '')}`,
+            shape: 'image',
+            image: defaultHouseSvg,
+            size: 26,
+            font: {
+              color: isLight ? '#0F172A' : '#FCD34D',
+              size: 10,
+              face: 'Inter, system-ui',
+              strokeWidth: isLight ? 3 : 2,
+              strokeColor: isLight ? '#FFFFFF' : '#000000',
+              multi: true
+            },
+            type: 'domicilio',
+            data: { ...dom, direccion: addr },
+            personIds: [p.id]
+          });
+          lastRenderedNodesMap.set(domKey, { type: 'domicilio', data: { ...dom, direccion: addr }, personIds: [p.id] });
+        } else {
+          const existing = lastRenderedNodesMap.get(domKey);
+          if (existing && !existing.personIds.includes(p.id)) existing.personIds.push(p.id);
+        }
+
+        addEdge(p.id, domKey, {
+          type: 'DOMICILIO',
+          label: dom.tipo ? dom.tipo.charAt(0).toUpperCase() + dom.tipo.slice(1).toLowerCase() : 'Domicilio',
+          color: { color: isLight ? '#B45309' : '#D97706', highlight: '#F59E0B', opacity: 0.85 },
+          width: 1.5,
+          font: { color: isLight ? '#78350F' : '#FDE68A', size: 9, strokeWidth: 2, strokeColor: isLight ? '#FFF' : '#000' }
+        });
+      });
+    });
+
+    // D. Agregar Nodos de Causas / Delitos Judiciales (CUIJs)
+    activePersonasObj.forEach(p => {
+      const personCausas = [];
+      if (Array.isArray(p.causas)) p.causas.forEach(c => personCausas.push(c));
+      if (Array.isArray(p.cuij_asociados)) p.cuij_asociados.forEach(c => personCausas.push(typeof c === 'string' ? { cuij: c } : c));
+
+      personCausas.forEach(c => {
+        const rawCuij = (c.cuij || c).toString().trim();
+        if (!rawCuij) return;
+
+        const cuijKey = 'causa_' + rawCuij.replace(/[^a-z0-9]/gi, '_');
+        if (!nodesMap.has(cuijKey)) {
+          const shortCaratula = c.caratula ? (c.caratula.length > 32 ? c.caratula.slice(0, 32) + '…' : c.caratula) : 'Causa Judicial';
+          nodesMap.set(cuijKey, {
+            id: cuijKey,
+            label: `⚖️ ${shortCaratula}\n${rawCuij}${c.lugar ? `\n📍 ${c.lugar}` : ''}${c.fecha_hecho ? ` (${c.fecha_hecho})` : ''}`,
+            shape: 'image',
+            image: defaultDocumentSvg,
+            size: 24,
+            font: {
+              color: isLight ? '#0F172A' : '#FCA5A5',
+              size: 10,
+              face: 'Inter, system-ui',
+              strokeWidth: isLight ? 3 : 2,
+              strokeColor: isLight ? '#FFFFFF' : '#000000',
+              multi: true
+            },
+            type: 'causa',
+            data: typeof c === 'object' ? c : { cuij: rawCuij },
+            cuij: rawCuij,
+            personIds: [p.id]
+          });
+          lastRenderedNodesMap.set(cuijKey, { type: 'causa', data: typeof c === 'object' ? c : { cuij: rawCuij }, cuij: rawCuij, personIds: [p.id] });
+        } else {
+          const existing = lastRenderedNodesMap.get(cuijKey);
+          if (existing && !existing.personIds.includes(p.id)) existing.personIds.push(p.id);
+        }
+
+        addEdge(p.id, cuijKey, {
+          type: 'CAUSA_JUDICIAL',
+          label: c.rol || 'Imputado',
+          color: { color: isLight ? '#DC2626' : '#EF4444', highlight: '#F87171', opacity: 0.85 },
+          width: 1.8,
+          dashes: [4, 4],
+          font: { color: isLight ? '#991B1B' : '#FCA5A5', size: 9, strokeWidth: 2, strokeColor: isLight ? '#FFF' : '#000' }
+        });
+      });
+    });
+
+    // E. Agregar Nodos de Vehículos / Rodados (Dossier p.vehiculos)
+    activePersonasObj.forEach(p => {
+      if (Array.isArray(p.vehiculos)) {
+        p.vehiculos.forEach(v => {
+          const rawPat = (v.patente || '').trim().toUpperCase();
+          if (!rawPat) return;
+
+          const vehKey = 'veh_' + rawPat.replace(/[^A-Z0-9]/g, '_');
+          if (!nodesMap.has(vehKey)) {
+            nodesMap.set(vehKey, {
+              id: vehKey,
+              label: `🚗 ${v.marca || ''} ${v.modelo || ''}\n[${rawPat}]${v.titular ? `\nTit: ${v.titular}` : ''}`,
+              shape: 'image',
+              image: defaultCarSvg,
+              size: 24,
+              font: {
+                color: isLight ? '#0F172A' : '#7DD3FC',
+                size: 10,
+                face: 'Inter, system-ui',
+                strokeWidth: isLight ? 3 : 2,
+                strokeColor: isLight ? '#FFFFFF' : '#000000',
+                multi: true
+              },
+              type: 'vehiculo',
+              data: v,
+              patente: rawPat,
+              personIds: [p.id]
+            });
+            lastRenderedNodesMap.set(vehKey, { type: 'vehiculo', data: v, patente: rawPat, personIds: [p.id] });
+          } else {
+            const existing = lastRenderedNodesMap.get(vehKey);
+            if (existing && !existing.personIds.includes(p.id)) existing.personIds.push(p.id);
+          }
+
+          addEdge(p.id, vehKey, {
+            type: 'RODADO',
+            label: v.rol_hechos || 'Registrado',
+            color: { color: isLight ? '#0284C7' : '#38BDF8', highlight: '#7DD3FC', opacity: 0.85 },
+            width: 1.8,
+            dashes: [5, 3],
+            font: { color: isLight ? '#0369A1' : '#7DD3FC', size: 9, strokeWidth: 2, strokeColor: isLight ? '#FFF' : '#000' }
+          });
+        });
+      }
     });
 
     // ------------------------------------------------------------
-    // 4. CONEXIÓN DE ARISTAS TÁCTICAS Y RELACIONALES
+    // 4. ARISTAS Y RELACIONES ENTRE PERSONAS
     // ------------------------------------------------------------
 
-    // A. Jerarquía y pertenencia a Banda (p.banda_id -> b.id)
+    // Jerarquía con la Banda
     personas.forEach(p => {
       if (nodesMap.has(p.id) && p.banda_id && nodesMap.has(p.banda_id)) {
         const isLeader = p.roles?.some(r => /l[íi]der|cabecilla|jefe|conducci[óo]n/i.test(r));
@@ -4425,7 +4668,7 @@ async function renderGrafoIntelligence(customOverrides = {}) {
         const isLogistica = p.roles?.some(r => /log[íi]stica|acopio|finanzas/i.test(r));
 
         let roleLabel = p.roles?.[0] || 'Miembro';
-        let edgeColor = 'rgba(148, 163, 184, 0.4)';
+        let edgeColor = isLight ? 'rgba(71, 85, 105, 0.6)' : 'rgba(148, 163, 184, 0.4)';
         let edgeWidth = 1.5;
         let isDashed = true;
 
@@ -4450,21 +4693,21 @@ async function renderGrafoIntelligence(customOverrides = {}) {
           color: { color: edgeColor, opacity: 0.8 },
           width: edgeWidth,
           dashes: isDashed,
-          font: { color: isLeader ? '#F59E0B' : '#94A3B8', size: 9 },
+          font: { color: isLeader ? '#F59E0B' : (isLight ? '#475569' : '#94A3B8'), size: 9, strokeWidth: 2, strokeColor: isLight ? '#FFF' : '#000' },
           arrows: { to: { enabled: true, scaleFactor: 0.5 } }
         });
       }
     });
 
-    // B. Vínculos Explícitos (getAllVinculos)
+    // Vínculos Explícitos (getAllVinculos — e.g., Asociado, Pareja, Transacciones)
     vinculos.forEach(v => {
       const oId = v.persona_origen_id || v.origen_id;
       const dId = v.persona_destino_id || v.destino_id;
-      const tipo = v.tipo_relacion || v.tipo || '';
+      const tipo = v.tipo_relacion || v.tipo || 'Asociado';
 
       if (oId && dId && nodesMap.has(oId) && nodesMap.has(dId)) {
         const isDisputa = tipo.includes('DISPUTA') || tipo.includes('TIROTEO') || tipo.includes('RIVAL');
-        const edgeColor = CONFIG.vinculoColors[tipo] || (isDisputa ? '#EF4444' : '#64748B');
+        const edgeColor = CONFIG.vinculoColors[tipo] || (isDisputa ? '#EF4444' : (isLight ? '#475569' : '#94A3B8'));
 
         addEdge(oId, dId, {
           type: tipo,
@@ -4472,61 +4715,13 @@ async function renderGrafoIntelligence(customOverrides = {}) {
           color: { color: edgeColor, highlight: '#FFFFFF', opacity: 0.85 },
           width: isDisputa ? 3.5 : 2,
           dashes: isDisputa ? [6, 4] : false,
-          font: { color: isDisputa ? '#EF4444' : '#94A3B8', size: 9 },
+          font: { color: isDisputa ? '#EF4444' : (isLight ? '#334155' : '#94A3B8'), size: 9, strokeWidth: 2, strokeColor: isLight ? '#FFF' : '#000' },
           arrows: { to: { enabled: !isDisputa, scaleFactor: 0.6 } }
         });
       }
     });
 
-    // C. Vínculos de Rodados Compartidos (Dossier p.vehiculos)
-    vehiculosIndex.forEach((entries, plate) => {
-      if (entries.length >= 2) {
-        for (let i = 0; i < entries.length; i++) {
-          for (let j = i + 1; j < entries.length; j++) {
-            const idA = entries[i].personaId;
-            const idB = entries[j].personaId;
-            if (nodesMap.has(idA) && nodesMap.has(idB)) {
-              addEdge(idA, idB, {
-                type: 'RODADO_COMPARTIDO',
-                label: `🚗 Rodado [${plate}]`,
-                color: { color: '#38BDF8', highlight: '#7DD3FC', opacity: 0.9 },
-                width: 2.5,
-                dashes: [5, 3],
-                font: { color: '#38BDF8', size: 9 },
-                title: `Vehículo compartido: ${plate} (${entries[i].veh.marca || ''} ${entries[i].veh.modelo || ''})`
-              });
-            }
-          }
-        }
-      }
-    });
-
-    // D. Vínculos de Causas Judiciales Compartidas (Dossier CUIJs)
-    cuijsIndex.forEach((pIdsSet, cuij) => {
-      const pIds = Array.from(pIdsSet);
-      if (pIds.length >= 2) {
-        const shortCuij = cuij.length > 13 ? cuij.slice(0, 13) + '…' : cuij;
-        for (let i = 0; i < pIds.length; i++) {
-          for (let j = i + 1; j < pIds.length; j++) {
-            const idA = pIds[i];
-            const idB = pIds[j];
-            if (nodesMap.has(idA) && nodesMap.has(idB)) {
-              addEdge(idA, idB, {
-                type: 'CO_IMPUTADOS_CUIJ',
-                label: `⚖️ CUIJ ${shortCuij}`,
-                color: { color: '#C084FC', highlight: '#E9D5FF', opacity: 0.85 },
-                width: 2,
-                dashes: [4, 4],
-                font: { color: '#C084FC', size: 9 },
-                title: `Co-imputados en causa CUIJ: ${cuij}`
-              });
-            }
-          }
-        }
-      }
-    });
-
-    // E. Vínculos Familiares de Dossiers (p.familiares)
+    // Vínculos Familiares
     familyEdges.forEach(f => {
       if (nodesMap.has(f.from) && nodesMap.has(f.to)) {
         addEdge(f.from, f.to, {
@@ -4534,13 +4729,13 @@ async function renderGrafoIntelligence(customOverrides = {}) {
           label: `👥 ${f.parentesco}`,
           color: { color: '#F59E0B', highlight: '#FDE68A', opacity: 0.9 },
           width: 2.5,
-          font: { color: '#F59E0B', size: 9 },
+          font: { color: isLight ? '#B45309' : '#F59E0B', size: 9, strokeWidth: 2, strokeColor: isLight ? '#FFF' : '#000' },
           title: `Vínculo familiar de dossier: ${f.parentesco} (${f.obs})`
         });
       }
     });
 
-    // F. Disputas Territoriales Armadas entre Bandas (b.rivales)
+    // Disputas territoriales
     bandas.forEach(b => {
       if (nodesMap.has(b.id) && Array.isArray(b.rivales)) {
         b.rivales.forEach(rivName => {
@@ -4552,7 +4747,7 @@ async function renderGrafoIntelligence(customOverrides = {}) {
               color: { color: '#EF4444', highlight: '#F87171', opacity: 1 },
               width: 4,
               dashes: [8, 4],
-              font: { color: '#EF4444', size: 10, strokeWidth: 2, strokeColor: '#000' }
+              font: { color: '#EF4444', size: 10, strokeWidth: 2, strokeColor: isLight ? '#FFF' : '#000' }
             });
           }
         });
@@ -4560,17 +4755,15 @@ async function renderGrafoIntelligence(customOverrides = {}) {
     });
 
     // ------------------------------------------------------------
-    // 5. SUPRESIÓN DE NODOS HUÉRFANOS / AISLADOS
+    // 5. SUPRESIÓN DE NODOS HUÉRFANOS AISLADOS
     // ------------------------------------------------------------
     if (opts.hideUnlinked) {
-      // Contar incidentes
       const incidentCounts = new Map();
       edgesList.forEach(e => {
         incidentCounts.set(e.from, (incidentCounts.get(e.from) || 0) + 1);
         incidentCounts.set(e.to, (incidentCounts.get(e.to) || 0) + 1);
       });
 
-      // Eliminar personas que no tienen ninguna conexión en este gráfico
       Array.from(nodesMap.entries()).forEach(([id, node]) => {
         if (node.type === 'persona') {
           const degree = incidentCounts.get(id) || 0;
@@ -4591,12 +4784,12 @@ async function renderGrafoIntelligence(customOverrides = {}) {
     const physicsConfig = {
       solver: 'barnesHut',
       barnesHut: {
-        gravitationalConstant: -2800,
-        centralGravity: 0.35,
-        springLength: 140,
+        gravitationalConstant: -3200,
+        centralGravity: 0.25,
+        springLength: 150,
         springConstant: 0.05,
-        damping: 0.85, // Damping muy alto para anular oscilaciones de inmediato
-        avoidOverlap: 0.5
+        damping: 0.85,
+        avoidOverlap: 0.6
       },
       stabilization: {
         enabled: true,
@@ -4620,8 +4813,7 @@ async function renderGrafoIntelligence(customOverrides = {}) {
       }
     });
 
-    // CONGELAR FÍSICA INMEDIATAMENTE AL ESTABILIZARSE
-    // Esto garantiza que los nodos queden fijos y no haya que "atraparlos" o perseguirlos
+    // Congelar física automáticamente para que la red quede fija estilo IBM i2
     const freezePhysics = () => {
       if (currentGrafoNetwork) {
         currentGrafoNetwork.setOptions({ physics: { enabled: false } });
@@ -4644,10 +4836,9 @@ async function renderGrafoIntelligence(customOverrides = {}) {
       freezePhysics();
     });
 
-    // Temporizador de seguridad: asegurar detención absoluta en máximo 1 segundo
     setTimeout(freezePhysics, 1000);
 
-    // Evento Click: Abrir Detalle Táctico de Inteligencia
+    // Click: Abrir Detalle Táctico de Inteligencia
     currentGrafoNetwork.on('click', (params) => {
       if (params.nodes.length > 0) {
         mostrarDossierNodo(params.nodes[0]);
@@ -4656,7 +4847,7 @@ async function renderGrafoIntelligence(customOverrides = {}) {
       }
     });
 
-    // Foco automático
+    // Foco inicial
     if (opts.focusPersonaId && nodesMap.has(opts.focusPersonaId)) {
       setTimeout(() => {
         currentGrafoNetwork.focus(opts.focusPersonaId, { scale: 1.25, animation: true });
@@ -4681,7 +4872,7 @@ async function renderGrafoIntelligence(customOverrides = {}) {
 }
 
 // ============================================================
-// DRAWER DE INTELIGENCIA DE NODO (BANDA O PERSONA)
+// DRAWER DE INTELIGENCIA DE NODO (PERSONA, DOMICILIO, CAUSA, RODADO, BANDA)
 // ============================================================
 async function mostrarDossierNodo(nodeId) {
   const panel = document.getElementById('grafo-node-dossier');
@@ -4691,7 +4882,115 @@ async function mostrarDossierNodo(nodeId) {
 
   panel.classList.remove('hidden');
 
-  // Caso 1: Estructura Criminal / Banda
+  const cached = lastRenderedNodesMap.get(nodeId);
+
+  // Caso 1: Domicilio / Inmueble Táctico
+  if (cached && cached.type === 'domicilio') {
+    const d = cached.data;
+    if (badge) {
+      badge.textContent = 'INMUEBLE / DOMICILIO';
+      badge.style.background = '#D97706';
+    }
+    const personas = await getPersonas({ limit: 1000 });
+    const inhabitants = (cached.personIds || []).map(pId => personas.find(p => p.id === pId)).filter(Boolean);
+
+    content.innerHTML = `
+      <div style="font-weight:800;font-size:15px;color:#F8FAFC;margin-bottom:4px;">🏠 ${d.direccion || 'Inmueble'}</div>
+      <div style="font-size:12px;color:#FCD34D;margin-bottom:8px;">B° ${d.barrio || 'Santa Fe Capital'} ${d.tipo ? `• [${d.tipo}]` : ''}</div>
+      ${d.observaciones ? `<div style="font-size:11px;color:var(--text-secondary);margin-bottom:10px;padding:6px 8px;background:rgba(255,255,255,0.04);border-radius:6px;">${d.observaciones}</div>` : ''}
+
+      <div style="margin-bottom:12px;">
+        <span style="font-size:10px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Sujetos Vinculados (${inhabitants.length}):</span>
+        <div style="display:flex;flex-direction:column;gap:4px;margin-top:4px;">
+          ${inhabitants.map(p => `
+            <div style="font-size:11px;background:rgba(255,255,255,0.03);padding:4px 8px;border-radius:4px;display:flex;justify-content:space-between;align-items:center;">
+              <span>${p.pedido_captura ? '🚨 ' : ''}<strong>${p.nombre || ''} ${p.apellido || ''}</strong></span>
+              <button class="btn btn-ghost btn-xs" onclick="window.renderGrafo('${p.id}')" style="padding:2px 6px;font-size:10px;">Enfocar</button>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+
+      <div style="margin-top:10px;display:flex;gap:6px;">
+        <button class="btn btn-primary btn-sm" onclick="window.localizarDomicilioDesdeGrafo('${encodeURIComponent(d.geom || '')}', '${encodeURIComponent(d.direccion || '')}')" style="flex:1;font-size:11px;font-weight:700;padding:7px;display:flex;align-items:center;justify-content:center;gap:6px;background:#D97706;border-color:#F59E0B;color:#fff;">
+          📍 Ver Domicilio en Mapa
+        </button>
+      </div>
+    `;
+    return;
+  }
+
+  // Caso 2: Causa Penal / Delito
+  if (cached && cached.type === 'causa') {
+    const c = cached.data;
+    if (badge) {
+      badge.textContent = 'EXPEDIENTE / CAUSA PENAL';
+      badge.style.background = '#DC2626';
+    }
+    const personas = await getPersonas({ limit: 1000 });
+    const accused = (cached.personIds || []).map(pId => personas.find(p => p.id === pId)).filter(Boolean);
+
+    content.innerHTML = `
+      <div style="font-weight:800;font-size:15px;color:#F8FAFC;margin-bottom:4px;">⚖️ ${c.caratula || 'Causa Penal'}</div>
+      <div style="font-family:var(--font-mono);font-size:12px;color:#FCA5A5;margin-bottom:8px;">CUIJ: ${cached.cuij || c.cuij || 'S/D'}</div>
+      ${c.lugar ? `<div style="font-size:11px;color:var(--text-secondary);margin-bottom:4px;">📍 Lugar del Hecho: <strong>${c.lugar}</strong></div>` : ''}
+      ${c.fecha_hecho ? `<div style="font-size:11px;color:var(--text-secondary);margin-bottom:4px;">📅 Fecha: ${c.fecha_hecho}</div>` : ''}
+      ${c.organo_judicial ? `<div style="font-size:11px;color:var(--text-secondary);margin-bottom:10px;">🏛️ Órgano: ${c.organo_judicial}</div>` : ''}
+
+      <div style="margin-bottom:12px;">
+        <span style="font-size:10px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Imputados / Investigados (${accused.length}):</span>
+        <div style="display:flex;flex-direction:column;gap:4px;margin-top:4px;">
+          ${accused.map(p => `
+            <div style="font-size:11px;background:rgba(255,255,255,0.03);padding:4px 8px;border-radius:4px;display:flex;justify-content:space-between;align-items:center;">
+              <span>${p.pedido_captura ? '🚨 ' : ''}<strong>${p.nombre || ''} ${p.apellido || ''}</strong></span>
+              <button class="btn btn-ghost btn-xs" onclick="window.renderGrafo('${p.id}')" style="padding:2px 6px;font-size:10px;">Enfocar</button>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+
+      <div style="margin-top:10px;display:flex;gap:6px;">
+        <button class="btn btn-primary btn-sm" onclick="window.buscarCausaEnMapa('${cached.cuij || c.cuij}')" style="flex:1;font-size:11px;font-weight:700;padding:7px;display:flex;align-items:center;justify-content:center;gap:6px;background:#DC2626;border-color:#EF4444;color:#fff;">
+          🗺️ Buscar Hecho en Mapa
+        </button>
+      </div>
+    `;
+    return;
+  }
+
+  // Caso 3: Vehículo / Rodado
+  if (cached && cached.type === 'vehiculo') {
+    const v = cached.data;
+    if (badge) {
+      badge.textContent = 'RODADO / VEHÍCULO';
+      badge.style.background = '#0284C7';
+    }
+    const personas = await getPersonas({ limit: 1000 });
+    const drivers = (cached.personIds || []).map(pId => personas.find(p => p.id === pId)).filter(Boolean);
+
+    content.innerHTML = `
+      <div style="font-weight:800;font-size:15px;color:#F8FAFC;margin-bottom:4px;">🚗 ${v.marca || ''} ${v.modelo || ''}</div>
+      <div style="font-family:var(--font-mono);font-size:13px;color:#7DD3FC;font-weight:700;margin-bottom:8px;">[${cached.patente || v.patente || 'S/D'}]</div>
+      ${v.titular ? `<div style="font-size:11px;color:var(--text-secondary);margin-bottom:4px;">Titular: <strong>${v.titular}</strong></div>` : ''}
+      ${v.anio ? `<div style="font-size:11px;color:var(--text-secondary);margin-bottom:4px;">Año: ${v.anio}</div>` : ''}
+      ${v.observaciones ? `<div style="font-size:11px;color:var(--text-secondary);margin-bottom:10px;padding:6px 8px;background:rgba(255,255,255,0.04);border-radius:6px;">${v.observaciones}</div>` : ''}
+
+      <div style="margin-bottom:12px;">
+        <span style="font-size:10px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Conductores / Relacionados (${drivers.length}):</span>
+        <div style="display:flex;flex-direction:column;gap:4px;margin-top:4px;">
+          ${drivers.map(p => `
+            <div style="font-size:11px;background:rgba(255,255,255,0.03);padding:4px 8px;border-radius:4px;display:flex;justify-content:space-between;align-items:center;">
+              <span>${p.pedido_captura ? '🚨 ' : ''}<strong>${p.nombre || ''} ${p.apellido || ''}</strong></span>
+              <button class="btn btn-ghost btn-xs" onclick="window.renderGrafo('${p.id}')" style="padding:2px 6px;font-size:10px;">Enfocar</button>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+    `;
+    return;
+  }
+
+  // Caso 4: Estructura Criminal / Banda
   const b = await getBandaById(nodeId);
   if (b) {
     if (badge) {
@@ -4723,7 +5022,10 @@ async function mostrarDossierNodo(nodeId) {
       ${b.delitos_alta_lesividad ? `<div style="font-size:11px;margin-bottom:8px;color:#F87171;"><strong style="color:#EF4444;">Alta Lesividad:</strong> ${b.delitos_alta_lesividad}</div>` : ''}
 
       <div style="margin-top:14px;display:flex;flex-direction:column;gap:6px;">
-        <button class="btn btn-primary btn-sm" onclick="window.filtrarGrafoPorBanda('${b.id}')" style="font-size:11px;font-weight:700;padding:7px 10px;justify-content:center;display:flex;align-items:center;gap:6px;background:var(--accent-primary);color:#fff;">
+        <button class="btn btn-primary btn-sm" onclick="window.trazarBandaDesdeGrafo('${b.id}')" style="font-size:11px;font-weight:700;padding:7px 10px;justify-content:center;display:flex;align-items:center;gap:6px;background:#D97706;border-color:#F59E0B;color:#fff;">
+          🗺️ Trazar Banda en Mapa (Direcciones y Delitos)
+        </button>
+        <button class="btn btn-outline btn-sm" onclick="window.filtrarGrafoPorBanda('${b.id}')" style="font-size:11px;font-weight:700;padding:6px 10px;justify-content:center;display:flex;align-items:center;gap:6px;border-color:var(--accent-primary);color:var(--accent-primary);">
           🔍 Aislar Estructura de esta Banda
         </button>
         <button class="btn btn-secondary btn-sm" onclick="showEntityDetail('banda', '${b.id}')" style="font-size:11px;font-weight:600;padding:6px 10px;justify-content:center;display:flex;align-items:center;gap:6px;">
@@ -4734,7 +5036,7 @@ async function mostrarDossierNodo(nodeId) {
     return;
   }
 
-  // Caso 2: Persona Investigada / Imputada
+  // Caso 5: Persona Investigada / Imputada
   const p = await getPersonaById(nodeId);
   if (p) {
     const isCaptura = p.pedido_captura;
@@ -4742,6 +5044,11 @@ async function mostrarDossierNodo(nodeId) {
       badge.textContent = isCaptura ? '🚨 PEDIDO DE CAPTURA ACTIVO' : 'PERSONA DE INTERÉS';
       badge.style.background = isCaptura ? '#DC2626' : 'var(--accent-secondary)';
     }
+
+    // Avatar o Foto de Legajo
+    const fotoHtml = p.foto_url
+      ? `<div style="text-align:center;margin-bottom:10px;"><img src="${p.foto_url}" style="width:72px;height:72px;border-radius:50%;object-fit:cover;border:3px solid ${isCaptura ? '#EF4444' : '#38BDF8'};box-shadow:0 4px 12px rgba(0,0,0,0.5);"></div>`
+      : '';
 
     // Resumen de Rodados
     const vehiculosHtml = Array.isArray(p.vehiculos) && p.vehiculos.length > 0
@@ -4787,6 +5094,7 @@ async function mostrarDossierNodo(nodeId) {
       : '';
 
     content.innerHTML = `
+      ${fotoHtml}
       ${isCaptura ? `
         <div style="background:rgba(239,68,68,0.2);border:1px solid #EF4444;border-radius:6px;padding:6px 10px;margin-bottom:10px;color:#FCA5A5;font-size:11px;font-weight:700;">
           ⚠️ PRÓFUGO CON PEDIDO DE CAPTURA ACTIVO
@@ -4825,8 +5133,8 @@ async function mostrarDossierNodo(nodeId) {
             📍 Ver en Mapa
           </button>
           ${p.banda_id ? `
-            <button class="btn btn-outline btn-xs" onclick="window.filtrarGrafoPorBanda('${p.banda_id}')" style="flex:1;font-size:11px;padding:6px 8px;justify-content:center;display:flex;align-items:center;gap:4px;border-color:var(--accent-primary);color:var(--accent-primary);">
-              🏴 Aislar su Banda
+            <button class="btn btn-outline btn-xs" onclick="window.trazarBandaDesdeGrafo('${p.banda_id}')" style="flex:1;font-size:11px;padding:6px 8px;justify-content:center;display:flex;align-items:center;gap:4px;border-color:#F59E0B;color:#FCD34D;">
+              🗺️ Trazar Banda
             </button>
           ` : ''}
         </div>
@@ -4908,19 +5216,52 @@ window.centrarPersonaEnMapa = async function(personaId) {
     setTimeout(() => {
       let coords = null;
       if (p.domicilio_principal_geom) {
-        const m = p.domicilio_principal_geom.match(/POINT\(([^ ]+)\s+([^)]+)\)/);
-        if (m) coords = { lng: parseFloat(m[1]), lat: parseFloat(m[2]) };
+        coords = parseGeom(p.domicilio_principal_geom);
+      } else if (p.domicilios?.[0]?.geom) {
+        coords = parseGeom(p.domicilios[0].geom);
       }
-      if (coords) {
+      if (coords && coords.lng && coords.lat) {
         flyTo(coords.lng, coords.lat, 17);
         showToast(`Ubicado: ${p.domicilio_principal || 'Domicilio'}`, 'info');
       } else {
         showToast(`El sujeto no registra geolocalización cargada`, 'warning');
       }
-    }, 200);
+    }, 250);
   } catch (e) {
     console.error('Error centrando persona en mapa:', e);
   }
+};
+
+window.trazarBandaDesdeGrafo = function(bandaId) {
+  document.querySelector('[data-view="mapa"]')?.click();
+  setTimeout(() => {
+    trazarBandaEnMapa(bandaId);
+  }, 250);
+};
+
+window.localizarDomicilioDesdeGrafo = function(encodedGeom, encodedAddr) {
+  const geomStr = decodeURIComponent(encodedGeom || '');
+  const addr = decodeURIComponent(encodedAddr || '');
+  document.querySelector('[data-view="mapa"]')?.click();
+  setTimeout(() => {
+    const coords = parseGeom(geomStr);
+    if (coords && coords.lng && coords.lat) {
+      flyTo(coords.lng, coords.lat, 17);
+      showToast(`Ubicado domicilio: ${addr}`, 'info');
+    } else {
+      filterMapBySearchQuery(addr);
+      showToast(`Filtrado en mapa: ${addr}`, 'info');
+    }
+  }, 250);
+};
+
+window.buscarCausaEnMapa = function(cuij) {
+  if (!cuij) return;
+  document.querySelector('[data-view="mapa"]')?.click();
+  setTimeout(() => {
+    filterMapBySearchQuery(cuij);
+    showToast(`Buscando hechos asociados a la causa: ${cuij}`, 'info');
+  }, 250);
 };
 
 // ============================================================
