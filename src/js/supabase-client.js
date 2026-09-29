@@ -34,6 +34,17 @@ try {
 }
 
 // Hydrate from localStorage for offline/client-side persistence of new investigations
+export function getDeletedPersonas() {
+  try {
+    if (typeof localStorage === 'undefined') return new Set();
+    const raw = localStorage.getItem('crimint_deleted_personas');
+    const parsed = raw ? JSON.parse(raw) : [];
+    return new Set(Array.isArray(parsed) ? parsed : []);
+  } catch (e) {
+    return new Set();
+  }
+}
+
 function getCustomStore(key) {
   try {
     if (typeof localStorage === 'undefined') return [];
@@ -48,8 +59,9 @@ function getCustomStore(key) {
 function hydrateCustomStore(key, targetList) {
   try {
     const items = getCustomStore(key);
+    const deletedPersonas = key === 'personas' ? getDeletedPersonas() : new Set();
     items.forEach(it => {
-      if (!it || !it.id) return;
+      if (!it || !it.id || deletedPersonas.has(it.id)) return;
       const idx = targetList.findIndex(x => x.id === it.id);
       if (idx !== -1) {
         targetList[idx] = { ...targetList[idx], ...it };
@@ -79,6 +91,16 @@ hydrateCustomStore('bandas', INITIAL_BANDAS);
 hydrateCustomStore('vinculos', INITIAL_VINCULOS);
 hydrateCustomStore('allanamientos', INITIAL_ALLANAMIENTOS);
 hydrateCustomStore('hechos', INITIAL_HECHOS);
+
+// Limpiar personas eliminadas de INITIAL_PERSONAS al inicio
+const initDelPersonas = getDeletedPersonas();
+if (initDelPersonas.size > 0) {
+  for (let i = INITIAL_PERSONAS.length - 1; i >= 0; i--) {
+    if (initDelPersonas.has(INITIAL_PERSONAS[i].id)) {
+      INITIAL_PERSONAS.splice(i, 1);
+    }
+  }
+}
 
 export default supabase;
 
@@ -176,6 +198,7 @@ export async function getHechoById(id) {
 // PERSONAS
 // ============================================================
 export async function getPersonas({ search, limit = 200 } = {}) {
+  const deletedIds = getDeletedPersonas();
   let list = [];
   try {
     if (supabase) {
@@ -202,7 +225,7 @@ export async function getPersonas({ search, limit = 200 } = {}) {
             };
           }
           return dbItem;
-        });
+        }).filter(p => !deletedIds.has(p.id));
       }
     }
   } catch (e) {
@@ -210,7 +233,7 @@ export async function getPersonas({ search, limit = 200 } = {}) {
   }
 
   if (list.length === 0) {
-    list = [...INITIAL_PERSONAS];
+    list = INITIAL_PERSONAS.filter(p => !deletedIds.has(p.id));
     if (search) {
       const s = search.toLowerCase();
       list = list.filter(p =>
@@ -220,6 +243,8 @@ export async function getPersonas({ search, limit = 200 } = {}) {
         p.alias?.some(a => a.toLowerCase().includes(s))
       );
     }
+  } else {
+    list = list.filter(p => !deletedIds.has(p.id));
   }
   return list.slice(0, limit);
 }
@@ -391,6 +416,70 @@ export async function updatePersona(id, updates = {}) {
   return localObj;
 }
 
+export async function deletePersona(id) {
+  if (!id) return false;
+
+  // 1. Guardar en lista local persistente de personas eliminadas
+  try {
+    if (typeof localStorage !== 'undefined') {
+      const raw = localStorage.getItem('crimint_deleted_personas');
+      const arr = raw ? JSON.parse(raw) : [];
+      if (!arr.includes(id)) {
+        arr.push(id);
+        localStorage.setItem('crimint_deleted_personas', JSON.stringify(arr));
+      }
+
+      // Remover del custom store
+      const customKey = 'crimint_custom_personas';
+      const customRaw = localStorage.getItem(customKey);
+      if (customRaw) {
+        const customList = JSON.parse(customRaw);
+        if (Array.isArray(customList)) {
+          const filtered = customList.filter(p => p.id !== id);
+          localStorage.setItem(customKey, JSON.stringify(filtered));
+        }
+      }
+
+      // Remover del orden manual si existía
+      const orderRaw = localStorage.getItem('crimint_personas_order');
+      if (orderRaw) {
+        const orderList = JSON.parse(orderRaw);
+        if (Array.isArray(orderList)) {
+          const filtered = orderList.filter(x => x !== id);
+          localStorage.setItem('crimint_personas_order', JSON.stringify(filtered));
+        }
+      }
+    }
+  } catch (e) {
+    console.warn('Error guardando eliminación local de persona:', e);
+  }
+
+  // 2. Remover de INITIAL_PERSONAS en memoria
+  const idx = INITIAL_PERSONAS.findIndex(p => p.id === id);
+  if (idx !== -1) {
+    INITIAL_PERSONAS.splice(idx, 1);
+  }
+
+  // 3. Remover vínculos asociados en INITIAL_VINCULOS
+  for (let i = INITIAL_VINCULOS.length - 1; i >= 0; i--) {
+    if (INITIAL_VINCULOS[i].persona_origen_id === id || INITIAL_VINCULOS[i].persona_destino_id === id) {
+      INITIAL_VINCULOS.splice(i, 1);
+    }
+  }
+
+  // 4. Intentar baja en Supabase (soft-delete y delete)
+  try {
+    if (supabase) {
+      await supabase.from('personas').update({ activo: false }).eq('id', id);
+      await supabase.from('personas').delete().eq('id', id);
+    }
+  } catch (e) {
+    console.warn('Supabase delete persona fallback:', e);
+  }
+
+  return true;
+}
+
 export async function getPersonasGeoJSON() {
   const personas = await getPersonas({ limit: 1000 });
   const bandas = await getBandas();
@@ -482,6 +571,7 @@ export async function getPersonasGeoJSON() {
 }
 
 export async function getPersonaById(id) {
+  if (!id || getDeletedPersonas().has(id)) return null;
   const local = INITIAL_PERSONAS.find(p => p.id === id) || null;
   try {
     if (supabase) {

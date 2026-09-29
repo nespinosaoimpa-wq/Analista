@@ -1250,6 +1250,102 @@ a:hover { text-decoration: underline; }
   box-shadow: 0 0 10px rgba(14, 165, 233, 0.4) !important;
 }
 
+/* ---- Reordering and Drag & Drop Dossiers ---- */
+.persona-card-dragging {
+  opacity: 0.35 !important;
+  transform: scale(0.96) !important;
+  border: 2px dashed #38BDF8 !important;
+  box-shadow: 0 0 20px rgba(56, 189, 248, 0.4) !important;
+}
+
+.persona-card.drag-target-left {
+  position: relative;
+  border-left: 3px solid #38BDF8 !important;
+  box-shadow: -8px 0 16px rgba(56, 189, 248, 0.35) !important;
+}
+
+.persona-card.drag-target-right {
+  position: relative;
+  border-right: 3px solid #38BDF8 !important;
+  box-shadow: 8px 0 16px rgba(56, 189, 248, 0.35) !important;
+}
+
+.persona-order-controls {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  padding: 1px 4px;
+  user-select: none;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+
+.persona-order-controls:hover {
+  background: rgba(14, 165, 233, 0.12);
+  border-color: rgba(56, 189, 248, 0.3);
+}
+
+.persona-drag-grip {
+  cursor: grab;
+  color: var(--text-muted);
+  font-size: 13px;
+  line-height: 1;
+  padding: 2px 2px;
+  font-weight: 800;
+  letter-spacing: -2px;
+  transition: color 0.15s ease, transform 0.15s ease;
+}
+
+.persona-drag-grip:hover {
+  color: #38BDF8;
+}
+
+.persona-drag-grip:active {
+  cursor: grabbing;
+}
+
+.btn-order-step {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-size: 8px;
+  cursor: pointer;
+  padding: 2px 3px;
+  border-radius: 3px;
+  transition: all 0.15s ease;
+  opacity: 0.6;
+}
+
+.btn-order-step:hover {
+  opacity: 1;
+  color: #fff;
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.btn-card-delete {
+  font-size: 10px !important;
+  padding: 3px 7px !important;
+  color: #EF4444 !important;
+  border-color: rgba(239, 68, 68, 0.35) !important;
+  transition: all 0.15s ease !important;
+}
+
+.btn-card-delete:hover {
+  background: rgba(239, 68, 68, 0.2) !important;
+  border-color: #EF4444 !important;
+  color: #FCA5A5 !important;
+  transform: scale(1.05);
+}
+
+.personas-sort-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
 /* Generic entity card legacy support */
 .entity-card {
   background: var(--bg-secondary);

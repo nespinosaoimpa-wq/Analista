@@ -11,7 +11,7 @@ import {
 import { initDashboard, refreshDashboard } from './dashboard.js';
 import { initTacticalHUD, initTacticalTimeline } from './tactical-hud.js';
 import {
-  globalSearch, insertHecho, insertPersona, updatePersona, insertBanda,
+  globalSearch, insertHecho, insertPersona, updatePersona, deletePersona, insertBanda,
   getHechos, getPersonas, getBandas, getAllanamientos, insertAllanamiento, insertVinculo,
   getGrafoPersona, getAllVinculos, geocodeAddress, logAction, parseGeom,
   getPersonaById, getBandaById, getAllanamientoById, getHechoById, getZonas
@@ -30,6 +30,7 @@ import { searchEngine } from './search-engine.js';
 // Estado global de dossier y perfilación criminal
 let currentPersonaFiles = [];
 let currentViewingDossierId = null;
+let personaPendingDeleteId = null;
 
 // ============================================================
 // APP INIT
@@ -614,6 +615,8 @@ function setupModals() {
     if (submitBtn) submitBtn.textContent = 'Guardar Ficha de Perfil';
     const pelVal = document.getElementById('persona-peligrosidad-val');
     if (pelVal) pelVal.textContent = '5';
+    const delEditBtn = document.getElementById('btn-delete-persona-edit');
+    if (delEditBtn) delEditBtn.style.display = 'none';
 
     // Reset files
     currentPersonaFiles = [];
@@ -1852,6 +1855,62 @@ async function renderPersonasView() {
       }
     }
 
+    // Ordenamiento y Reordenación de Dossieres
+    const sortSelect = document.getElementById('personas-sort-select');
+    let currentSort = sortSelect ? sortSelect.value : (localStorage.getItem('crimint_personas_sort_criteria') || 'custom');
+    if (sortSelect && sortSelect.value !== currentSort) {
+      sortSelect.value = currentSort;
+    }
+
+    if (currentSort === 'custom') {
+      let customOrder = [];
+      try {
+        const raw = localStorage.getItem('crimint_personas_order');
+        if (raw) customOrder = JSON.parse(raw);
+      } catch (e) { }
+
+      if (Array.isArray(customOrder) && customOrder.length > 0) {
+        const orderMap = new Map();
+        customOrder.forEach((id, idx) => orderMap.set(id, idx));
+        personas.sort((a, b) => {
+          const posA = orderMap.has(a.id) ? orderMap.get(a.id) : 999999;
+          const posB = orderMap.has(b.id) ? orderMap.get(b.id) : 999999;
+          return posA - posB;
+        });
+      }
+    } else if (currentSort === 'peligrosidad-desc') {
+      personas.sort((a, b) => (b.score_peligrosidad || 0) - (a.score_peligrosidad || 0));
+    } else if (currentSort === 'peligrosidad-asc') {
+      personas.sort((a, b) => (a.score_peligrosidad || 0) - (b.score_peligrosidad || 0));
+    } else if (currentSort === 'captura-first') {
+      personas.sort((a, b) => {
+        if (Boolean(b.pedido_captura) !== Boolean(a.pedido_captura)) {
+          return Boolean(b.pedido_captura) ? -1 : 1;
+        }
+        return (b.score_peligrosidad || 0) - (a.score_peligrosidad || 0);
+      });
+    } else if (currentSort === 'nombre-asc') {
+      personas.sort((a, b) => {
+        const nA = `${a.nombre || ''} ${a.apellido || ''}`.trim().toLowerCase();
+        const nB = `${b.nombre || ''} ${b.apellido || ''}`.trim().toLowerCase();
+        return nA.localeCompare(nB, 'es-AR');
+      });
+    } else if (currentSort === 'nombre-desc') {
+      personas.sort((a, b) => {
+        const nA = `${a.nombre || ''} ${a.apellido || ''}`.trim().toLowerCase();
+        const nB = `${b.nombre || ''} ${b.apellido || ''}`.trim().toLowerCase();
+        return nB.localeCompare(nA, 'es-AR');
+      });
+    } else if (currentSort === 'recientes') {
+      personas.sort((a, b) => new Date(b.fecha_creacion || 0) - new Date(a.fecha_creacion || 0));
+    }
+
+    const btnReset = document.getElementById('btn-reset-order');
+    const hasSavedOrder = localStorage.getItem('crimint_personas_order') !== null;
+    if (btnReset) {
+      btnReset.style.display = (hasSavedOrder || currentSort !== 'custom') ? 'inline-flex' : 'none';
+    }
+
     if (personas.length === 0) {
       grid.innerHTML = `
         <div class="empty-state">
@@ -1884,10 +1943,15 @@ async function renderPersonasView() {
            </div>`;
 
       return `
-        <div class="persona-card ${isCaptura ? 'persona-card-captura' : ''}" data-id="${p.id}" data-type="persona">
+        <div class="persona-card ${isCaptura ? 'persona-card-captura' : ''}" data-id="${p.id}" data-type="persona" draggable="true">
           <!-- Topbar -->
           <div class="persona-card-topbar">
             <div style="display:flex;align-items:center;gap:6px;flex:1;min-width:0;overflow:hidden;">
+              <div class="persona-order-controls" onclick="event.stopPropagation();" title="Reordenar este dossier">
+                <button type="button" class="btn-order-step" onclick="event.stopPropagation(); window.moverDossier('${p.id}', -1);" title="Mover a la izquierda / antes">◀</button>
+                <span class="persona-drag-grip" title="Arrastrar y soltar para reordenar dossier">⋮⋮</span>
+                <button type="button" class="btn-order-step" onclick="event.stopPropagation(); window.moverDossier('${p.id}', 1);" title="Mover a la derecha / después">▶</button>
+              </div>
               ${!isIndividual ? `
                 <span class="persona-banda-tag" style="background:${bandaColor}22;border:1px solid ${bandaColor}55;color:${bandaColor};" title="Organización: ${p.banda_nombre}">
                   <span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:${bandaColor};flex-shrink:0;"></span>
@@ -1968,17 +2032,67 @@ async function renderPersonasView() {
               <button class="btn btn-outline btn-xs" onclick="event.stopPropagation(); window.abrirEdicionPersona('${p.id}');" title="Editar Perfil" style="font-size:10px;padding:3px 7px;">
                 ✏️
               </button>
+              <button class="btn btn-outline btn-xs btn-card-delete" onclick="event.stopPropagation(); window.confirmarEliminarPersona('${p.id}');" title="Eliminar este Legajo / Dossier">
+                🗑️
+              </button>
             </div>
           </div>
         </div>
       `;
     }).join('');
 
-    // Click anywhere on card opens dossier
+    // Eventos de click y Drag & Drop en las tarjetas
+    let draggedId = null;
+
     grid.querySelectorAll('.persona-card').forEach(card => {
       card.addEventListener('click', (e) => {
-        if (!e.target.closest('button')) {
+        if (!e.target.closest('button') && !e.target.closest('.persona-order-controls')) {
           window.abrirDossierDigital(card.dataset.id);
+        }
+      });
+
+      card.addEventListener('dragstart', (e) => {
+        draggedId = card.dataset.id;
+        e.dataTransfer.setData('text/plain', card.dataset.id);
+        e.dataTransfer.effectAllowed = 'move';
+        card.classList.add('persona-card-dragging');
+      });
+
+      card.addEventListener('dragend', () => {
+        draggedId = null;
+        grid.querySelectorAll('.persona-card').forEach(c => {
+          c.classList.remove('persona-card-dragging', 'drag-target-left', 'drag-target-right');
+        });
+      });
+
+      card.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+        if (!draggedId || draggedId === card.dataset.id) return;
+        const rect = card.getBoundingClientRect();
+        const midX = rect.left + rect.width / 2;
+        if (e.clientX < midX) {
+          card.classList.add('drag-target-left');
+          card.classList.remove('drag-target-right');
+        } else {
+          card.classList.add('drag-target-right');
+          card.classList.remove('drag-target-left');
+        }
+      });
+
+      card.addEventListener('dragleave', () => {
+        card.classList.remove('drag-target-left', 'drag-target-right');
+      });
+
+      card.addEventListener('drop', (e) => {
+        e.preventDefault();
+        const sourceId = e.dataTransfer.getData('text/plain') || draggedId;
+        const targetId = card.dataset.id;
+        const isLeft = card.classList.contains('drag-target-left');
+        card.classList.remove('drag-target-left', 'drag-target-right');
+
+        if (sourceId && targetId && sourceId !== targetId) {
+          window.reordenarDossieresDrag(sourceId, targetId, isLeft);
         }
       });
     });
@@ -2003,8 +2117,153 @@ async function renderPersonasView() {
     bandaSelect.addEventListener('change', renderPersonasView);
   }
 
+  const sortSelectEl = document.getElementById('personas-sort-select');
+  if (sortSelectEl && !sortSelectEl._bound) {
+    sortSelectEl._bound = true;
+    sortSelectEl.addEventListener('change', () => {
+      localStorage.setItem('crimint_personas_sort_criteria', sortSelectEl.value);
+      renderPersonasView();
+    });
+  }
+
+  const btnResetOrder = document.getElementById('btn-reset-order');
+  if (btnResetOrder && !btnResetOrder._bound) {
+    btnResetOrder._bound = true;
+    btnResetOrder.addEventListener('click', () => {
+      localStorage.removeItem('crimint_personas_order');
+      localStorage.removeItem('crimint_personas_sort_criteria');
+      if (sortSelectEl) sortSelectEl.value = 'custom';
+      renderPersonasView();
+      showToast('Orden original de dossieres restablecido', 'info');
+    });
+  }
+
   setupListSearch('personas-search', renderPersonasView);
 }
+
+// Funciones globales de reordenamiento de dossieres
+window.reordenarDossieresDrag = function(sourceId, targetId, insertBefore) {
+  const grid = document.getElementById('personas-grid');
+  if (!grid) return;
+  const currentCardIds = Array.from(grid.querySelectorAll('.persona-card')).map(c => c.dataset.id);
+
+  let fullOrder = [];
+  try {
+    const raw = localStorage.getItem('crimint_personas_order');
+    if (raw) fullOrder = JSON.parse(raw);
+  } catch (e) { }
+
+  if (!Array.isArray(fullOrder) || fullOrder.length === 0) {
+    fullOrder = [...currentCardIds];
+  } else {
+    currentCardIds.forEach(id => {
+      if (!fullOrder.includes(id)) fullOrder.push(id);
+    });
+  }
+
+  const sIdx = fullOrder.indexOf(sourceId);
+  if (sIdx !== -1) fullOrder.splice(sIdx, 1);
+
+  const tIdx = fullOrder.indexOf(targetId);
+  if (tIdx !== -1) {
+    fullOrder.splice(insertBefore ? tIdx : tIdx + 1, 0, sourceId);
+  } else {
+    fullOrder.push(sourceId);
+  }
+
+  localStorage.setItem('crimint_personas_order', JSON.stringify(fullOrder));
+  localStorage.setItem('crimint_personas_sort_criteria', 'custom');
+
+  const sortSelect = document.getElementById('personas-sort-select');
+  if (sortSelect) sortSelect.value = 'custom';
+
+  renderPersonasView();
+  showToast('Dossier reordenado', 'info');
+};
+
+window.moverDossier = function(id, delta) {
+  const grid = document.getElementById('personas-grid');
+  if (!grid) return;
+  const currentCardIds = Array.from(grid.querySelectorAll('.persona-card')).map(c => c.dataset.id);
+  const currentIdx = currentCardIds.indexOf(id);
+  if (currentIdx === -1) return;
+
+  const targetIdx = currentIdx + delta;
+  if (targetIdx < 0 || targetIdx >= currentCardIds.length) {
+    showToast(delta < 0 ? 'El dossier ya se encuentra al inicio' : 'El dossier ya se encuentra al final', 'info');
+    return;
+  }
+
+  const targetId = currentCardIds[targetIdx];
+  window.reordenarDossieresDrag(id, targetId, delta < 0);
+};
+
+// Funciones globales de eliminación de dossieres
+window.confirmarEliminarPersona = async function(personaId) {
+  try {
+    const p = await getPersonaById(personaId);
+    if (!p) {
+      showToast('No se encontró el legajo a eliminar', 'error');
+      return;
+    }
+    personaPendingDeleteId = p.id;
+
+    const nombreEl = document.getElementById('delete-dossier-nombre');
+    const dniEl = document.getElementById('delete-dossier-dni');
+    const bandaEl = document.getElementById('delete-dossier-banda');
+
+    const nombreCompleto = `${p.nombre || ''} ${p.apellido || ''}`.trim() || 'Sin nombre registrado';
+    const aliasStr = p.alias?.length ? ` "${p.alias.slice(0, 2).join('", "')}"` : '';
+
+    if (nombreEl) nombreEl.textContent = `${nombreCompleto}${aliasStr}`;
+    if (dniEl) dniEl.textContent = p.dni || 'Sin DNI';
+    if (bandaEl) bandaEl.textContent = p.banda_nombre || 'Individual / Sin banda';
+
+    openModal('modal-confirmar-eliminar-dossier');
+  } catch (err) {
+    console.error('Error al preparar eliminación de persona:', err);
+    showToast('Error preparando eliminación', 'error');
+  }
+};
+
+window.ejecutarEliminacionPersona = async function() {
+  if (!personaPendingDeleteId) return;
+  const idToDelete = personaPendingDeleteId;
+  const btn = document.getElementById('btn-confirmar-eliminar-persona-exec');
+  try {
+    if (btn) {
+      btn.disabled = true;
+      btn.innerHTML = '<span>Eliminando...</span>';
+    }
+
+    await deletePersona(idToDelete);
+
+    closeModal('modal-confirmar-eliminar-dossier');
+    closeModal('modal-dossier-digital');
+    closeModal('modal-persona');
+
+    await renderPersonasView();
+
+    try {
+      await loadPersonasMapData();
+    } catch (e) { }
+
+    updateHeaderStats();
+
+    searchEngine.build(getPersonas, getHechos, getBandas, getAllanamientos, getAllVinculos);
+
+    showToast('Legajo y dossier eliminados correctamente', 'info');
+  } catch (err) {
+    console.error('Error eliminando persona:', err);
+    showToast('Error al eliminar el dossier: ' + err.message, 'error');
+  } finally {
+    personaPendingDeleteId = null;
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg> Sí, Eliminar Dossier`;
+    }
+  }
+};
 
 // Global exposure for direct graph navigation
 window.enfocarPersonaEnGrafo = async function(personaId) {
@@ -2189,6 +2448,16 @@ export function initDossierSystem() {
     if (currentViewingDossierId) {
       window.editarPersonaDesdeDossier(currentViewingDossierId);
     }
+  });
+
+  document.getElementById('btn-delete-dossier-direct')?.addEventListener('click', () => {
+    if (currentViewingDossierId) {
+      window.confirmarEliminarPersona(currentViewingDossierId);
+    }
+  });
+
+  document.getElementById('btn-confirmar-eliminar-persona-exec')?.addEventListener('click', () => {
+    window.ejecutarEliminacionPersona();
   });
 
   // Creación rápida de nueva banda desde el formulario de perfil
@@ -2661,6 +2930,12 @@ window.abrirEdicionPersona = async function(personaId, targetTab = 'tab-f-identi
 
     const submitBtn = document.getElementById('btn-submit-persona');
     if (submitBtn) submitBtn.textContent = 'Guardar Cambios de Legajo';
+
+    const delEditBtn = document.getElementById('btn-delete-persona-edit');
+    if (delEditBtn) {
+      delEditBtn.style.display = 'inline-flex';
+      delEditBtn.onclick = () => window.confirmarEliminarPersona(p.id);
+    }
 
     document.getElementById('persona-edit-id').value = p.id;
     document.getElementById('persona-nombre').value = p.nombre || '';
