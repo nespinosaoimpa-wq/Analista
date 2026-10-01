@@ -14,6 +14,7 @@ import {
   parseCoordsOrUrl,
   renderPrecisionBadge
 } from './geocoder.js';
+import { idbGetAll, idbGet, idbPut, idbDelete } from './idb-store.js';
 
 export {
   geocodeAddress,
@@ -33,7 +34,7 @@ try {
   console.warn('Supabase client init fallback:', e);
 }
 
-// Hydrate from localStorage for offline/client-side persistence of new investigations
+// Hydrate from localStorage and IndexedDB for offline/client-side persistence of new investigations
 export function getDeletedPersonas() {
   try {
     if (typeof localStorage === 'undefined') return new Set();
@@ -56,6 +57,41 @@ function getCustomStore(key) {
   }
 }
 
+// Sanitizar copia para LocalStorage en caso de archivos o fotos pesadas para evitar QuotaExceededError
+function sanitizeForLocalStorage(item) {
+  if (!item || typeof item !== 'object') return item;
+  const clone = { ...item };
+  if (Array.isArray(clone.archivos_adjuntos)) {
+    clone.archivos_adjuntos = clone.archivos_adjuntos.map(f => {
+      if (f.data_url && f.data_url.length > 50000) {
+        return { ...f, data_url_omitted: true, data_url: '' };
+      }
+      return f;
+    });
+  }
+  return clone;
+}
+
+export async function ensureHydratedFromIndexedDB(key, targetList) {
+  try {
+    const items = await idbGetAll(key);
+    const deletedPersonas = key === 'personas' ? getDeletedPersonas() : new Set();
+    if (Array.isArray(items) && items.length > 0) {
+      items.forEach(it => {
+        if (!it || !it.id || deletedPersonas.has(it.id)) return;
+        const idx = targetList.findIndex(x => x.id === it.id);
+        if (idx !== -1) {
+          targetList[idx] = { ...targetList[idx], ...it };
+        } else {
+          targetList.unshift(it);
+        }
+      });
+    }
+  } catch (err) {
+    console.warn(`[CRIMINT] Error hidratando ${key} desde IndexedDB:`, err);
+  }
+}
+
 function hydrateCustomStore(key, targetList) {
   try {
     const items = getCustomStore(key);
@@ -70,11 +106,27 @@ function hydrateCustomStore(key, targetList) {
       }
     });
   } catch (e) { }
+
+  // Disparar sincronización asíncrona inmediata con IndexedDB
+  ensureHydratedFromIndexedDB(key, targetList);
 }
 
-function persistCustomItem(key, item) {
+export function persistCustomItem(key, item) {
+  if (!item || !item.id) return;
+
+  // 1. Guardar siempre en IndexedDB (sin límites de 5MB, soporta fotos y PDFs)
+  idbPut(key, item).catch(err => console.warn(`[IDB] Error guardando ${key}:`, err));
+
+  // 2. Guardar en memoria de la lista objetivo si corresponde
+  if (key === 'personas') {
+    const idx = INITIAL_PERSONAS.findIndex(x => x.id === item.id);
+    if (idx !== -1) INITIAL_PERSONAS[idx] = item;
+    else INITIAL_PERSONAS.unshift(item);
+  }
+
+  // 3. Guardar en LocalStorage con manejo inteligente de quota
   try {
-    if (typeof localStorage === 'undefined' || !item || !item.id) return;
+    if (typeof localStorage === 'undefined') return;
     const list = getCustomStore(key);
     const idx = list.findIndex(x => x.id === item.id);
     if (idx !== -1) {
@@ -82,8 +134,27 @@ function persistCustomItem(key, item) {
     } else {
       list.unshift(item);
     }
-    localStorage.setItem(`crimint_custom_${key}`, JSON.stringify(list));
-  } catch (e) { }
+
+    try {
+      localStorage.setItem(`crimint_custom_${key}`, JSON.stringify(list));
+    } catch (quotaErr) {
+      console.warn(`[CRIMINT] Quota excedida en localStorage para ${key}. Sanitizando adjuntos y fotos pesadas...`, quotaErr);
+      const sanitizedList = list.map(sanitizeForLocalStorage);
+      try {
+        localStorage.setItem(`crimint_custom_${key}`, JSON.stringify(sanitizedList));
+      } catch (secondErr) {
+        const minimalList = sanitizedList.map(it => {
+          const min = { ...it };
+          if (min.foto_url && min.foto_url.startsWith('data:')) delete min.foto_url;
+          delete min.archivos_adjuntos;
+          return min;
+        });
+        localStorage.setItem(`crimint_custom_${key}`, JSON.stringify(minimalList));
+      }
+    }
+  } catch (e) {
+    console.warn(`[CRIMINT] Error en persistCustomItem (${key}):`, e);
+  }
 }
 
 hydrateCustomStore('personas', INITIAL_PERSONAS);
@@ -198,6 +269,7 @@ export async function getHechoById(id) {
 // PERSONAS
 // ============================================================
 export async function getPersonas({ search, limit = 200 } = {}) {
+  await ensureHydratedFromIndexedDB('personas', INITIAL_PERSONAS);
   const deletedIds = getDeletedPersonas();
   let list = [];
   try {
@@ -209,7 +281,7 @@ export async function getPersonas({ search, limit = 200 } = {}) {
       if (limit) query = query.limit(limit);
       const { data, error } = await query;
       if (!error && data && data.length > 0) {
-        list = data.map(dbItem => {
+        const dbMapped = data.map(dbItem => {
           const localItem = INITIAL_PERSONAS.find(p => p.id === dbItem.id);
           if (localItem) {
             return {
@@ -225,7 +297,10 @@ export async function getPersonas({ search, limit = 200 } = {}) {
             };
           }
           return dbItem;
-        }).filter(p => !deletedIds.has(p.id));
+        });
+        const dbIds = new Set(data.map(d => d.id));
+        const localOnly = INITIAL_PERSONAS.filter(p => !dbIds.has(p.id) && !deletedIds.has(p.id));
+        list = [...localOnly, ...dbMapped];
       }
     }
   } catch (e) {
@@ -234,17 +309,18 @@ export async function getPersonas({ search, limit = 200 } = {}) {
 
   if (list.length === 0) {
     list = INITIAL_PERSONAS.filter(p => !deletedIds.has(p.id));
-    if (search) {
-      const s = search.toLowerCase();
-      list = list.filter(p =>
-        p.nombre?.toLowerCase().includes(s) ||
-        p.apellido?.toLowerCase().includes(s) ||
-        p.dni?.includes(s) ||
-        p.alias?.some(a => a.toLowerCase().includes(s))
-      );
-    }
   } else {
     list = list.filter(p => !deletedIds.has(p.id));
+  }
+
+  if (search) {
+    const s = search.toLowerCase();
+    list = list.filter(p =>
+      p.nombre?.toLowerCase().includes(s) ||
+      p.apellido?.toLowerCase().includes(s) ||
+      p.dni?.includes(s) ||
+      p.alias?.some(a => a.toLowerCase().includes(s))
+    );
   }
   return list.slice(0, limit);
 }
@@ -289,8 +365,32 @@ export async function insertPersona(persona) {
 
   const localId = persona.id || `local-persona-${Date.now()}`;
   const localObj = { ...persona, id: localId };
-  INITIAL_PERSONAS.unshift(localObj);
+
+  // Guardar en memoria inmediatamente
+  const existingIdx = INITIAL_PERSONAS.findIndex(p => p.id === localId);
+  if (existingIdx !== -1) {
+    INITIAL_PERSONAS[existingIdx] = localObj;
+  } else {
+    INITIAL_PERSONAS.unshift(localObj);
+  }
+
+  // Guardar en IndexedDB y LocalStorage
   persistCustomItem('personas', localObj);
+
+  // Asegurar que la nueva persona aparezca en primer lugar en el orden personalizado
+  try {
+    if (typeof localStorage !== 'undefined') {
+      const orderRaw = localStorage.getItem('crimint_personas_order');
+      if (orderRaw) {
+        const orderList = JSON.parse(orderRaw);
+        if (Array.isArray(orderList)) {
+          const filtered = orderList.filter(x => x !== localId);
+          filtered.unshift(localId);
+          localStorage.setItem('crimint_personas_order', JSON.stringify(filtered));
+        }
+      }
+    }
+  } catch (e) { }
 
   try {
     if (supabase) {
@@ -454,20 +554,23 @@ export async function deletePersona(id) {
     console.warn('Error guardando eliminación local de persona:', e);
   }
 
-  // 2. Remover de INITIAL_PERSONAS en memoria
+  // 2. Remover de IndexedDB
+  idbDelete('personas', id).catch(e => console.warn('Error borrando en IndexedDB:', e));
+
+  // 3. Remover de INITIAL_PERSONAS en memoria
   const idx = INITIAL_PERSONAS.findIndex(p => p.id === id);
   if (idx !== -1) {
     INITIAL_PERSONAS.splice(idx, 1);
   }
 
-  // 3. Remover vínculos asociados en INITIAL_VINCULOS
+  // 4. Remover vínculos asociados en INITIAL_VINCULOS
   for (let i = INITIAL_VINCULOS.length - 1; i >= 0; i--) {
     if (INITIAL_VINCULOS[i].persona_origen_id === id || INITIAL_VINCULOS[i].persona_destino_id === id) {
       INITIAL_VINCULOS.splice(i, 1);
     }
   }
 
-  // 4. Intentar baja en Supabase (soft-delete y delete)
+  // 5. Intentar baja en Supabase (soft-delete y delete)
   try {
     if (supabase) {
       await supabase.from('personas').update({ activo: false }).eq('id', id);
@@ -572,7 +675,17 @@ export async function getPersonasGeoJSON() {
 
 export async function getPersonaById(id) {
   if (!id || getDeletedPersonas().has(id)) return null;
-  const local = INITIAL_PERSONAS.find(p => p.id === id) || null;
+  let local = INITIAL_PERSONAS.find(p => p.id === id) || null;
+  if (!local) {
+    try {
+      const fromIdb = await idbGet('personas', id);
+      if (fromIdb) {
+        local = fromIdb;
+        INITIAL_PERSONAS.unshift(fromIdb);
+      }
+    } catch (e) { }
+  }
+
   try {
     if (supabase) {
       const { data, error } = await supabase.from('personas').select('*').eq('id', id).single();

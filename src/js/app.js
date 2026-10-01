@@ -1873,8 +1873,8 @@ async function renderPersonasView() {
         const orderMap = new Map();
         customOrder.forEach((id, idx) => orderMap.set(id, idx));
         personas.sort((a, b) => {
-          const posA = orderMap.has(a.id) ? orderMap.get(a.id) : 999999;
-          const posB = orderMap.has(b.id) ? orderMap.get(b.id) : 999999;
+          const posA = orderMap.has(a.id) ? orderMap.get(a.id) : -1;
+          const posB = orderMap.has(b.id) ? orderMap.get(b.id) : -1;
           return posA - posB;
         });
       }
