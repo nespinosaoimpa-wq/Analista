@@ -369,10 +369,825 @@ export const INITIAL_BANDAS = [
     ],
     "delitos_alta_lesividad": "Tiroteos con armas largas en barrancas ribereñas, agresiones agravadas por el uso de armas de fuego.",
     "activa": true
+  },
+  {
+    "id": "banda-eros-torres",
+    "nombre": "Red Eros Torres (Fonavi Centenario)",
+    "barrio_base": "Centenario / Fonavi San Jerónimo (Manzanas 1, 5, 9 y 11)",
+    "color_hex": "#EC4899",
+    "actividad_principal": "Comercialización de estupefacientes (Ley 23.737), búnkers fortificados y violencia armada",
+    "descripcion": "Estructura criminal con base en monoblocks del Fonavi San Jerónimo (Barrio Centenario). Conducción de Eros Emanuel Torres y Daniela Márquez, con provisión logística a cargo de Lorenzo Sandoval Acosta y búnkers de distribución en Manzanas 1, 5, 9 y 11. Mantiene violentas disputas territoriales con 'Los de Siempre' y nexos investigados con 'La Negrada'.",
+    "nivel_amenaza": 9,
+    "cabecilla_principal": "Eros Emanuel Torres y Daniela Márquez",
+    "zonas_operacion": [
+      "Barrio Centenario",
+      "Fonavi San Jerónimo",
+      "Varadero Sarsotti",
+      "San Lorenzo"
+    ],
+    "rivales": [
+      "Los de Siempre",
+      "La Negrada"
+    ],
+    "delitos_alta_lesividad": "Homicidios calificados agravados por empleo de arma de fuego (CUIJ 21-09294170-0, R-077680-25, 21-09602075-0), lesiones dolosas graves (R-094134-25) y tráfico de estupefacientes (Ley 23.737).",
+    "activa": true
   }
 ];
 
 export const INITIAL_PERSONAS = [
+  {
+    "id": "p-torres-eros",
+    "nombre": "Eros Emanuel",
+    "apellido": "Torres",
+    "alias": [
+      "Eros"
+    ],
+    "dni": "47656448",
+    "cuit": "20-47656448-4",
+    "fecha_nacimiento": "2003-05-14",
+    "sexo": "M",
+    "roles": [
+      "Cabecilla",
+      "Tirador",
+      "Comercialización de Estupefacientes"
+    ],
+    "score_peligrosidad": 9,
+    "banda_id": "banda-eros-torres",
+    "banda_nombre": "Red Eros Torres (Fonavi Centenario)",
+    "banda_color": "#EC4899",
+    "pedido_captura": true,
+    "estado_procesal": "IMPUTADO EN CAUSAS DE HOMICIDIO CALIFICADO Y NARCOMENUDEO",
+    "domicilio_principal": "Fonavi San Jerónimo, Manzana 5, Barrio Centenario, Santa Fe",
+    "domicilio_principal_geom": "SRID=4326;POINT(-60.7212 -31.6641)",
+    "domicilios": [
+      {
+        "id": "dom-torres-1",
+        "tipo": "BASE",
+        "direccion": "Fonavi San Jerónimo, Manzana 5",
+        "barrio": "Centenario",
+        "localidad": "Santa Fe",
+        "detalle": "Punto de concentración y resguardo territorial",
+        "geom": "SRID=4326;POINT(-60.7212 -31.6641)"
+      },
+      {
+        "id": "dom-torres-2",
+        "tipo": "BUNKER",
+        "direccion": "Fonavi San Jerónimo, Manzanas 5 y 9",
+        "barrio": "Centenario",
+        "localidad": "Santa Fe",
+        "detalle": "Búnker de acopio y abastecimiento intermanzanas",
+        "geom": "SRID=4326;POINT(-60.7205 -31.6650)"
+      }
+    ],
+    "causas": [
+      {
+        "id": "causa-torres-1",
+        "cuij": "21-09294170-0",
+        "caratula": "Homicidio calificado por empleo de arma de fuego (28/11/2023 - Víctima: Rossi Cristian Gabriel)",
+        "organo": "MPA - Fiscalía de Homicidios",
+        "estado": "Imputado Coautor"
+      },
+      {
+        "id": "causa-torres-2",
+        "cuij": "21-09776802-5",
+        "caratula": "Requerimiento R-077680-25 Homicidio (Víctima: Lucas Rolón)",
+        "organo": "MPA - Unidad Fiscal Especial",
+        "estado": "Investigado Asociado"
+      },
+      {
+        "id": "causa-torres-3",
+        "cuij": "21-09602075-0",
+        "caratula": "Homicidio en Centenario a cargo del fiscal Lacuadra",
+        "organo": "MPA - Fiscal Lacuadra",
+        "estado": "Investigado / Víctima en agresión mutua"
+      },
+      {
+        "id": "causa-torres-4",
+        "cuij": "21-09652421-0",
+        "caratula": "Investigación a cargo del fiscal Olcesia (01/08/2025) - Secuestro rodado Citroën C4",
+        "organo": "MPA - Fiscal Olcesia",
+        "estado": "Investigado"
+      }
+    ],
+    "vehiculos": [
+      {
+        "id": "veh-torres-1",
+        "patente": "MZG-219",
+        "tipo": "Automóvil",
+        "marca": "Citroën",
+        "modelo": "C4",
+        "color": "Negro",
+        "titular": "Investigado",
+        "rol": "Vehículo operativo de traslados y ataques"
+      }
+    ],
+    "familiares": [],
+    "contactos": [
+      {
+        "tipo": "TELEFONO",
+        "valor": "+54 9 342 590-4411",
+        "detalle": "Línea de contacto reservada"
+      }
+    ],
+    "antecedentes_texto": "Identificado en estructura IBM i2 como nodo central con imputaciones por homicidio agravado por empleo de arma de fuego y microtráfico en monoblocks del Fonavi Centenario."
+  },
+  {
+    "id": "p-marquez-daniela",
+    "nombre": "Daniela",
+    "apellido": "Márquez",
+    "alias": [
+      "Daniela"
+    ],
+    "dni": "39482249",
+    "cuit": "27-39482249-2",
+    "fecha_nacimiento": "1996-08-22",
+    "sexo": "F",
+    "roles": [
+      "Operadora de Búnkers",
+      "Distribución de Estupefacientes",
+      "Financista"
+    ],
+    "score_peligrosidad": 7,
+    "banda_id": "banda-eros-torres",
+    "banda_nombre": "Red Eros Torres (Fonavi Centenario)",
+    "banda_color": "#EC4899",
+    "pedido_captura": false,
+    "estado_procesal": "IMPUTADA LEY 23.737 / VÍCTIMA HERIDA DE ARMA DE FUEGO",
+    "domicilio_principal": "Fonavi San Jerónimo, Manzana 1 Escalera 2 - Primer Piso, Santa Fe",
+    "domicilio_principal_geom": "SRID=4326;POINT(-60.7225 -31.6632)",
+    "domicilios": [
+      {
+        "id": "dom-marquez-1",
+        "tipo": "BUNKER",
+        "direccion": "Fonavi San Jerónimo, Manzana 1 Escalera 2 - Primer Piso",
+        "barrio": "Centenario",
+        "localidad": "Santa Fe",
+        "detalle": "Búnker familiar y punto de venta Ley 23.737",
+        "geom": "SRID=4326;POINT(-60.7225 -31.6632)"
+      },
+      {
+        "id": "dom-marquez-2",
+        "tipo": "PUNTO_VENTA",
+        "direccion": "Fonavi San Jerónimo, Manzanas 5 y 9",
+        "barrio": "Centenario",
+        "localidad": "Santa Fe",
+        "detalle": "Búnker provisto",
+        "geom": "SRID=4326;POINT(-60.7212 -31.6641)"
+      }
+    ],
+    "causas": [
+      {
+        "id": "causa-marquez-1",
+        "cuij": "21-09366110-0",
+        "caratula": "Infracción Ley 23.737 Ctoy 23737 - Tenencia con fines de comercialización",
+        "organo": "Juzgado Federal / MPA Microtráfico",
+        "estado": "Procesada / Imputada"
+      },
+      {
+        "id": "causa-marquez-2",
+        "cuij": "21-09413425-7",
+        "caratula": "Requerimiento R-094134-25 (27/04/2025) Lesiones Dolosas Graves - Herida con arma de fuego",
+        "organo": "MPA",
+        "estado": "Víctima"
+      },
+      {
+        "id": "causa-marquez-3",
+        "cuij": "21-09362625-3",
+        "caratula": "Requerimiento R-093626-25 (27/04/2025) Abuso de armas en enfrentamiento armado",
+        "organo": "MPA",
+        "estado": "Investigada Asociada"
+      }
+    ],
+    "familiares": [
+      {
+        "familiar_id": "p-marquez-jose",
+        "parentesco": "Padre",
+        "observaciones": "José Francisco Márquez ('Pato') - Co-operador del búnker Mz 1 Esc 2"
+      }
+    ],
+    "antecedentes_texto": "Conduce la logística de ventas en los monoblocks. Sufrió herida de bala en el tiroteo del 27/04/2025 (R-094134-25). Nexo directo con búnkers de Manzana 1 y Manzanas 5 y 9."
+  },
+  {
+    "id": "p-sandoval-lorenzo",
+    "nombre": "Lorenzo",
+    "apellido": "Sandoval Acosta",
+    "alias": [
+      "Lorenzo",
+      "Sandoval"
+    ],
+    "dni": "41872190",
+    "cuit": "20-41872190-3",
+    "fecha_nacimiento": "1999-03-11",
+    "sexo": "M",
+    "roles": [
+      "Proveedor",
+      "Logística Búnkers",
+      "Distribuidor"
+    ],
+    "score_peligrosidad": 7,
+    "banda_id": "banda-eros-torres",
+    "banda_nombre": "Red Eros Torres (Fonavi Centenario)",
+    "banda_color": "#EC4899",
+    "pedido_captura": false,
+    "estado_procesal": "INVESTIGADO - PROVEEDOR DE BOCAS DE EXPENDIO",
+    "domicilio_principal": "Fonavi San Jerónimo, Manzanas 5 y 9, Barrio Centenario, Santa Fe",
+    "domicilio_principal_geom": "SRID=4326;POINT(-60.7212 -31.6641)",
+    "domicilios": [
+      {
+        "id": "dom-sandoval-1",
+        "tipo": "PRINCIPAL",
+        "direccion": "Fonavi San Jerónimo, Manzanas 5 y 9",
+        "barrio": "Centenario",
+        "localidad": "Santa Fe",
+        "detalle": "Búnker de distribución principal",
+        "geom": "SRID=4326;POINT(-60.7212 -31.6641)"
+      },
+      {
+        "id": "dom-sandoval-2",
+        "tipo": "BUNKER",
+        "direccion": "Fonavi San Jerónimo, Manzana 5 Dpto 82",
+        "barrio": "Centenario",
+        "localidad": "Santa Fe",
+        "detalle": "Búnker provisto (operado por Vanesa Placentuk)",
+        "geom": "SRID=4326;POINT(-60.7214 -31.6644)"
+      },
+      {
+        "id": "dom-sandoval-3",
+        "tipo": "AGUANTADERO",
+        "direccion": "Fonavi San Jerónimo, Manzana 11 (apellido Rico)",
+        "barrio": "Centenario",
+        "localidad": "Santa Fe",
+        "detalle": "Inmueble receptor provisto",
+        "geom": "SRID=4326;POINT(-60.7198 -31.6658)"
+      }
+    ],
+    "causas": [
+      {
+        "id": "causa-sandoval-1",
+        "cuij": "21-09156272-5",
+        "caratula": "Investigación R-015627-25 por suministro a búnkers",
+        "organo": "MPA",
+        "estado": "Investigado"
+      }
+    ],
+    "antecedentes_texto": "Eslabón de abastecimiento entre Eros Torres y los puntos de expendio en el Fonavi Centenario. Figura como proveedor explícito de Manzanas 5 y 9, Manzana 5 Dpto 82 y Manzana 11."
+  },
+  {
+    "id": "p-marquez-jose",
+    "nombre": "José Francisco",
+    "apellido": "Márquez",
+    "alias": [
+      "Pato"
+    ],
+    "dni": "17007113",
+    "cuit": "20-17007113-5",
+    "fecha_nacimiento": "1964-10-05",
+    "sexo": "M",
+    "roles": [
+      "Administrador de Búnker",
+      "Logística"
+    ],
+    "score_peligrosidad": 6,
+    "banda_id": "banda-eros-torres",
+    "banda_nombre": "Red Eros Torres (Fonavi Centenario)",
+    "banda_color": "#EC4899",
+    "pedido_captura": false,
+    "estado_procesal": "INVESTIGADO - VÍNCULO FAMILIAR / PROGENITOR",
+    "domicilio_principal": "Fonavi San Jerónimo, Manzana 1 Escalera 2 - Primer Piso, Santa Fe",
+    "domicilio_principal_geom": "SRID=4326;POINT(-60.7225 -31.6632)",
+    "domicilios": [
+      {
+        "id": "dom-marquezpato-1",
+        "tipo": "BUNKER",
+        "direccion": "Fonavi San Jerónimo, Manzana 1 Escalera 2 - Primer Piso",
+        "barrio": "Centenario",
+        "localidad": "Santa Fe",
+        "detalle": "Residencia y búnker investigado CUIJ 21-09366110 Ctoy 23737",
+        "geom": "SRID=4326;POINT(-60.7225 -31.6632)"
+      }
+    ],
+    "causas": [
+      {
+        "id": "causa-marquezpato-1",
+        "cuij": "21-09366110-0",
+        "caratula": "Causa 21-09366110 Ctoy 23737 - Infracción Ley 23.737",
+        "organo": "Justicia Federal / MPA",
+        "estado": "Investigado Asociado"
+      }
+    ],
+    "familiares": [
+      {
+        "familiar_id": "p-marquez-daniela",
+        "parentesco": "Hija",
+        "observaciones": "Daniela Márquez (DNI 39482249)"
+      }
+    ],
+    "antecedentes_texto": "Padre de Daniela Márquez. Registrado en el legajo de IBM i2 con vinculación directa al búnker de Manzana 1 Escalera 2 - Primer Piso."
+  },
+  {
+    "id": "p-obregon-lautaro",
+    "nombre": "Lautaro Agustín",
+    "apellido": "Obregón",
+    "alias": [
+      "Roco",
+      "Posiblemente Roco"
+    ],
+    "dni": "42898739",
+    "cuit": "20-42898739-1",
+    "fecha_nacimiento": "2000-11-29",
+    "sexo": "M",
+    "roles": [
+      "Tirador",
+      "Distribuidor",
+      "Brazo Armado"
+    ],
+    "score_peligrosidad": 8,
+    "banda_id": "banda-eros-torres",
+    "banda_nombre": "Red Eros Torres (Fonavi Centenario)",
+    "banda_color": "#EC4899",
+    "pedido_captura": true,
+    "estado_procesal": "POSIBLE RESPONSABLE DE ABUSOS DE ARMAS Y VENTA DE DROGAS",
+    "domicilio_principal": "Fonavi San Jerónimo, Barrio Centenario, Santa Fe",
+    "domicilio_principal_geom": "SRID=4326;POINT(-60.7218 -31.6642)",
+    "causas": [
+      {
+        "id": "causa-obregon-1",
+        "cuij": "21-09205842-5",
+        "caratula": "Requerimiento R-020584-25 (31/01/2025) Venta de estupefacientes y disparos con arma de fuego",
+        "organo": "MPA",
+        "estado": "Posible Responsable Señalado"
+      },
+      {
+        "id": "causa-obregon-2",
+        "cuij": "21-09652421-0",
+        "caratula": "CUIJ 21-09652421-0 Fiscal Olcesia - Vinculado a rodado Citroën C4 negro MZG-219",
+        "organo": "MPA - Fiscal Olcesia",
+        "estado": "Asociado"
+      }
+    ],
+    "vehiculos": [
+      {
+        "id": "veh-obregon-1",
+        "patente": "MZG-219",
+        "tipo": "Automóvil",
+        "marca": "Citroën",
+        "modelo": "C4",
+        "color": "Negro",
+        "titular": "Asociado",
+        "rol": "Rodado utilizado en tiroteos e intimidaciones"
+      }
+    ],
+    "antecedentes_texto": "Apodado 'Roco'. Mencionado en actuaciones por disparos intimidatorios y distribución barrial. Vinculado operativamente al Citroën C4 negro MZG-219."
+  },
+  {
+    "id": "p-sosa-tomas",
+    "nombre": "Tomás Rubén",
+    "apellido": "Sosa",
+    "alias": [
+      "Tomás"
+    ],
+    "dni": "46137188",
+    "cuit": "20-46137188-7",
+    "fecha_nacimiento": "2004-06-19",
+    "sexo": "M",
+    "roles": [
+      "Operador Logístico",
+      "Chofer"
+    ],
+    "score_peligrosidad": 6,
+    "banda_id": "banda-eros-torres",
+    "banda_nombre": "Red Eros Torres (Fonavi Centenario)",
+    "banda_color": "#EC4899",
+    "pedido_captura": false,
+    "estado_procesal": "INVESTIGADO - ASOCIADO",
+    "domicilio_principal": "Barrio Centenario, Santa Fe",
+    "domicilio_principal_geom": "SRID=4326;POINT(-60.7228 -31.6639)",
+    "causas": [
+      {
+        "id": "causa-sosa-1",
+        "cuij": "21-09652421-0",
+        "caratula": "Investigación Fiscal Olcesia (01/08/2025) - Conexión rodado Citroën C4",
+        "organo": "MPA",
+        "estado": "Investigado"
+      }
+    ],
+    "vehiculos": [
+      {
+        "id": "veh-sosa-1",
+        "patente": "MZG-219",
+        "tipo": "Automóvil",
+        "marca": "Citroën",
+        "modelo": "C4",
+        "color": "Negro",
+        "titular": "Asociado",
+        "rol": "Desplazamiento"
+      }
+    ],
+    "antecedentes_texto": "Asociado al transporte y logística con el vehículo Citroën C4 dominio MZG-219 bajo investigación penal."
+  },
+  {
+    "id": "p-marani-roxana",
+    "nombre": "Roxana Guadalupe",
+    "apellido": "Marani",
+    "alias": [
+      "Roxana"
+    ],
+    "dni": "35182115",
+    "cuit": "27-35182115-4",
+    "fecha_nacimiento": "1990-09-08",
+    "sexo": "F",
+    "roles": [
+      "Asociada",
+      "Logística"
+    ],
+    "score_peligrosidad": 5,
+    "banda_id": "banda-eros-torres",
+    "banda_nombre": "Red Eros Torres (Fonavi Centenario)",
+    "banda_color": "#EC4899",
+    "pedido_captura": false,
+    "estado_procesal": "INVESTIGADA",
+    "domicilio_principal": "Barrio Centenario, Santa Fe",
+    "domicilio_principal_geom": "SRID=4326;POINT(-60.7232 -31.6644)",
+    "causas": [
+      {
+        "id": "causa-marani-1",
+        "cuij": "21-09652421-0",
+        "caratula": "Investigación Fiscal Olcesia (01/08/2025) - Vínculo con rodado investigado",
+        "organo": "MPA",
+        "estado": "Asociada"
+      }
+    ],
+    "antecedentes_texto": "Registrada en el diagrama de vínculos asociada al uso del rodado Citroën C4 negro dominio MZG-219."
+  },
+  {
+    "id": "p-rico-juan",
+    "nombre": "Juan Pablo",
+    "apellido": "Rico",
+    "alias": [
+      "Rico"
+    ],
+    "dni": "42004200",
+    "cuit": "20-42004200-2",
+    "fecha_nacimiento": "1999-07-24",
+    "sexo": "M",
+    "roles": [
+      "Soldadito",
+      "Nexo Interbandas"
+    ],
+    "score_peligrosidad": 7,
+    "banda_id": "banda-la-negrada",
+    "banda_nombre": "La Negrada",
+    "banda_color": "#EF4444",
+    "pedido_captura": false,
+    "estado_procesal": "INVESTIGADO - VÍNCULO LA NEGRADA",
+    "domicilio_principal": "Fonavi San Jerónimo, Manzana 11 (apellido Rico), Santa Fe",
+    "domicilio_principal_geom": "SRID=4326;POINT(-60.7198 -31.6658)",
+    "antecedentes_texto": "Conexión en Manzana 11 con la organización criminal 'La Negrada'. Figura en IBM i2 con anotación 'Podría ser' respecto del punto provisto por Sandoval Acosta."
+  },
+  {
+    "id": "p-placentuk-vanesa",
+    "nombre": "Vanesa Elisabet",
+    "apellido": "Placentuk",
+    "alias": [
+      "Vanesa"
+    ],
+    "dni": "38429543",
+    "cuit": "27-38429543-9",
+    "fecha_nacimiento": "1994-12-03",
+    "sexo": "F",
+    "roles": [
+      "Operadora Búnker",
+      "Venta Minorista"
+    ],
+    "score_peligrosidad": 6,
+    "banda_id": "banda-eros-torres",
+    "banda_nombre": "Red Eros Torres (Fonavi Centenario)",
+    "banda_color": "#EC4899",
+    "pedido_captura": false,
+    "estado_procesal": "INVESTIGADA - CAUSA R-015627-25",
+    "domicilio_principal": "Fonavi San Jerónimo, Manzana 5 Dpto 82, Santa Fe",
+    "domicilio_principal_geom": "SRID=4326;POINT(-60.7214 -31.6644)",
+    "domicilios": [
+      {
+        "id": "dom-placentuk-1",
+        "tipo": "BUNKER",
+        "direccion": "Fonavi San Jerónimo, Manzana 5 Dpto 82",
+        "barrio": "Centenario",
+        "localidad": "Santa Fe",
+        "detalle": "Punto de fraccionamiento y venta provisto por Lorenzo Sandoval",
+        "geom": "SRID=4326;POINT(-60.7214 -31.6644)"
+      }
+    ],
+    "causas": [
+      {
+        "id": "causa-placentuk-1",
+        "cuij": "21-09156272-5",
+        "caratula": "Actuaciones R-015627-25 por estupefacientes en Manzana 5 Dpto 82",
+        "organo": "MPA",
+        "estado": "Investigada"
+      }
+    ],
+    "antecedentes_texto": "Encargada operativa del Búnker en Manzana 5 Dpto 82, abastecido por Lorenzo Sandoval Acosta."
+  },
+  {
+    "id": "p-pasculi-bruno",
+    "nombre": "Bruno",
+    "apellido": "Pasculi",
+    "alias": [
+      "Los Mellizos Pasculi",
+      "Bruno"
+    ],
+    "dni": "42929124",
+    "cuit": "20-42929124-6",
+    "fecha_nacimiento": "2000-09-15",
+    "sexo": "M",
+    "roles": [
+      "Brazo Armado",
+      "Tirador",
+      "Disputa Territorial"
+    ],
+    "score_peligrosidad": 8,
+    "banda_id": "banda-los-de-siempre",
+    "banda_nombre": "Los de Siempre",
+    "banda_color": "#0EA5E9",
+    "pedido_captura": false,
+    "estado_procesal": "IMPUTADO EN BALACERAS REITERADAS",
+    "domicilio_principal": "Barrio Centenario, Santa Fe",
+    "domicilio_principal_geom": "SRID=4326;POINT(-60.7220 -31.6634)",
+    "causas": [
+      {
+        "id": "causa-pasculib-1",
+        "cuij": "21-09413425-7",
+        "caratula": "Requerimiento R-094134-25 (27/04/2025) Lesiones Dolosas Graves con arma de fuego",
+        "organo": "MPA",
+        "estado": "Imputado"
+      },
+      {
+        "id": "causa-pasculib-2",
+        "cuij": "21-09362625-3",
+        "caratula": "Requerimiento R-093626-25 (27/04/2025) Abuso de armas contra Daniela Márquez y facción",
+        "organo": "MPA",
+        "estado": "Imputado"
+      }
+    ],
+    "familiares": [
+      {
+        "familiar_id": "p-pasculi-joaquin",
+        "parentesco": "Hermano Mellizo",
+        "observaciones": "Joaquín Pasculi (DNI 42929123)"
+      }
+    ],
+    "antecedentes_texto": "Hermano mellizo de Joaquín Pasculi. Integrante del brazo armado de 'Los de Siempre'. Participó en las agresiones armadas del 27/04/2025."
+  },
+  {
+    "id": "p-pasculi-joaquin",
+    "nombre": "Joaquín",
+    "apellido": "Pasculi",
+    "alias": [
+      "Los Mellizos Pasculi",
+      "Joaquín"
+    ],
+    "dni": "42929123",
+    "cuit": "20-42929123-8",
+    "fecha_nacimiento": "2000-09-15",
+    "sexo": "M",
+    "roles": [
+      "Brazo Armado",
+      "Tirador",
+      "Disputa Territorial"
+    ],
+    "score_peligrosidad": 8,
+    "banda_id": "banda-los-de-siempre",
+    "banda_nombre": "Los de Siempre",
+    "banda_color": "#0EA5E9",
+    "pedido_captura": false,
+    "estado_procesal": "IMPUTADO EN BALACERAS REITERADAS",
+    "domicilio_principal": "Barrio Centenario, Santa Fe",
+    "domicilio_principal_geom": "SRID=4326;POINT(-60.7220 -31.6634)",
+    "causas": [
+      {
+        "id": "causa-pasculij-1",
+        "cuij": "21-09413425-7",
+        "caratula": "Requerimiento R-094134-25 (27/04/2025) Lesiones Dolosas Graves con arma de fuego",
+        "organo": "MPA",
+        "estado": "Imputado"
+      },
+      {
+        "id": "causa-pasculij-2",
+        "cuij": "21-09362625-3",
+        "caratula": "Requerimiento R-093626-25 (27/04/2025) Abuso de armas contra Daniela Márquez y facción",
+        "organo": "MPA",
+        "estado": "Imputado"
+      }
+    ],
+    "familiares": [
+      {
+        "familiar_id": "p-pasculi-bruno",
+        "parentesco": "Hermano Mellizo",
+        "observaciones": "Bruno Pasculi (DNI 42929124)"
+      }
+    ],
+    "antecedentes_texto": "Hermano mellizo de Bruno Pasculi. Integrante del brazo armado de 'Los de Siempre'. Participó en las agresiones armadas del 27/04/2025."
+  },
+  {
+    "id": "p-ledesma-maximiliano",
+    "nombre": "Maximiliano",
+    "apellido": "Ledesma",
+    "alias": [
+      "Maxi"
+    ],
+    "dni": "43377370",
+    "cuit": "20-43377370-1",
+    "fecha_nacimiento": "1991-04-10",
+    "sexo": "M",
+    "roles": [
+      "Víctima HAF"
+    ],
+    "score_peligrosidad": 3,
+    "banda_id": null,
+    "banda_nombre": "Individual / Sin banda",
+    "banda_color": "#94A3B8",
+    "pedido_captura": false,
+    "estado_procesal": "VÍCTIMA DE LESIONES POR ARMA DE FUEGO",
+    "domicilio_principal": "Pasaje Calatao 1477, Santa Fe",
+    "domicilio_principal_geom": "SRID=4326;POINT(-60.7248 -31.6620)",
+    "causas": [
+      {
+        "id": "causa-ledesma-1",
+        "cuij": "21-09413425-7",
+        "caratula": "R-094134-25 (27/04/2025) Lesiones Dolosas Graves - Herida de bala",
+        "organo": "MPA",
+        "estado": "Víctima"
+      }
+    ],
+    "antecedentes_texto": "34 años. Domiciliado en Pasaje Calatao 1477. Resultó herido con arma de fuego durante el ataque de los mellizos Pasculi en Centenario."
+  },
+  {
+    "id": "p-pasculi-valentino",
+    "nombre": "Valentino",
+    "apellido": "Pasculi",
+    "alias": [
+      "Valentino"
+    ],
+    "dni": "49004834",
+    "cuit": "20-49004834-3",
+    "fecha_nacimiento": "2012-08-05",
+    "sexo": "M",
+    "roles": [
+      "Víctima HAF",
+      "Menor Lesionado"
+    ],
+    "score_peligrosidad": 1,
+    "banda_id": null,
+    "banda_nombre": "Individual / Familia Pasculi",
+    "banda_color": "#94A3B8",
+    "pedido_captura": false,
+    "estado_procesal": "VÍCTIMA (MENOR DE EDAD HERIDO DE BALA)",
+    "domicilio_principal": "Independencia 3403, Barrio Centenario, Santa Fe",
+    "domicilio_principal_geom": "SRID=4326;POINT(-60.7218 -31.6638)",
+    "causas": [
+      {
+        "id": "causa-pasculiv-1",
+        "cuij": "21-09413425-7",
+        "caratula": "R-094134-25 (27/04/2025) Menor lesionado por impacto de bala en enfrentamiento",
+        "organo": "MPA",
+        "estado": "Víctima"
+      }
+    ],
+    "antecedentes_texto": "13 años. Domiciliado en Independencia 3403. Resultó víctima colateral con herida de bala en la balacera del 27/04/2025."
+  },
+  {
+    "id": "p-rossi-cristian",
+    "nombre": "Cristian Gabriel",
+    "apellido": "Rossi",
+    "alias": [
+      "Cristian Rossi"
+    ],
+    "dni": "35046365",
+    "cuit": "20-35046365-8",
+    "fecha_nacimiento": "1990-01-20",
+    "sexo": "M",
+    "roles": [
+      "Víctima Homicidio"
+    ],
+    "score_peligrosidad": 4,
+    "banda_id": null,
+    "banda_nombre": "Individual",
+    "banda_color": "#94A3B8",
+    "pedido_captura": false,
+    "estado_procesal": "VÍCTIMA FALLECIDA (OCCISO)",
+    "domicilio_principal": "Barrio Centenario, Santa Fe",
+    "domicilio_principal_geom": "SRID=4326;POINT(-60.7215 -31.6645)",
+    "causas": [
+      {
+        "id": "causa-rossi-1",
+        "cuij": "21-09294170-0",
+        "caratula": "Homicidio calificado por empleo de arma de fuego (28/11/2023)",
+        "organo": "MPA - Fiscalía de Homicidios",
+        "estado": "Víctima Fatal"
+      }
+    ],
+    "antecedentes_texto": "Víctima fatal en causa de homicidio calificado por empleo de arma de fuego ocurrida el 28/11/2023, imputada a Eros Emanuel Torres."
+  },
+  {
+    "id": "p-rolon-lucas",
+    "nombre": "Lucas Maximiliano",
+    "apellido": "Rolón",
+    "alias": [
+      "Lucas Rolón"
+    ],
+    "dni": "37146527",
+    "cuit": "20-37146527-3",
+    "fecha_nacimiento": "1993-06-14",
+    "sexo": "M",
+    "roles": [
+      "Víctima Homicidio"
+    ],
+    "score_peligrosidad": 4,
+    "banda_id": null,
+    "banda_nombre": "Individual",
+    "banda_color": "#94A3B8",
+    "pedido_captura": false,
+    "estado_procesal": "VÍCTIMA FALLECIDA (OCCISO)",
+    "domicilio_principal": "Barrio Centenario, Santa Fe",
+    "domicilio_principal_geom": "SRID=4326;POINT(-60.7220 -31.6640)",
+    "causas": [
+      {
+        "id": "causa-rolon-1",
+        "cuij": "21-09776802-5",
+        "caratula": "Requerimiento R-077680-25 Homicidio",
+        "organo": "MPA",
+        "estado": "Víctima Fatal"
+      }
+    ],
+    "antecedentes_texto": "Víctima fatal de homicidio investigado bajo Requerimiento R-077680-25 vinculado a la facción de Eros Emanuel Torres."
+  },
+  {
+    "id": "p-leiva-gonzalo",
+    "nombre": "Gonzalo Ezequiel",
+    "apellido": "Leiva",
+    "alias": [
+      "Gonzalo Leiva"
+    ],
+    "dni": "47660468",
+    "cuit": "20-47660468-9",
+    "fecha_nacimiento": "2003-10-18",
+    "sexo": "M",
+    "roles": [
+      "Víctima Homicidio Centenario"
+    ],
+    "score_peligrosidad": 6,
+    "banda_id": "banda-los-de-siempre",
+    "banda_nombre": "Los de Siempre",
+    "banda_color": "#0EA5E9",
+    "pedido_captura": false,
+    "estado_procesal": "VÍCTIMA FALLECIDA EN CONFLICTO TERRITORIAL",
+    "domicilio_principal": "Fonavi San Jerónimo, Barrio Centenario, Santa Fe",
+    "domicilio_principal_geom": "SRID=4326;POINT(-60.7210 -31.6648)",
+    "causas": [
+      {
+        "id": "causa-leiva-1",
+        "cuij": "21-09602075-0",
+        "caratula": "Homicidio Centenario a cargo del Fiscal Lacuadra",
+        "organo": "MPA - Fiscal Lacuadra",
+        "estado": "Víctima Fatal"
+      }
+    ],
+    "antecedentes_texto": "Víctima fatal en el homicidio investigado en CUIJ 21-09602075-0 (Fiscal Lacuadra) en Fonavi Centenario. Miembro de la familia Leiva de 'Los de Siempre'."
+  },
+  {
+    "id": "p-vazquez-sebastian",
+    "nombre": "Sebastián Ezequiel",
+    "apellido": "Vázquez",
+    "alias": [
+      "Sebastián Vázquez"
+    ],
+    "dni": "47075020",
+    "cuit": "20-47075020-5",
+    "fecha_nacimiento": "2002-12-07",
+    "sexo": "M",
+    "roles": [
+      "Víctima Homicidio Centenario"
+    ],
+    "score_peligrosidad": 5,
+    "banda_id": null,
+    "banda_nombre": "Individual / Fonavi Centenario",
+    "banda_color": "#94A3B8",
+    "pedido_captura": false,
+    "estado_procesal": "VÍCTIMA FALLECIDA EN CONFLICTO TERRITORIAL",
+    "domicilio_principal": "Fonavi San Jerónimo, Barrio Centenario, Santa Fe",
+    "domicilio_principal_geom": "SRID=4326;POINT(-60.7210 -31.6648)",
+    "causas": [
+      {
+        "id": "causa-vazquez-1",
+        "cuij": "21-09602075-0",
+        "caratula": "Homicidio Centenario a cargo del Fiscal Lacuadra",
+        "organo": "MPA - Fiscal Lacuadra",
+        "estado": "Víctima Fatal"
+      }
+    ],
+    "antecedentes_texto": "Víctima fatal junto a Gonzalo Leiva en la causa CUIJ 21-09602075-0 (Fiscal Lacuadra) en monoblocks del Fonavi Centenario."
+  },
   {
     "id": "p-diaz-juan-marcelo",
     "nombre": "Juan Marcelo",
@@ -9284,6 +10099,292 @@ export const INITIAL_PERSONAS = [
 
 export const INITIAL_VINCULOS = [
   {
+    "id": "v-eros-1",
+    "persona_origen_id": "p-torres-eros",
+    "persona_destino_id": "p-sandoval-lorenzo",
+    "tipo_relacion": "ASOCIADO",
+    "origen_nombre": "Eros Emanuel Torres",
+    "destino_nombre": "Lorenzo Sandoval Acosta",
+    "certeza": "CONFIRMADO",
+    "tipo": "ASOCIADO",
+    "origen_informacion": "IBM i2 Red Eros Torres: Enlace directo de mando y articulación operativa"
+  },
+  {
+    "id": "v-eros-2",
+    "persona_origen_id": "p-marquez-jose",
+    "persona_destino_id": "p-marquez-daniela",
+    "tipo_relacion": "FAMILIAR_PADRE",
+    "origen_nombre": "José Francisco Márquez (Polo)",
+    "destino_nombre": "Daniela Márquez",
+    "certeza": "CONFIRMADO",
+    "tipo": "FAMILIAR_PADRE",
+    "origen_informacion": "IBM i2 Red Eros Torres: Vínculo filial directo 'Padre'"
+  },
+  {
+    "id": "v-eros-3",
+    "persona_origen_id": "p-marquez-daniela",
+    "persona_destino_id": "p-sandoval-lorenzo",
+    "tipo_relacion": "PROVEEDOR",
+    "origen_nombre": "Daniela Márquez",
+    "destino_nombre": "Lorenzo Sandoval Acosta",
+    "certeza": "CONFIRMADO",
+    "tipo": "PROVEEDOR",
+    "origen_informacion": "IBM i2 Red Eros Torres: Proveedora de estupefacientes a búnkers y red de Sandoval"
+  },
+  {
+    "id": "v-eros-4",
+    "persona_origen_id": "p-sandoval-lorenzo",
+    "persona_destino_id": "p-placentuk-vanesa",
+    "tipo_relacion": "ASOCIADO_PROVEEDOR",
+    "origen_nombre": "Lorenzo Sandoval Acosta",
+    "destino_nombre": "Vanesa Elisabet Placentuk",
+    "certeza": "CONFIRMADO",
+    "tipo": "ASOCIADO_PROVEEDOR",
+    "origen_informacion": "IBM i2 Red Eros Torres: Abastecimiento y control de búnker Manzana 5 Dpto 82"
+  },
+  {
+    "id": "v-eros-5",
+    "persona_origen_id": "p-sandoval-lorenzo",
+    "persona_destino_id": "p-rico-juan",
+    "tipo_relacion": "ASOCIADO",
+    "origen_nombre": "Lorenzo Sandoval Acosta",
+    "destino_nombre": "Juan Pablo Rico",
+    "certeza": "CONFIRMADO",
+    "tipo": "ASOCIADO",
+    "origen_informacion": "IBM i2 Red Eros Torres: Vínculo con Manzana 11 (apellido Rico) / Podría ser"
+  },
+  {
+    "id": "v-eros-6",
+    "persona_origen_id": "p-rico-juan",
+    "persona_destino_id": "banda-la-negrada",
+    "tipo_relacion": "ASOCIADO_BANDA",
+    "origen_nombre": "Juan Pablo Rico",
+    "destino_nombre": "La Negrada",
+    "certeza": "CONFIRMADO",
+    "tipo": "ASOCIADO_BANDA",
+    "origen_informacion": "IBM i2 Red Eros Torres: Enlace de Rico con la facción LA NEGRADA"
+  },
+  {
+    "id": "v-eros-7",
+    "persona_origen_id": "p-torres-eros",
+    "persona_destino_id": "p-obregon-lautaro",
+    "tipo_relacion": "ASOCIADO",
+    "origen_nombre": "Eros Emanuel Torres",
+    "destino_nombre": "Lautaro Agustín Obregón (Roco)",
+    "certeza": "CONFIRMADO",
+    "tipo": "ASOCIADO",
+    "origen_informacion": "IBM i2 Red Eros Torres: Nexo a través de causa 21-09652421-0 Fiscal Olcesia y rodado C4"
+  },
+  {
+    "id": "v-eros-8",
+    "persona_origen_id": "p-obregon-lautaro",
+    "persona_destino_id": "p-sosa-tomas",
+    "tipo_relacion": "ASOCIADO_RODADO",
+    "origen_nombre": "Lautaro Agustín Obregón (Roco)",
+    "destino_nombre": "Tomás Rubén Sosa",
+    "certeza": "CONFIRMADO",
+    "tipo": "ASOCIADO_RODADO",
+    "origen_informacion": "IBM i2 Red Eros Torres: Uso conjunto de Citroën C4 negro MZG-219"
+  },
+  {
+    "id": "v-eros-9",
+    "persona_origen_id": "p-sosa-tomas",
+    "persona_destino_id": "p-marani-roxana",
+    "tipo_relacion": "ASOCIADO_RODADO",
+    "origen_nombre": "Tomás Rubén Sosa",
+    "destino_nombre": "Roxana Guadalupe Marani",
+    "certeza": "CONFIRMADO",
+    "tipo": "ASOCIADO_RODADO",
+    "origen_informacion": "IBM i2 Red Eros Torres: Titularidad y usuarios del vehículo Citroën C4"
+  },
+  {
+    "id": "v-eros-10",
+    "persona_origen_id": "p-obregon-lautaro",
+    "persona_destino_id": "p-marani-roxana",
+    "tipo_relacion": "ASOCIADO_RODADO",
+    "origen_nombre": "Lautaro Agustín Obregón (Roco)",
+    "destino_nombre": "Roxana Guadalupe Marani",
+    "certeza": "CONFIRMADO",
+    "tipo": "ASOCIADO_RODADO",
+    "origen_informacion": "IBM i2 Red Eros Torres: Vínculo directo por automóvil Citroën C4 negro MZG-219"
+  },
+  {
+    "id": "v-eros-11",
+    "persona_origen_id": "p-pasculi-bruno",
+    "persona_destino_id": "p-pasculi-joaquin",
+    "tipo_relacion": "FAMILIAR_HERMANO",
+    "origen_nombre": "Bruno Pasculi",
+    "destino_nombre": "Joaquín Pasculi",
+    "certeza": "CONFIRMADO",
+    "tipo": "FAMILIAR_HERMANO",
+    "origen_informacion": "IBM i2 Red Eros Torres: 'Los mellizos Pasculi'"
+  },
+  {
+    "id": "v-eros-12",
+    "persona_origen_id": "p-pasculi-bruno",
+    "persona_destino_id": "banda-los-de-siempre",
+    "tipo_relacion": "ASOCIADO_BANDA",
+    "origen_nombre": "Bruno Pasculi",
+    "destino_nombre": "Los de Siempre",
+    "certeza": "CONFIRMADO",
+    "tipo": "ASOCIADO_BANDA",
+    "origen_informacion": "IBM i2 Red Eros Torres: Integrante facción LOS DE SIEMPRE"
+  },
+  {
+    "id": "v-eros-13",
+    "persona_origen_id": "p-pasculi-joaquin",
+    "persona_destino_id": "banda-los-de-siempre",
+    "tipo_relacion": "ASOCIADO_BANDA",
+    "origen_nombre": "Joaquín Pasculi",
+    "destino_nombre": "Los de Siempre",
+    "certeza": "CONFIRMADO",
+    "tipo": "ASOCIADO_BANDA",
+    "origen_informacion": "IBM i2 Red Eros Torres: Integrante facción LOS DE SIEMPRE"
+  },
+  {
+    "id": "v-eros-14",
+    "persona_origen_id": "p-pasculi-bruno",
+    "persona_destino_id": "p-marquez-daniela",
+    "tipo_relacion": "DISPUTA_ARMADA",
+    "origen_nombre": "Bruno Pasculi",
+    "destino_nombre": "Daniela Márquez",
+    "certeza": "CONFIRMADO",
+    "tipo": "DISPUTA_ARMADA",
+    "origen_informacion": "IBM i2 Red Eros Torres: Enfrentamiento armado, causas R-094134-25 y R-093626-25"
+  },
+  {
+    "id": "v-eros-15",
+    "persona_origen_id": "p-pasculi-joaquin",
+    "persona_destino_id": "p-marquez-daniela",
+    "tipo_relacion": "DISPUTA_ARMADA",
+    "origen_nombre": "Joaquín Pasculi",
+    "destino_nombre": "Daniela Márquez",
+    "certeza": "CONFIRMADO",
+    "tipo": "DISPUTA_ARMADA",
+    "origen_informacion": "IBM i2 Red Eros Torres: Enfrentamiento armado, causas R-094134-25 y R-093626-25"
+  },
+  {
+    "id": "v-eros-16",
+    "persona_origen_id": "p-pasculi-bruno",
+    "persona_destino_id": "p-pasculi-valentino",
+    "tipo_relacion": "FAMILIAR_PRIMO",
+    "origen_nombre": "Bruno Pasculi",
+    "destino_nombre": "Valentino Pasculi",
+    "certeza": "CONFIRMADO",
+    "tipo": "FAMILIAR_PRIMO",
+    "origen_informacion": "IBM i2 Red Eros Torres: Parentesco familiar; Valentino resultó víctima de disparos en R-094134-25"
+  },
+  {
+    "id": "v-eros-17",
+    "persona_origen_id": "p-pasculi-joaquin",
+    "persona_destino_id": "p-pasculi-valentino",
+    "tipo_relacion": "FAMILIAR_PRIMO",
+    "origen_nombre": "Joaquín Pasculi",
+    "destino_nombre": "Valentino Pasculi",
+    "certeza": "CONFIRMADO",
+    "tipo": "FAMILIAR_PRIMO",
+    "origen_informacion": "IBM i2 Red Eros Torres: Parentesco familiar; Valentino resultó víctima de disparos en R-094134-25"
+  },
+  {
+    "id": "v-eros-18",
+    "persona_origen_id": "p-marquez-daniela",
+    "persona_destino_id": "p-ledesma-maximiliano",
+    "tipo_relacion": "ASOCIADO_HECHO",
+    "origen_nombre": "Daniela Márquez",
+    "destino_nombre": "Maximiliano Ledesma",
+    "certeza": "CONFIRMADO",
+    "tipo": "ASOCIADO_HECHO",
+    "origen_informacion": "IBM i2 Red Eros Torres: Co-víctimas del hecho de armas R-094134-25 (Lesiones Dolosas Graves HAF)"
+  },
+  {
+    "id": "v-eros-19",
+    "persona_origen_id": "p-marquez-daniela",
+    "persona_destino_id": "p-pasculi-valentino",
+    "tipo_relacion": "ASOCIADO_HECHO",
+    "origen_nombre": "Daniela Márquez",
+    "destino_nombre": "Valentino Pasculi",
+    "certeza": "CONFIRMADO",
+    "tipo": "ASOCIADO_HECHO",
+    "origen_informacion": "IBM i2 Red Eros Torres: Co-víctimas del hecho de armas R-094134-25 (Lesiones Dolosas Graves HAF)"
+  },
+  {
+    "id": "v-eros-20",
+    "persona_origen_id": "p-ledesma-maximiliano",
+    "persona_destino_id": "p-pasculi-valentino",
+    "tipo_relacion": "ASOCIADO_HECHO",
+    "origen_nombre": "Maximiliano Ledesma",
+    "destino_nombre": "Valentino Pasculi",
+    "certeza": "CONFIRMADO",
+    "tipo": "ASOCIADO_HECHO",
+    "origen_informacion": "IBM i2 Red Eros Torres: Co-víctimas de la balacera de R-094134-25"
+  },
+  {
+    "id": "v-eros-21",
+    "persona_origen_id": "p-torres-eros",
+    "persona_destino_id": "p-rossi-cristian",
+    "tipo_relacion": "HOMICIDIO_IMPUTADO_VICTIMA",
+    "origen_nombre": "Eros Emanuel Torres",
+    "destino_nombre": "Cristian Gabriel Rossi",
+    "certeza": "CONFIRMADO",
+    "tipo": "HOMICIDIO_IMPUTADO_VICTIMA",
+    "origen_informacion": "IBM i2 Red Eros Torres: CUIJ 21-09294170-0 Homicidio calificado por empleo de arma de fuego (Rossi Víctima / Torres Asociado-Imputado)"
+  },
+  {
+    "id": "v-eros-22",
+    "persona_origen_id": "p-torres-eros",
+    "persona_destino_id": "p-rolon-lucas",
+    "tipo_relacion": "HOMICIDIO_IMPUTADO_VICTIMA",
+    "origen_nombre": "Eros Emanuel Torres",
+    "destino_nombre": "Lucas Maximiliano Rolón",
+    "certeza": "CONFIRMADO",
+    "tipo": "HOMICIDIO_IMPUTADO_VICTIMA",
+    "origen_informacion": "IBM i2 Red Eros Torres: Requerimiento R-077680-25 Homicidio (Rolón Víctima / Torres Asociado)"
+  },
+  {
+    "id": "v-eros-23",
+    "persona_origen_id": "p-torres-eros",
+    "persona_destino_id": "p-leiva-gonzalo",
+    "tipo_relacion": "HOMICIDIO_IMPUTADO_VICTIMA",
+    "origen_nombre": "Eros Emanuel Torres",
+    "destino_nombre": "Gonzalo Ezequiel Leiva",
+    "certeza": "CONFIRMADO",
+    "tipo": "HOMICIDIO_IMPUTADO_VICTIMA",
+    "origen_informacion": "IBM i2 Red Eros Torres: CUIJ 21-09602075-0 Fiscal Lacuadra Homicidio Centenario (Leiva Víctima / Torres Asociado)"
+  },
+  {
+    "id": "v-eros-24",
+    "persona_origen_id": "p-torres-eros",
+    "persona_destino_id": "p-vazquez-sebastian",
+    "tipo_relacion": "HOMICIDIO_IMPUTADO_VICTIMA",
+    "origen_nombre": "Eros Emanuel Torres",
+    "destino_nombre": "Sebastián Ezequiel Vázquez",
+    "certeza": "CONFIRMADO",
+    "tipo": "HOMICIDIO_IMPUTADO_VICTIMA",
+    "origen_informacion": "IBM i2 Red Eros Torres: CUIJ 21-09602075-0 Fiscal Lacuadra Homicidio Centenario (Vázquez Víctima / Torres Asociado)"
+  },
+  {
+    "id": "v-eros-25",
+    "persona_origen_id": "p-leiva-gonzalo",
+    "persona_destino_id": "p-vazquez-sebastian",
+    "tipo_relacion": "ASOCIADO_VICTIMAS",
+    "origen_nombre": "Gonzalo Ezequiel Leiva",
+    "destino_nombre": "Sebastián Ezequiel Vázquez",
+    "certeza": "CONFIRMADO",
+    "tipo": "ASOCIADO_VICTIMAS",
+    "origen_informacion": "IBM i2 Red Eros Torres: Co-víctimas fatales del Homicidio en Centenario CUIJ 21-09602075-0"
+  },
+  {
+    "id": "v-eros-26",
+    "persona_origen_id": "p-marquez-daniela",
+    "persona_destino_id": "p-torres-eros",
+    "tipo_relacion": "ASOCIADO_LOGISTICA",
+    "origen_nombre": "Daniela Márquez",
+    "destino_nombre": "Eros Emanuel Torres",
+    "certeza": "CONFIRMADO",
+    "tipo": "ASOCIADO_LOGISTICA",
+    "origen_informacion": "IBM i2 Red Eros Torres: Cadena de suministro a través de búnkers y Sandoval"
+  },
+  {
     "id": "v-pastor-1",
     "persona_origen_id": "p-diaz-juan-marcelo",
     "persona_destino_id": "p-ruggenini-delia",
@@ -9628,6 +10729,51 @@ export const INITIAL_VINCULOS = [
 
 export const INITIAL_ALLANAMIENTOS = [
   {
+    "id": "allanamiento-bunker-mz1-esc2",
+    "cuij": "21-09366110-0",
+    "requerimiento": "Secuestro Ley 23737",
+    "fecha_operativo": "2024-10-15T06:30:00.000Z",
+    "direccion": "Fonavi San Jerónimo Manzana 1 Escalera 2 - Primer Piso",
+    "barrio": "Centenario",
+    "localidad": "Santa Fe",
+    "fuerza_interviniente": "PDI Microtráfico y TOE",
+    "resultado": "Positivo",
+    "juzgado_interviniente": "MPA Unidad Fiscal Especial Microtráfico",
+    "resultado_detalle": "Secuestro de envoltorios con estupefacientes (cocaína y marihuana) listos para la venta al menudeo, dinero en efectivo, balanza de precisión y teléfonos celulares. Búnker operado por José Francisco Márquez (Polo) y abastecido por Daniela Márquez.",
+    "resumen": "Búnker fortificado en altura (escalera 2, primer piso) operado por la familia Márquez para acopio y distribución de la red.",
+    "geom": "SRID=4326;POINT(-60.7212 -31.6668)"
+  },
+  {
+    "id": "allanamiento-bunker-mz5-dpto82",
+    "cuij": "R-015627-25",
+    "requerimiento": "R-015627-25",
+    "fecha_operativo": "2025-02-10T07:00:00.000Z",
+    "direccion": "Fonavi San Jerónimo Manzana 5 Dpto 82",
+    "barrio": "Centenario",
+    "localidad": "Santa Fe",
+    "fuerza_interviniente": "PDI y Prefectura Naval Argentina",
+    "resultado": "Positivo",
+    "juzgado_interviniente": "MPA Fiscalía Regional 1",
+    "resultado_detalle": "Secuestro de 95 dosis fraccionadas de estupefacientes, anotaciones de clientes y recaudación diaria. Punto de expendio operado por Vanesa Elisabet Placentuk y aprovisionado periódicamente por Lorenzo Sandoval Acosta.",
+    "resumen": "Puesto de expendio minorista de drogas ('Búnker Manzana 5 Dpto 82') subordinado a Sandoval.",
+    "geom": "SRID=4326;POINT(-60.7225 -31.6675)"
+  },
+  {
+    "id": "allanamiento-bunker-mz5-mz9",
+    "cuij": "21-09366110-0",
+    "requerimiento": "R-093661-24",
+    "fecha_operativo": "2024-11-20T08:00:00.000Z",
+    "direccion": "Fonavi San Jerónimo Manzana 5 y 9",
+    "barrio": "Centenario",
+    "localidad": "Santa Fe",
+    "fuerza_interviniente": "Policía de Investigaciones (PDI) Complejas",
+    "resultado": "Positivo",
+    "juzgado_interviniente": "Colegio de Jueces Penales 1a Instancia Santa Fe",
+    "resultado_detalle": "Clausura y neutralización de puntos de pase y acopio en pasillos entre Manzana 5 y Manzana 9. Punto de abastecimiento de Daniela Márquez con articulación directa de Lorenzo Sandoval Acosta.",
+    "resumen": "Punto logístico clave y búnker de distribución intermediaria ('Búnker Manzana 5 y 9').",
+    "geom": "SRID=4326;POINT(-60.7230 -31.6670)"
+  },
+  {
     "id": "allanamiento-zazpe",
     "cuij": "21-09726972-3",
     "requerimiento": "R-062-26",
@@ -9690,6 +10836,150 @@ export const INITIAL_ALLANAMIENTOS = [
 ];
 
 export const INITIAL_HECHOS = [
+  {
+    "id": "hecho-eros-rossi",
+    "tipo_penal": "Homicidio calificado por empleo de arma de fuego",
+    "fecha": "2023-11-29T21:30:00.000Z",
+    "franja_horaria": "NOCHE",
+    "direccion": "Fonavi San Jerónimo Manzana 2",
+    "barrio": "Centenario",
+    "localidad": "Santa Fe",
+    "cuij": "21-09294170-0",
+    "requerimiento": "21-09294170-0",
+    "indice_lesividad": 10,
+    "geom": "SRID=4326;POINT(-60.7215 -31.6672)",
+    "resumen": "Homicidio calificado por el empleo de arma de fuego perpetrado el 29/11/2023. Víctima fatal: Cristian Gabriel Rossi (DNI 35.040.365). Sujeto investigado/asociado: Eros Emanuel Torres.",
+    "modus_operandi": "Disparos directos con arma de fuego a quemarropa en sector interno de pasillos de Monoblocks.",
+    "banda_implicada": "Red Eros Torres (Fonavi Centenario)"
+  },
+  {
+    "id": "hecho-eros-rolon",
+    "tipo_penal": "Homicidio calificado por el uso de arma de fuego",
+    "fecha": "2025-03-12T23:45:00.000Z",
+    "franja_horaria": "NOCHE",
+    "direccion": "Fonavi San Jerónimo Manzana 6",
+    "barrio": "Centenario",
+    "localidad": "Santa Fe",
+    "cuij": "21-09581420-5",
+    "requerimiento": "R-077680-25",
+    "indice_lesividad": 10,
+    "geom": "SRID=4326;POINT(-60.7228 -31.6681)",
+    "resumen": "Causa penal bajo Requerimiento R-077680-25 caratulada HOMICIDIO. Víctima: Lucas Maximiliano Rolón (DNI 37.146.527). Imputado/asociado: Eros Emanuel Torres.",
+    "modus_operandi": "Ataque armado sorpresivo con arma corta en inmediaciones del complejo habitacional.",
+    "banda_implicada": "Red Eros Torres (Fonavi Centenario)"
+  },
+  {
+    "id": "hecho-eros-lacuadra",
+    "tipo_penal": "Doble homicidio calificado con arma de fuego",
+    "fecha": "2025-05-18T02:15:00.000Z",
+    "franja_horaria": "MADRUGADA",
+    "direccion": "Fonavi San Jerónimo Sector Escaleras Monoblock",
+    "barrio": "Centenario",
+    "localidad": "Santa Fe",
+    "cuij": "21-09602075-0",
+    "requerimiento": "21-09602075-0",
+    "indice_lesividad": 10,
+    "geom": "SRID=4326;POINT(-60.7220 -31.6670)",
+    "resumen": "CUIJ 21-09602075-0 a cargo del fiscal Lacuadra caratulada HOMICIDIO (Centenario). Víctimas fatales: Gonzalo Ezequiel Leiva (DNI 47.660.485) y Sebastián Ezequiel Vázquez (DNI 47.075.020). Sujeto asociado: Eros Emanuel Torres.",
+    "modus_operandi": "Tiroteo letal en escaleras de monoblock durante la madrugada.",
+    "banda_implicada": "Red Eros Torres (Fonavi Centenario)"
+  },
+  {
+    "id": "hecho-eros-olcesia",
+    "tipo_penal": "Asociación ilícita y balaceras coactivas",
+    "fecha": "2025-08-06T19:30:00.000Z",
+    "franja_horaria": "NOCHE",
+    "direccion": "Barrio Centenario / Inmediaciones Fonavi",
+    "barrio": "Centenario",
+    "localidad": "Santa Fe",
+    "cuij": "21-09652421-0",
+    "requerimiento": "21-09652421-0",
+    "indice_lesividad": 8,
+    "geom": "SRID=4326;POINT(-60.7235 -31.6665)",
+    "resumen": "CUIJ 21-09652421-0 a cargo del fiscal Olcesia con fecha 06/08/2025. Sujeto investigado: Eros Emanuel Torres. Vinculado al automóvil Citroën C4 color negro dominio MZG-219 utilizado por Lautaro Obregón (Roco), Tomás Sosa y Roxana Marani.",
+    "modus_operandi": "Desplazamiento operativo en rodado C4 negro para actos intimidatorios y logística delictiva.",
+    "banda_implicada": "Red Eros Torres (Fonavi Centenario)"
+  },
+  {
+    "id": "hecho-eros-roco",
+    "tipo_penal": "Comercialización de estupefacientes y abuso de armas",
+    "fecha": "2025-01-31T20:00:00.000Z",
+    "franja_horaria": "NOCHE",
+    "direccion": "Fonavi San Jerónimo Manzana 9",
+    "barrio": "Centenario",
+    "localidad": "Santa Fe",
+    "cuij": "21-09418290-7",
+    "requerimiento": "R-020584-25",
+    "indice_lesividad": 8,
+    "geom": "SRID=4326;POINT(-60.7240 -31.6678)",
+    "resumen": "Requerimiento R-020584-25 del 31/01/2025: 'un masculino que vende estupefacientes para un masculino apodado Roco, del cual no aporta más datos, quien habría efectuado disparos hace tiempo atrás'. POSIBLE RESPONSABLE: Lautaro Agustín Obregón (DNI 42.888.739).",
+    "modus_operandi": "Comercialización de sustancias mediante revendedores barriales con protección armada y tiroteos disuasorios.",
+    "banda_implicada": "Red Eros Torres (Fonavi Centenario)"
+  },
+  {
+    "id": "hecho-eros-calatao",
+    "tipo_penal": "Lesiones dolosas graves calificadas por el uso de arma de fuego",
+    "fecha": "2025-04-22T21:15:00.000Z",
+    "franja_horaria": "NOCHE",
+    "direccion": "Pasaje Calatao 1477 e Independencia 3403",
+    "barrio": "Centenario",
+    "localidad": "Santa Fe",
+    "cuij": "21-09413425-4",
+    "requerimiento": "R-094134-25",
+    "indice_lesividad": 9,
+    "geom": "SRID=4326;POINT(-60.7222 -31.6659)",
+    "resumen": "Requerimiento R-094134-25 del 22/04/2025: 'LESIONES DOLOSAS GRAVES herido/a con arma de fuego'. VÍCTIMAS: Daniela Márquez (DNI 38.652.245), Maximiliano Ledesma (34 años, DNI 40.377.370, domiciliado en Pje Calatao 1477) y Valentino Pasculi (13 años, DNI 49.104.834, domiciliado en Independencia 3403). ASOCIADOS/AGRESORES: Los mellizos Pasculi (Bruno y Joaquín Pasculi).",
+    "modus_operandi": "Ataque a balazos contra domicilio y transeúntes con heridas de consideración en tres personas.",
+    "banda_implicada": "Los de Siempre (Mellizos Pasculi)"
+  },
+  {
+    "id": "hecho-eros-taquimura",
+    "tipo_penal": "Abuso de armas y tiroteo en vía pública",
+    "fecha": "2025-04-27T18:40:00.000Z",
+    "franja_horaria": "TARDE",
+    "direccion": "Independencia 3400 / Sector Monoblocks",
+    "barrio": "Centenario",
+    "localidad": "Santa Fe",
+    "cuij": "21-09362625-9",
+    "requerimiento": "R-093626-25",
+    "indice_lesividad": 8,
+    "geom": "SRID=4326;POINT(-60.7218 -31.6655)",
+    "resumen": "Requerimiento R-093626-25 del 27/04/2025: Enfrentamiento armado que asocia como víctima a Daniela Márquez, y como actores asociados a 'Los mellizos Pasculi' (Bruno y Joaquín) y 'Los Taquimura'. Disputa territorial y represalia por búnkers.",
+    "modus_operandi": "Balacera cruzada entre facciones juveniles antagónicas en pasajes públicos.",
+    "banda_implicada": "Los de Siempre / Taquimura vs Red Márquez"
+  },
+  {
+    "id": "hecho-eros-secuestro23737",
+    "tipo_penal": "Infracción Ley 23.737 y Comercialización de Estupefacientes",
+    "fecha": "2024-10-15T09:00:00.000Z",
+    "franja_horaria": "MAÑANA",
+    "direccion": "Fonavi San Jerónimo Manzana 1 Escalera 2 Primer Piso",
+    "barrio": "Centenario",
+    "localidad": "Santa Fe",
+    "cuij": "21-09366110-0",
+    "requerimiento": "21-09366110-0 / Sec 23737",
+    "indice_lesividad": 7,
+    "geom": "SRID=4326;POINT(-60.7212 -31.6668)",
+    "resumen": "CUIJ 21-09366110-0 Secy 23737: Investigación por narcotráfico y acopio. Vincula al Búnker Manzana 1 Escalera 2 - Primer Piso, operado por José Francisco Márquez (Polo) y Daniela Márquez como proveedora a los búnkers de Mz 5 y 9.",
+    "modus_operandi": "Punto de fraccionamiento y guarda de sustancias estupefacientes en planta alta de monoblock.",
+    "banda_implicada": "Red Eros Torres (Fonavi Centenario)"
+  },
+  {
+    "id": "hecho-eros-dpto82",
+    "tipo_penal": "Comercialización de Estupefacientes en búnker",
+    "fecha": "2025-02-10T11:00:00.000Z",
+    "franja_horaria": "MAÑANA",
+    "direccion": "Fonavi San Jerónimo Manzana 5 Dpto 82",
+    "barrio": "Centenario",
+    "localidad": "Santa Fe",
+    "cuij": "21-09156272-5",
+    "requerimiento": "R-015627-25",
+    "indice_lesividad": 6,
+    "geom": "SRID=4326;POINT(-60.7225 -31.6675)",
+    "resumen": "Requerimiento R-015627-25: Procedimiento en Búnker Manzana 5 Dpto 82. Imputada/asociada: Vanesa Elisabet Placentuk (DNI 38.429.543), abastecida directamente por Lorenzo Sandoval Acosta.",
+    "modus_operandi": "Comercialización directa al menudeo con custodia y relevos por turnos.",
+    "banda_implicada": "Red Eros Torres (Fonavi Centenario)"
+  },
   {
     "id": "hecho-haf-1",
     "tipo_penal": "Abuso de armas y lesiones graves por HAF",
